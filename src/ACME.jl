@@ -61,6 +61,9 @@ type Element
         elem.(m) = spzeros(Int, get(sizes, ns[1], 0), get(sizes, ns[2], 0))
       end
     end
+    if !isdefined(elem, :nonlinear_eq)
+      elem.nonlinear_eq = Expr(:block)
+    end
     if !isdefined(elem, :pins)
       elem.pins = make_pin_dict(map(string,1:2nb(elem)))
     end
