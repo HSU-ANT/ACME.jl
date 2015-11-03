@@ -12,7 +12,7 @@ type Element
   pi :: SparseMatrixCSC{Number,Int}
   px :: SparseMatrixCSC{Number,Int}
   pxd :: SparseMatrixCSC{Number,Int}
-  pq :: SparseMatrixCSC{Number}
+  pq :: SparseMatrixCSC{Number,Int}
   nonlinear_eq :: Expr
   pins :: Dict{Symbol, Vector{(Int, Int)}}
 
