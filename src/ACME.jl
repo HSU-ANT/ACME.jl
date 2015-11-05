@@ -218,4 +218,49 @@ function connect!(c::Circuit, pins::Union(Pin,Symbol)...)
     end
 end
 
+function topomat!{T<:Integer}(incidence::SparseMatrixCSC{T})
+    @assert all(abs(nonzeros(incidence)) .== 1)
+    @assert all(sum(incidence, 1) .== 0)
+
+    t = falses(size(incidence)[2]);
+
+    row = 1;
+    for col = 1:size(incidence)[2]
+        rows = filter(r -> r ≥ row, find(incidence[:,col]))
+        @assert length(rows) ≤ 2
+
+        isempty(rows) && continue
+        t[col] = true;
+
+        if rows[1] ≠ row
+            incidence[[rows[1], row],:] = incidence[[row, rows[1]],:]
+        end
+        if length(rows) == 2
+            @assert incidence[row, col] + incidence[rows[2], col] == 0
+            incidence[rows[2],:] = incidence[rows[2],:] + incidence[row,:]
+        end
+        if incidence[row, col] < 0
+            cols = find(incidence[row,:])
+            incidence[row,cols] = -incidence[row,cols]
+        end
+        rows = find(incidence[1:row-1,col] .== 1)
+        incidence[rows,:] = broadcast(-, incidence[rows, :], incidence[row,:])
+        rows = find(incidence[1:row-1,col] .== -1)
+        incidence[rows,:] = broadcast(+, incidence[rows, :], incidence[row,:])
+        row += 1
+    end
+
+    ti = incidence[1:row-1, :]
+
+    dl = ti[:, ~t]
+    tv = spzeros(T,size(dl)[2], size(incidence)[2])
+    tv[:,find(t)] = -dl.'
+    tv[:,find(~t)] = speye(T,size(dl)[2])
+
+    tv, ti
+end
+
+topomat{T<:Integer}(incidence::SparseMatrixCSC{T}) = topomat!(copy(incidence))
+topomat(c::Circuit) = topomat!(incidence(c))
+
 end # module
