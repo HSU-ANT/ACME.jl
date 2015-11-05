@@ -1,5 +1,7 @@
 module ACME
 
+export Circuit, add!, connect!
+
 type Element
   mv :: SparseMatrixCSC{Number,Int}
   mi :: SparseMatrixCSC{Number,Int}
@@ -78,6 +80,142 @@ nl(e::Element) = size(e.mv)[1]
 ny(e::Element) = size(e.pv)[1]
 nn(e::Element) = nb(e) + nx(e) + nq(e) - nl(e)
 
+# a Pin combines an element with a branch/polarity list
+typealias Pin (Element, Vector{(Int,Int)})
+
+# allow elem[:pin] notation to get an elements pin
+getindex(e::Element, p::Symbol) = (e, e.pins[p])
+getindex(e::Element, p::String) = getindex(e, symbol(p))
+getindex(e::Element, p::Int) = getindex(e, string(p))
+
 include("elements.jl")
+
+typealias Net Vector{(Int,Int)} # each net is a list of branch/polarity pairs
+
+type Circuit
+    elements :: Vector{Element}
+    nets :: Vector{Net}
+    net_names :: Dict{Symbol, Net}
+    Circuit() = new([], [], Dict{Symbol, Net}())
+end
+
+for n in [:nb, :nx, :nq, :nu, :nl, :ny, :nn]
+    @eval ($n)(c::Circuit) = sum([$n(elem) for elem in c.elements])
+end
+
+for mat in [:mv, :mi, :mx, :mxd, :mq, :mu, :pv, :pi, :px, :pxd, :pq]
+    @eval ($mat)(c::Circuit) = blkdiag([elem.$mat for elem in c.elements]...)
+end
+
+u0(c::Circuit) = vcat([elem.u0 for elem in c.elements]...)
+
+function incidence(c::Circuit)
+    i = sizehint(Int[], 2nb(c))
+    j = sizehint(Int[], 2nb(c))
+    v = sizehint(Int[], 2nb(c))
+    for (row, pins) in enumerate(c.nets), (branch, polarity) in pins
+        push!(i, row)
+        push!(j, branch)
+        push!(v, polarity)
+    end
+    sparse(i,j,v)
+end
+
+function nonlinear_eq(c::Circuit)
+    # construct a block expression containing all element's expressions after
+    # offsetting their indexes into q, J and res
+
+    row_offset = 0
+    col_offset = 0
+    nl_expr = Expr(:block)
+    for elem in c.elements
+        index_offsets = { :q => (col_offset,),
+                          :J => (row_offset, col_offset),
+                          :res => (row_offset,) }
+
+        function offset_indexes(expr::Expr)
+            ret = Expr(expr.head)
+            ret.typ = expr.typ
+            if expr.head == :ref && haskey(index_offsets, expr.args[1])
+                push!(ret.args, expr.args[1])
+                offsets = index_offsets[expr.args[1]]
+                length(expr.args) == length(offsets) + 1 ||
+                    throw(ArgumentError(string(expr.args[1], " must be indexed with exactly ", length(offsets), " index(es)")))
+                for i in 1:length(offsets)
+                    push!(ret.args,
+                          :($(offsets[i]) + $(offset_indexes(expr.args[i+1]))))
+                end
+            else
+                push!(ret.args, map(offset_indexes, expr.args)...)
+            end
+            ret
+        end
+
+        function offset_indexes(s::Symbol)
+            haskey(index_offsets, s) && throw(ArgumentError(string(s, " used without indexing expression")))
+            s
+        end
+
+        offset_indexes(x::Any) = x
+
+        # wrap into a let to keep variables local
+        push!(nl_expr.args, :( let; $(offset_indexes(elem.nonlinear_eq)) end))
+
+        row_offset += nn(elem)
+        col_offset += nq(elem)
+    end
+    nl_expr
+end
+
+function add!(c::Circuit, elem::Element)
+    elem ∈ c.elements && return
+    b_offset = nb(c)
+    push!(c.elements, elem)
+    for branch_pols in values(elem.pins)
+        push!(c.nets, [(b_offset + b, pol) for (b, pol) in branch_pols])
+    end
+    nothing
+end
+
+add!(c::Circuit, elems::Element...) = for elem in es add!(c, elem) end
+
+function branch_offset(c::Circuit, elem::Element)
+    offset = 0
+    for el in c.elements
+        el == elem && return offset
+        offset += nb(el)
+    end
+    throw(ArgumentError("Element not found in circuit"))
+end
+
+function netfor!(c::Circuit, p::Pin)
+    element = p[1]
+    add!(c, element)
+    b_offset = branch_offset(c, element)
+    local net
+    for (branch, pol) in p[2], net in c.nets
+        (branch + b_offset, pol) ∈ net && break
+    end
+    @assert isdefined(net)
+    net
+end
+
+function netfor!(c::Circuit, name::Symbol)
+    haskey(c.net_names, name) || push!(c.nets, get!(c.net_names, name, []))
+    c.net_names[name]
+end
+
+function connect!(c::Circuit, pins::Union(Pin,Symbol)...)
+    nets = unique([netfor!(c, pin) for pin in pins])
+    for net in nets[2:end]
+        push!(nets[1], net...)
+        deleteat!(c.nets, findfirst(c.nets, net))
+        for (name, named_net) in c.net_names
+            if named_net == net
+                c.net_names[name] = nets[1]
+            end
+        end
+    end
+end
 
 end # module
