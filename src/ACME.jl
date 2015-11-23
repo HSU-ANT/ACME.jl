@@ -252,12 +252,23 @@ function topomat!{T<:Integer}(incidence::SparseMatrixCSC{T})
         row += 1
     end
 
-    ti = incidence[1:row-1, :]
+    if row > 1
+        ti = incidence[1:row-1, :]
+    else
+        ti = spzeros(T, 0, size(incidence)[2])
+    end
 
-    dl = ti[:, ~t]
-    tv = spzeros(T,size(dl)[2], size(incidence)[2])
-    tv[:,find(t)] = -dl.'
-    tv[:,find(~t)] = speye(T,size(dl)[2])
+    if all(t)
+        dl = spzeros(T, row-1, 0)
+        tv = spzeros(T, 0, size(incidence)[2])
+    else
+        dl = ti[:, ~t]
+        tv = spzeros(T, size(dl)[2], size(incidence)[2])
+        if ~all(~t)
+            tv[:,find(t)] = -dl.'
+        end
+        tv[:,find(~t)] = speye(T,size(dl)[2])
+    end
 
     tv, ti
 end
