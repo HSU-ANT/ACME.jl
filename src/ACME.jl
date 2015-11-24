@@ -276,4 +276,32 @@ end
 topomat{T<:Integer}(incidence::SparseMatrixCSC{T}) = topomat!(copy(incidence))
 topomat(c::Circuit) = topomat!(incidence(c))
 
+function gensolve(a::SparseMatrixCSC, b, x, h, thresh=0.1)
+    m = size(a)[1]
+    t = sortperm(vec(sum(spones(a),2))) # row indexes in ascending order of nnz
+    for i in 1:m
+        ait = a[t[i],:] # ait is a row of the a matrix
+        s = ait * h;
+        if nnz(s) == 0
+            continue
+        end
+        inz, jnz, nz_vals = findnz(s)
+        nz_abs_vals = abs(nz_vals)
+        jat = jnz[nz_abs_vals .≥ thresh*maximum(nz_abs_vals)] # cols above threshold
+        j = jat[indmin(sum(spones(h[:,jat])))]
+        q = h[:,j]
+        # ait*q only has a single element!
+        x = x + q * ((b[t[i],:] - ait*x) / (ait*q)[1]);
+        if size(h)[2] > 1
+            h = h[:,[1:j-1,j+1:end]] - q * s[1,[1:j-1,j+1:end]]/s[1,j]
+        else
+            h = similar(h, eltype(h), (size(h)[1], 0))
+        end
+    end
+    return x, h
+end
+
+gensolve(a, b, thresh=0.1) =
+    gensolve(a, b, spzeros(size(a)[2], size(b)[2]), speye(size(a)[2]), thresh)
+
 end # module
