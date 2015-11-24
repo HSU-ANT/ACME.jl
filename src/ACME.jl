@@ -304,4 +304,9 @@ end
 gensolve(a, b, thresh=0.1) =
     gensolve(a, b, spzeros(size(a)[2], size(b)[2]), speye(size(a)[2]), thresh)
 
+consecranges(lengths) = map(range, cumsum([1, lengths[1:end-1]]), lengths)
+
+matsplit(m, rowsizes, colsizes=[size(m)[2]]) =
+    [m[rs, cs] for rs in consecranges(rowsizes), cs in consecranges(colsizes)]
+
 end # module
