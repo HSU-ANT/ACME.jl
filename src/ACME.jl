@@ -235,7 +235,7 @@ function topomat!{T<:Integer}(incidence::SparseMatrixCSC{T})
         t[col] = true;
 
         if rows[1] ≠ row
-            incidence[[rows[1], row],:] = incidence[[row, rows[1]],:]
+            swaprows!(incidence, rows[1], row)
         end
         if length(rows) == 2
             @assert incidence[row, col] + incidence[rows[2], col] == 0
@@ -265,7 +265,7 @@ function topomat!{T<:Integer}(incidence::SparseMatrixCSC{T})
         dl = ti[:, ~t]
         tv = spzeros(T, size(dl)[2], size(incidence)[2])
         if ~all(~t)
-            tv[:,find(t)] = -dl.'
+            tv[:,find(t)] = -dl' # with julia 0.3.2, sparse([1 -1]).' -> [1, 0], hence use of ' (conjugate transpose)
         end
         tv[:,find(~t)] = speye(T,size(dl)[2])
     end
@@ -341,7 +341,7 @@ function DiscreteModel(circ::Circuit, t::Float64, solver::Type = SimpleSolver)
     # choose particular solution such that the rows corresponding to q are
     # column-wise orthogonal to the column space of k (and hence have a column
     # space of minimal dimension)
-    x = x - full(f)/full(k.'*k)*k'*x[end-nq(circ)+1:end,:]
+    x = x - full(f)/(full(k)'*k)*k'*x[end-nq(circ)+1:end,:]
 
     v0, i0, x0, q0, ev, ei, b, eq_full, dv, di, a, dq_full =
         matsplit(x, rowsizes, [1, nu(circ), nx(circ)])
@@ -441,6 +441,16 @@ function solve(solver::SimpleSolver, p::AbstractVector{Float64}, maxiter=500)
     return solver.z
 end
 
+function swaprows!(a::SparseMatrixCSC, row1, row2)
+    # This sometimes gives a wrong result with julia 0.3.2:
+    #    a[[row1, row2],:] = a[[row2, row1],:]
+    i, j, v = findnz(a)
+    row1idx = i.==row1
+    row2idx = i.==row2
+    i[row1idx] = row2
+    i[row2idx] = row1
+    a[:,:] = sparse(i, j, v, size(a)...)
+end
 
 function gensolve(a::SparseMatrixCSC, b, x, h, thresh=0.1)
     m = size(a)[1]
