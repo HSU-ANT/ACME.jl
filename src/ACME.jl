@@ -1,6 +1,6 @@
 module ACME
 
-export Circuit, add!, connect!
+export Circuit, add!, connect!, DiscreteModel, run
 
 type Element
   mv :: SparseMatrixCSC{Number,Int}
@@ -275,6 +275,172 @@ end
 
 topomat{T<:Integer}(incidence::SparseMatrixCSC{T}) = topomat!(copy(incidence))
 topomat(c::Circuit) = topomat!(incidence(c))
+
+type DiscreteModel{Solver}
+    a::Matrix{Float64}
+    b::Matrix{Float64}
+    c::Matrix{Float64}
+    x0::Vector{Float64}
+    pexp::Matrix{Float64}
+    dq::Matrix{Float64}
+    eq::Matrix{Float64}
+    k::Matrix{Float64}
+    q0::Vector{Float64}
+    dy::Matrix{Float64}
+    ey::Matrix{Float64}
+    fy::Matrix{Float64}
+    y0::Vector{Float64}
+
+    nonlinear_eq :: Expr
+    nonlinear_eq_func :: Function
+
+    solver::Solver
+    x::Vector{Float64}
+
+    function DiscreteModel(;args...)
+        model = new()
+        types = { name_type[1] => name_type[2] for
+                  name_type in zip(DiscreteModel.names, DiscreteModel.types)}
+        for (key, val) in args
+            expected_type = types[key]
+            if issubtype(expected_type, Matrix)
+                model.(key) = full(val)
+            elseif  issubtype(expected_type, Vector)
+                model.(key) = squeeze(full(val),2)
+            else
+                model.(key) = val
+            end
+        end
+        model.x = zeros(nx(model))
+
+        # use a preallocated q and Jq
+        q = zeros(nq(model))
+        Jq = zeros(nn(model), nq(model))
+        model.nonlinear_eq_func = eval (quote
+            # wrap up in named function until anonymous functions are as fast...
+            function $(gensym())(res, J, Jp, p, z)
+                let q0=$(model.q0), pexp=$(model.pexp), q=$(q), Jq=$(Jq), k=$(model.k)
+                    $(model.nonlinear_eq)
+                end
+                return nothing
+            end
+        end)
+        model.solver = Solver(model)
+        return model
+    end
+end
+
+function DiscreteModel(circ::Circuit, t::Float64, solver::Type = SimpleSolver)
+    x, f = gensolve([mv(circ) mi(circ) 1/t*mxd(circ)+0.5*mx(circ) mq(circ);
+                     blkdiag(topomat(circ)...) spzeros(nb(circ), nx(circ) + nq(circ))],
+                    [u0(circ) mu(circ) 1/t*mxd(circ)-0.5*mx(circ);
+                     spzeros(nb(circ), 1+nu(circ)+nx(circ))])
+    rowsizes = [nb(circ), nb(circ), nx(circ), nq(circ)]
+    fv, fi, c, k = matsplit(f, rowsizes)
+
+    # choose particular solution such that the rows corresponding to q are
+    # column-wise orthogonal to the column space of k (and hence have a column
+    # space of minimal dimension)
+    x = x - full(f)/full(k.'*k)*k'*x[end-nq(circ)+1:end,:]
+
+    v0, i0, x0, q0, ev, ei, b, eq_full, dv, di, a, dq_full =
+        matsplit(x, rowsizes, [1, nu(circ), nx(circ)])
+
+    if size(dq_full)[1] > 0
+        # decompose [dq_full eq_full] into pexp*[dq eq] with [dq eq] having minimum
+        # number of rows based on the QR factorization
+        pexp, r, piv = qr([dq_full eq_full], pivot=true)
+        ref_err = vecnorm([dq_full eq_full][:,piv] - pexp*r)
+        local rowcount
+        for rowcount=size(r)[1]:-1:0
+            err = vecnorm([dq_full eq_full][:,piv] - pexp[:,1:rowcount]*r[1:rowcount,:])
+            if err > ref_err
+                rowcount += 1
+                break
+            end
+        end
+        dq, eq = matsplit(r[1:rowcount,sortperm(piv)], [rowcount], [nx(circ), nu(circ)])
+        pexp = pexp[:,1:rowcount]
+    else
+        dq = zeros(0, nx(circ))
+        eq = zeros(0, nu(circ))
+        pexp = zeros(0, 0)
+    end
+
+    p = [pv(circ) pi(circ) 0.5*px(circ)+1/t*pxd(circ) pq(circ)]
+    dy = p * [dv, di, a,  dq_full] + 0.5*px(circ)-1/t*pxd(circ)
+    ey = p * [ev, ei, b,  eq_full]
+    fy = p * [fv, fi, c,  k]
+    y0 = p * [v0, i0, x0, q0]
+
+    nl_eq = quote
+        #copy!(q, q0 + pexp * p + k * z)
+        copy!(q, q0)
+        BLAS.gemv!('N',1.,pexp,p,1.,q)
+        BLAS.gemv!('N',1.,k,z,1.,q)
+        let J=Jq
+            $(nonlinear_eq(circ))
+        end
+        #copy!(J, Jq*model.k)
+        BLAS.gemm!('N', 'N', 1., Jq, k, 0., J)
+        #copy!(Jp, Jq*pexp)
+        BLAS.gemm!('N', 'N', 1., Jq, pexp, 0., Jp)
+    end
+
+    DiscreteModel{solver}(a=a, b=b, c=c, x0=x0,
+                          pexp=pexp, dq=dq, eq=eq, k=k, q0=q0,
+                          dy=dy, ey=ey, fy=fy, y0=y0,
+                          nonlinear_eq=nl_eq)
+end
+
+nx(model::DiscreteModel) = length(model.x0)
+nq(model::DiscreteModel) = length(model.q0)
+np(model::DiscreteModel) = size(model.dq)[1]
+ny(model::DiscreteModel) = length(model.y0)
+nn(model::DiscreteModel) = size(model.k)[2]
+
+function run(model::DiscreteModel, u::AbstractMatrix{Float64})
+    y = Array(Float64, ny(model), size(u)[2])
+    for n = 1:size(u)[2]
+        p = model.dq * model.x + model.eq * u[:,n]
+        z = solve(model.solver, p)
+        y[:,n] = model.dy * model.x + model.ey * u[:,n] + model.fy * z + model.y0
+        model.x = model.a * model.x + model.b * u[:,n] + model.c * z + model.x0
+    end
+    return y
+end
+
+type SimpleSolver
+    func::Function
+    res::Vector{Float64}
+    Jp::Matrix{Float64}
+    J::Matrix{Float64}
+    z::Vector{Float64}
+    last_p::Vector{Float64}
+    function SimpleSolver(model::DiscreteModel)
+        res = Array(Float64,nn(model))
+        Jp = zeros(Float64,nn(model),np(model))
+        J = zeros(Float64,nn(model),nn(model))
+        z = zeros(Float64,nn(model))
+        last_p = zeros(Float64,np(model))
+        new(model.nonlinear_eq_func, res, Jp, J, z, last_p)
+    end
+end
+
+function solve(solver::SimpleSolver, p::AbstractVector{Float64}, maxiter=500)
+    solver.z += solver.Jp * (p - solver.last_p)
+    for i=1:maxiter
+        solver.func(solver.res, solver.J, solver.Jp, p, solver.z)
+        if dot(solver.res, solver.res) < 1e-20
+            break;
+        end
+        # explictly allow factorization to change J
+        solver.z -= lufact!(solver.J)\solver.res
+    end
+    copy!(solver.last_p, p)
+    return solver.z
+end
+
 
 function gensolve(a::SparseMatrixCSC, b, x, h, thresh=0.1)
     m = size(a)[1]
