@@ -417,27 +417,32 @@ type SimpleSolver
     J::Matrix{Float64}
     z::Vector{Float64}
     last_p::Vector{Float64}
+    dzdp::Matrix{Float64}
     function SimpleSolver(model::DiscreteModel)
         res = Array(Float64,nn(model))
         Jp = zeros(Float64,nn(model),np(model))
         J = zeros(Float64,nn(model),nn(model))
         z = zeros(Float64,nn(model))
         last_p = zeros(Float64,np(model))
-        new(model.nonlinear_eq_func, res, Jp, J, z, last_p)
+        dzdp = zeros(Float64,nn(model),np(model))
+        new(model.nonlinear_eq_func, res, Jp, J, z, last_p, dzdp)
     end
 end
 
 function solve(solver::SimpleSolver, p::AbstractVector{Float64}, maxiter=500)
-    solver.z += solver.Jp * (p - solver.last_p)
+    solver.z += solver.dzdp * (p - solver.last_p)
+    local JLU
     for i=1:maxiter
         solver.func(solver.res, solver.J, solver.Jp, p, solver.z)
+        # explictly allow factorization to change J
+        JLU = lufact!(solver.J)
         if dot(solver.res, solver.res) < 1e-20
             break;
         end
-        # explictly allow factorization to change J
-        solver.z -= lufact!(solver.J)\solver.res
+        solver.z -= JLU\solver.res
     end
     copy!(solver.last_p, p)
+    solver.dzdp[:,:] = -(JLU\solver.Jp)
     return solver.z
 end
 
