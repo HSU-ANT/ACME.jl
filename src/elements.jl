@@ -1,5 +1,5 @@
 export resistor, capacitor, inductor, transformer, voltagesource, currentsource,
-       voltageprobe, diode, bjt
+       voltageprobe, diode, bjt, opamp_ideal
 
 resistor(r) = Element(mv=-1, mi=r)
 
@@ -63,3 +63,7 @@ function bjt(typ; is=1e-12, η=1, isc=is, ise=is, ηc=η, ηe=η, βf=1000, βr=
                    mq = -polarity*speye(4), nonlinear_eq = nonlinear_eq,
                    pins = [:base, :emitter, :base, :collector])
 end
+
+opamp_ideal() = Element(mv=[0 0; 1 0], mi=[1 0; 0 0],
+                        pins=[symbol("in+"), symbol(:"in-"),
+                              symbol(:"out+"), symbol(:"out-")])
