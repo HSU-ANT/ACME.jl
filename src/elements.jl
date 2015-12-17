@@ -1,5 +1,5 @@
 export resistor, capacitor, inductor, transformer, voltagesource, currentsource,
-       voltageprobe, diode, bjt, opamp_ideal
+       voltageprobe, diode, bjt, opamp_ideal, opamp_macak
 
 resistor(r) = Element(mv=-1, mi=r)
 
@@ -67,3 +67,22 @@ end
 opamp_ideal() = Element(mv=[0 0; 1 0], mi=[1 0; 0 0],
                         pins=[symbol("in+"), symbol(:"in-"),
                               symbol(:"out+"), symbol(:"out-")])
+function opamp_macak(gain, vomin, vomax)
+    offset = 0.5 * (vomin + vomax)
+    scale = 0.5 * (vomax - vomin)
+    nonlinear_eq =
+        quote
+            let vi = q[1], vo = q[2], vi_scaled = vi * $(gain/scale)
+
+                res[1] = tanh(vi_scaled) * $(scale) - vo
+                #res[1] = tanh(q[1]) * $(scale) - vo
+                J[1,1] = $(gain) / cosh(vi_scaled)^2
+                J[1,2] = -1
+            end
+        end
+    return Element(mv=[0 0; 1 0; 0 1], mi=[1 0; 0 0; 0 0], mq=[0 0; -1 0; 0 -1],
+                   u0=[0; 0; offset],
+                   nonlinear_eq = nonlinear_eq,
+                   pins=[symbol("in+"), symbol(:"in-"),
+                         symbol(:"out+"), symbol(:"out-")])
+end
