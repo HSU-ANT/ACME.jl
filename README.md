@@ -30,3 +30,8 @@ model = DiscreteModel(circ, 1./44100)
 y = run(model, sin(2π*1000/44100*(0:44099)'))
 
 ```
+
+Note that the solver used to solve the non-linear equation when running the
+model is at present a very simple one which is likely not to converge. Hence,
+ACME can at the moment be used primarily to compute all the model matrices, but
+not so much for actually running the model.
