@@ -1,3 +1,6 @@
+# Copyright 2015 Martin Holters
+# See accompanying license file.
+
 module ACME
 
 export Circuit, add!, connect!, DiscreteModel, run

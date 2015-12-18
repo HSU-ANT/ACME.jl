@@ -1,3 +1,6 @@
+# Copyright 2015 Martin Holters
+# See accompanying license file.
+
 using ACME
 using Base.Test
 

@@ -1,3 +1,6 @@
+# Copyright 2015 Martin Holters
+# See accompanying license file.
+
 export resistor, capacitor, inductor, transformer, voltagesource, currentsource,
        voltageprobe, diode, bjt, opamp_ideal, opamp_macak
 
