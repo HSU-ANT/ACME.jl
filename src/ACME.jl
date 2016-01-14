@@ -213,7 +213,7 @@ function netfor!(c::Circuit, name::Symbol)
     c.net_names[name]
 end
 
-function connect!(c::Circuit, pins::Union(Pin,Symbol)...)
+function connect!(c::Circuit, pins::(@compat Union{Pin,Symbol})...)
     nets = unique([netfor!(c, pin) for pin in pins])
     for net in nets[2:end]
         push!(nets[1], net...)
