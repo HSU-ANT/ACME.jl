@@ -1,9 +1,11 @@
-# Copyright 2015 Martin Holters
+# Copyright 2015, 2016 Martin Holters
 # See accompanying license file.
 
 module ACME
 
 export Circuit, add!, connect!, DiscreteModel, run
+
+using Compat
 
 type Element
   mv :: SparseMatrixCSC{Number,Int}
@@ -19,7 +21,7 @@ type Element
   pxd :: SparseMatrixCSC{Number,Int}
   pq :: SparseMatrixCSC{Number,Int}
   nonlinear_eq :: Expr
-  pins :: Dict{Symbol, Vector{(Int, Int)}}
+  pins :: Dict{Symbol, Vector{@compat Tuple{Int, Int}}}
 
   function Element(;args...)
     sizes = (Symbol=>Int)[:n0 => 1]
@@ -35,7 +37,7 @@ type Element
     end
 
     function make_pin_dict(syms)
-      dict = (Symbol=>Vector{(Int, Int)})[]
+      dict = (Symbol=>Vector{@compat Tuple{Int, Int}})[]
       for i in 1:length(syms)
         branch = div(i+1, 2)
         polarity = 2mod(i, 2) - 1
@@ -84,7 +86,7 @@ ny(e::Element) = size(e.pv)[1]
 nn(e::Element) = nb(e) + nx(e) + nq(e) - nl(e)
 
 # a Pin combines an element with a branch/polarity list
-typealias Pin (Element, Vector{(Int,Int)})
+typealias Pin @compat Tuple{Element, Vector{@compat Tuple{Int,Int}}}
 
 # allow elem[:pin] notation to get an elements pin
 getindex(e::Element, p::Symbol) = (e, e.pins[p])
@@ -93,7 +95,7 @@ getindex(e::Element, p::Int) = getindex(e, string(p))
 
 include("elements.jl")
 
-typealias Net Vector{(Int,Int)} # each net is a list of branch/polarity pairs
+typealias Net Vector{@compat Tuple{Int,Int}} # each net is a list of branch/polarity pairs
 
 type Circuit
     elements :: Vector{Element}
