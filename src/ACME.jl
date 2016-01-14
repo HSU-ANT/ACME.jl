@@ -24,7 +24,7 @@ type Element
   pins :: Dict{Symbol, Vector{@compat Tuple{Int, Int}}}
 
   function Element(;args...)
-    sizes = (Symbol=>Int)[:n0 => 1]
+    sizes = @compat Dict{Symbol,Int}(:n0 => 1)
 
     function update_sizes(mat, syms)
       for (sym, s) in zip(syms, size(mat))
@@ -37,7 +37,7 @@ type Element
     end
 
     function make_pin_dict(syms)
-      dict = (Symbol=>Vector{@compat Tuple{Int, Int}})[]
+      dict = @compat Dict{Symbol,Vector{@compat Tuple{Int, Int}}}()
       for i in 1:length(syms)
         branch = div(i+1, 2)
         polarity = 2mod(i, 2) - 1
@@ -47,11 +47,12 @@ type Element
     end
     make_pin_dict(dict::Dict) = dict
 
-    const mat_dims = [ :mv => (:nl,:nb), :mi => (:nl,:nb), :mx => (:nl,:nx),
+    const mat_dims =
+        @compat  Dict( :mv => (:nl,:nb), :mi => (:nl,:nb), :mx => (:nl,:nx),
                        :mxd => (:nl,:nx), :mq => (:nl,:nq), :mu => (:nl,:nu),
                        :u0 => (:nl, :n0),
                        :pv => (:ny,:nb), :pi => (:ny,:nb), :px => (:ny,:nx),
-                       :pxd => (:ny,:nx), :pq => (:ny,:nq) ]
+                       :pxd => (:ny,:nx), :pq => (:ny,:nq) )
 
     elem = new()
     for (key, val) in args
@@ -78,7 +79,7 @@ type Element
   end
 end
 
-for (n,m) in [:nb => :mv, :nx => :mx, :nq => :mq, :nu => :mu]
+for (n,m) in @compat Dict(:nb => :mv, :nx => :mx, :nq => :mq, :nu => :mu)
   @eval ($n)(e::Element) = size(e.$m)[2]
 end
 nl(e::Element) = size(e.mv)[1]
@@ -136,9 +137,9 @@ function nonlinear_eq(c::Circuit)
     col_offset = 0
     nl_expr = Expr(:block)
     for elem in c.elements
-        index_offsets = { :q => (col_offset,),
-                          :J => (row_offset, col_offset),
-                          :res => (row_offset,) }
+        index_offsets = @compat Dict( :q => (col_offset,),
+                                      :J => (row_offset, col_offset),
+                                      :res => (row_offset,) )
 
         function offset_indexes(expr::Expr)
             ret = Expr(expr.head)
@@ -304,8 +305,8 @@ type DiscreteModel{Solver}
 
     function DiscreteModel(;args...)
         model = new()
-        types = { name_type[1] => name_type[2] for
-                  name_type in zip(DiscreteModel.names, DiscreteModel.types)}
+        types = @compat Dict([name_type[1] => name_type[2] for
+                              name_type in zip(fieldnames(DiscreteModel), DiscreteModel.types)])
         for (key, val) in args
             expected_type = types[key]
             if issubtype(expected_type, Matrix)
