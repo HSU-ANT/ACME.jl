@@ -1,4 +1,4 @@
-# Copyright 2015 Martin Holters
+# Copyright 2015, 2016 Martin Holters
 # See accompanying license file.
 
 module ACME
