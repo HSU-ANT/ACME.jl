@@ -151,7 +151,7 @@ function nonlinear_eq(c::Circuit)
                           :($(offsets[i]) + $(offset_indexes(expr.args[i+1]))))
                 end
             else
-                push!(ret.args, map(offset_indexes, expr.args)...)
+                append!(ret.args, map(offset_indexes, expr.args))
             end
             ret
         end
@@ -213,7 +213,7 @@ end
 function connect!(c::Circuit, pins::Union(Pin,Symbol)...)
     nets = unique([netfor!(c, pin) for pin in pins])
     for net in nets[2:end]
-        push!(nets[1], net...)
+        append!(nets[1], net)
         deleteat!(c.nets, findfirst(c.nets, net))
         for (name, named_net) in c.net_names
             if named_net == net
