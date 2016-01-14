@@ -102,11 +102,11 @@ type Circuit
     Circuit() = new([], [], Dict{Symbol, Net}())
 end
 
-for n in [:nb, :nx, :nq, :nu, :nl, :ny, :nn]
+for n in [:nb; :nx; :nq; :nu; :nl; :ny; :nn]
     @eval ($n)(c::Circuit) = sum([$n(elem) for elem in c.elements])
 end
 
-for mat in [:mv, :mi, :mx, :mxd, :mq, :mu, :pv, :pi, :px, :pxd, :pq]
+for mat in [:mv; :mi; :mx; :mxd; :mq; :mu; :pv; :pi; :px; :pxd; :pq]
     @eval ($mat)(c::Circuit) = blkdiag([elem.$mat for elem in c.elements]...)
 end
 
@@ -338,7 +338,7 @@ function DiscreteModel(circ::Circuit, t::Float64, solver::Type = SimpleSolver)
                      blkdiag(topomat(circ)...) spzeros(nb(circ), nx(circ) + nq(circ))],
                     [u0(circ) mu(circ) 1/t*mxd(circ)-0.5*mx(circ);
                      spzeros(nb(circ), 1+nu(circ)+nx(circ))])
-    rowsizes = [nb(circ), nb(circ), nx(circ), nq(circ)]
+    rowsizes = [nb(circ); nb(circ); nx(circ); nq(circ)]
     fv, fi, c, fq = matsplit(f, rowsizes)
 
     # choose particular solution such that the rows corresponding to q are
@@ -347,7 +347,7 @@ function DiscreteModel(circ::Circuit, t::Float64, solver::Type = SimpleSolver)
     x = x - full(f)/(full(fq)'*fq)*fq'*x[end-nq(circ)+1:end,:]
 
     v0, i0, x0, q0, ev, ei, b, eq_full, dv, di, a, dq_full =
-        matsplit(x, rowsizes, [1, nu(circ), nx(circ)])
+        matsplit(x, rowsizes, [1; nu(circ); nx(circ)])
 
     if size(dq_full)[1] > 0
         # decompose [dq_full eq_full] into pexp*[dq eq] with [dq eq] having minimum
@@ -362,7 +362,7 @@ function DiscreteModel(circ::Circuit, t::Float64, solver::Type = SimpleSolver)
                 break
             end
         end
-        dq, eq = matsplit(r[1:rowcount,sortperm(piv)], [rowcount], [nx(circ), nu(circ)])
+        dq, eq = matsplit(r[1:rowcount,sortperm(piv)], [rowcount], [nx(circ); nu(circ)])
         pexp = pexp[:,1:rowcount]
     else
         dq = zeros(0, nx(circ))
@@ -371,10 +371,10 @@ function DiscreteModel(circ::Circuit, t::Float64, solver::Type = SimpleSolver)
     end
 
     p = [pv(circ) pi(circ) 0.5*px(circ)+1/t*pxd(circ) pq(circ)]
-    dy = p * [dv, di, a,  dq_full] + 0.5*px(circ)-1/t*pxd(circ)
-    ey = p * [ev, ei, b,  eq_full]
-    fy = p * [fv, fi, c,  fq]
-    y0 = p * [v0, i0, x0, q0]
+    dy = p * [dv; di; a;  dq_full] + 0.5*px(circ)-1/t*pxd(circ)
+    ey = p * [ev; ei; b;  eq_full]
+    fy = p * [fv; fi; c;  fq]
+    y0 = p * [v0; i0; x0; q0]
 
     nl_eq = quote
         #copy!(q, q0 + pexp * p + fq * z)
