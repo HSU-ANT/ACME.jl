@@ -116,9 +116,9 @@ end
 u0(c::Circuit) = vcat([elem.u0 for elem in c.elements]...)
 
 function incidence(c::Circuit)
-    i = sizehint(Int[], 2nb(c))
-    j = sizehint(Int[], 2nb(c))
-    v = sizehint(Int[], 2nb(c))
+    i = sizehint!(Int[], 2nb(c))
+    j = sizehint!(Int[], 2nb(c))
+    v = sizehint!(Int[], 2nb(c))
     for (row, pins) in enumerate(c.nets), (branch, polarity) in pins
         push!(i, row)
         push!(j, branch)
