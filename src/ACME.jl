@@ -13,6 +13,8 @@ if VERSION < v"0.4.0-dev+2840"
         Base.qr(A, pivot=false, thin=thin)
 end
 
+import Base.getindex
+
 type Element
   mv :: SparseMatrixCSC{Number,Int}
   mi :: SparseMatrixCSC{Number,Int}
