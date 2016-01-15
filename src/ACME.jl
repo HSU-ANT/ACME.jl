@@ -55,9 +55,9 @@ type Element
     for (key, val) in args
       if haskey(mat_dims, key)
         val = sparse([val])
-        update_sizes (val, mat_dims[key])
+        update_sizes(val, mat_dims[key])
       elseif key == :pins
-        val = make_pin_dict (val)
+        val = make_pin_dict(val)
       end
       elem.(key) = val
     end
@@ -319,7 +319,7 @@ type DiscreteModel{Solver}
         # use a preallocated q and Jq
         q = zeros(nq(model))
         Jq = zeros(nn(model), nq(model))
-        model.nonlinear_eq_func = eval (quote
+        model.nonlinear_eq_func = eval(quote
             # wrap up in named function until anonymous functions are as fast...
             function $(gensym())(res, J, Jp, p, z)
                 let q0=$(model.q0), pexp=$(model.pexp), q=$(q), Jq=$(Jq), fq=$(model.fq)
