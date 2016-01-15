@@ -1,4 +1,4 @@
-# Copyright 2015 Martin Holters
+# Copyright 2015, 2016 Martin Holters
 # See accompanying license file.
 
 export resistor, capacitor, inductor, transformer, voltagesource, currentsource,
@@ -6,24 +6,24 @@ export resistor, capacitor, inductor, transformer, voltagesource, currentsource,
 
 resistor(r) = Element(mv=-1, mi=r)
 
-capacitor(c) = Element(mv=[c,0], mi=[0, 1], mx=[-1,0], mxd=[0,-1])
-inductor(l) = Element(mv=[1,0], mi=[0, l], mx=[0,-1], mxd=[-1,0])
+capacitor(c) = Element(mv=[c;0], mi=[0; 1], mx=[-1;0], mxd=[0;-1])
+inductor(l) = Element(mv=[1;0], mi=[0; l], mx=[0;-1], mxd=[-1;0])
 transformer(l1, l2; coupling_coefficient=1,
             mutual_coupling=coupling_coefficient*sqrt(l1*l2)) =
     Element(mv=[1 0; 0 1; 0 0; 0 0],
             mi=[0 0; 0 0; l1 mutual_coupling; mutual_coupling l2],
             mx=[0 0; 0 0; -1 0; 0 -1], mxd=[-1 0; 0 -1; 0 0; 0 0],
-            pins=[:primary1, :primary2, :secondary1, :secondary2])
+            pins=[:primary1; :primary2; :secondary1; :secondary2])
 
-voltagesource(v) = Element(mv=1, u0=v, pins=[:+, :-])
-voltagesource() = Element(mv=1, mu=1, pins=[:+, :-])
-currentsource(i) = Element(mi=-1, u0=i, pins=[:+, :-])
-currentsource() = Element(mi=-1, mu=1, pins=[:+, :-])
+voltagesource(v) = Element(mv=1, u0=v, pins=[:+; :-])
+voltagesource() = Element(mv=1, mu=1, pins=[:+; :-])
+currentsource(i) = Element(mi=-1, u0=i, pins=[:+; :-])
+currentsource() = Element(mi=-1, mu=1, pins=[:+; :-])
 
-voltageprobe() = Element(mi=1, pv=1, pins=[:+, :-])
+voltageprobe() = Element(mi=1, pv=1, pins=[:+; :-])
 
 diode(is::Number, η::Number = 1) =
-  Element(mv=[1,0], mi=[0,1], mq=[-1 0; 0 -1], pins=[:+, :-], nonlinear_eq =
+  Element(mv=[1;0], mi=[0;1], mq=[-1 0; 0 -1], pins=[:+; :-], nonlinear_eq =
     quote
       let v = q[1], i = q[2], ex = exp(v*$(1./(25e-3 * η)))
         res[1] = $(is) * (ex - 1) - i
@@ -64,12 +64,12 @@ function bjt(typ; is=1e-12, η=1, isc=is, ise=is, ηc=η, ηe=η, βf=1000, βr=
         end
     return Element(mv=[1 0; 0 1; 0 0; 0 0], mi = [0 0; 0 0; 1 0; 0 1],
                    mq = -polarity*speye(4), nonlinear_eq = nonlinear_eq,
-                   pins = [:base, :emitter, :base, :collector])
+                   pins = [:base; :emitter; :base; :collector])
 end
 
 opamp_ideal() = Element(mv=[0 0; 1 0], mi=[1 0; 0 0],
-                        pins=[symbol("in+"), symbol(:"in-"),
-                              symbol(:"out+"), symbol(:"out-")])
+                        pins=[symbol("in+"); symbol(:"in-");
+                              symbol(:"out+"); symbol(:"out-")])
 function opamp_macak(gain, vomin, vomax)
     offset = 0.5 * (vomin + vomax)
     scale = 0.5 * (vomax - vomin)
@@ -86,6 +86,6 @@ function opamp_macak(gain, vomin, vomax)
     return Element(mv=[0 0; 1 0; 0 1], mi=[1 0; 0 0; 0 0], mq=[0 0; -1 0; 0 -1],
                    u0=[0; 0; offset],
                    nonlinear_eq = nonlinear_eq,
-                   pins=[symbol("in+"), symbol(:"in-"),
-                         symbol(:"out+"), symbol(:"out-")])
+                   pins=[symbol("in+"); symbol(:"in-");
+                         symbol(:"out+"); symbol(:"out-")])
 end
