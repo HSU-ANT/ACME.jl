@@ -6,6 +6,12 @@ module ACME
 export Circuit, add!, connect!, DiscreteModel, run
 
 using Compat
+if VERSION < v"0.4.0-dev+2840"
+    qr(A, ::Type{Val{true}}; thin::Bool=true) =
+        Base.qr(A, pivot=true, thin=thin)
+    qr(A, ::Type{Val{false}}; thin::Bool=true) =
+        Base.qr(A, pivot=false, thin=thin)
+end
 
 type Element
   mv :: SparseMatrixCSC{Number,Int}
@@ -355,7 +361,7 @@ function DiscreteModel(circ::Circuit, t::Float64, solver::Type = SimpleSolver)
     if size(dq_full)[1] > 0
         # decompose [dq_full eq_full] into pexp*[dq eq] with [dq eq] having minimum
         # number of rows based on the QR factorization
-        pexp, r, piv = qr([dq_full eq_full], pivot=true)
+        pexp, r, piv = qr([dq_full eq_full], Val{true})
         ref_err = vecnorm([dq_full eq_full][:,piv] - pexp*r)
         local rowcount
         for rowcount=size(r)[1]:-1:0
