@@ -64,9 +64,9 @@ type Element
     for (key, val) in args
       if haskey(mat_dims, key)
         val = sparse([val])
-        update_sizes (val, mat_dims[key])
+        update_sizes(val, mat_dims[key])
       elseif key == :pins
-        val = make_pin_dict (val)
+        val = make_pin_dict(val)
       end
       elem.(key) = val
     end
@@ -328,7 +328,7 @@ type DiscreteModel{Solver}
         # use a preallocated q and Jq
         q = zeros(nq(model))
         Jq = zeros(nn(model), nq(model))
-        model.nonlinear_eq_func = eval (quote
+        model.nonlinear_eq_func = eval(quote
             # wrap up in named function until anonymous functions are as fast...
             function $(gensym())(res, J, Jp, p, z)
                 let q0=$(model.q0), pexp=$(model.pexp), q=$(q), Jq=$(Jq), fq=$(model.fq)
@@ -486,7 +486,7 @@ function gensolve(a::SparseMatrixCSC, b, x, h, thresh=0.1)
         # ait*q only has a single element!
         x = x + q * ((b[t[i],:] - ait*x) / (ait*q)[1]);
         if size(h)[2] > 1
-            h = h[:,[1:j-1,j+1:end]] - q * s[1,[1:j-1,j+1:end]]/s[1,j]
+            h = h[:,[1:j-1;j+1:end]] - q * s[1,[1:j-1;j+1:end]]/s[1,j]
         else
             h = similar(h, eltype(h), (size(h)[1], 0))
         end
@@ -497,7 +497,7 @@ end
 gensolve(a, b, thresh=0.1) =
     gensolve(a, b, spzeros(size(a)[2], size(b)[2]), speye(size(a)[2]), thresh)
 
-consecranges(lengths) = map(range, cumsum([1, lengths[1:end-1]]), lengths)
+consecranges(lengths) = map(range, cumsum([1; lengths[1:end-1]]), lengths)
 
 matsplit(m, rowsizes, colsizes=[size(m)[2]]) =
     [m[rs, cs] for rs in consecranges(rowsizes), cs in consecranges(colsizes)]
