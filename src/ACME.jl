@@ -65,7 +65,7 @@ type Element
     elem = new()
     for (key, val) in args
       if haskey(mat_dims, key)
-        val = sparse([val])
+        val = sparsemat(val)
         update_sizes(val, mat_dims[key])
       elseif key == :pins
         val = make_pin_dict(val)
@@ -503,5 +503,10 @@ consecranges(lengths) = map(range, cumsum([1; lengths[1:end-1]]), lengths)
 
 matsplit(m, rowsizes, colsizes=[size(m)[2]]) =
     [m[rs, cs] for rs in consecranges(rowsizes), cs in consecranges(colsizes)]
+
+sparsemat(A::SparseMatrixCSC) = A
+sparsemat(A::AbstractMatrix) = sparse(A)
+sparsemat(A::AbstractVector) = sparse(A)
+sparsemat(a::Number) = sparse([a])
 
 end # module
