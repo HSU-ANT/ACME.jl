@@ -99,7 +99,7 @@ typealias Pin @compat Tuple{Element, Vector{@compat Tuple{Int,Int}}}
 
 # allow elem[:pin] notation to get an elements pin
 getindex(e::Element, p::Symbol) = (e, e.pins[p])
-getindex(e::Element, p::String) = getindex(e, symbol(p))
+getindex(e::Element, p::AbstractString) = getindex(e, symbol(p))
 getindex(e::Element, p::Int) = getindex(e, string(p))
 
 include("elements.jl")
