@@ -477,7 +477,7 @@ function gensolve(a::SparseMatrixCSC, b, x, h, thresh=0.1)
         # ait*q only has a single element!
         x = x + q * ((b[t[i],:] - ait*x) / (ait*q)[1]);
         if size(h)[2] > 1
-            h = h[:,[1:j-1,j+1:end]] - q * s[1,[1:j-1,j+1:end]]/s[1,j]
+            h = h[:,[1:j-1;j+1:end]] - q * s[1,[1:j-1;j+1:end]]/s[1,j]
         else
             h = similar(h, eltype(h), (size(h)[1], 0))
         end
@@ -488,7 +488,7 @@ end
 gensolve(a, b, thresh=0.1) =
     gensolve(a, b, spzeros(size(a)[2], size(b)[2]), speye(size(a)[2]), thresh)
 
-consecranges(lengths) = map(range, cumsum([1, lengths[1:end-1]]), lengths)
+consecranges(lengths) = map(range, cumsum([1; lengths[1:end-1]]), lengths)
 
 matsplit(m, rowsizes, colsizes=[size(m)[2]]) =
     [m[rs, cs] for rs in consecranges(rowsizes), cs in consecranges(colsizes)]
