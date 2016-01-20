@@ -3,6 +3,7 @@
 
 module ACME
 
+import Base.run
 export Circuit, add!, connect!, DiscreteModel, run
 
 using Compat
