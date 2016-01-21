@@ -13,6 +13,16 @@ tv, ti = ACME.topomat(sparse([1 -1 1; -1 1 -1]))
 # two nodes, one branch between them -> voltage arbitrary, current==0
 @test ACME.topomat(sparse([1,2], [1,1], [1,-1])) == (sparse([]), sparse([1]))
 
+for num = 1:50
+    let ps = rand(4, num)
+        t = ACME.KDTree(ps)
+        for i in 1:size(ps)[2]
+            idx = ACME.indnearest(t, ps[:,i])[1]
+            @test ps[:,i] == ps[:,idx]
+        end
+    end
+end
+
 # simple circuit: resistor and diode in series, driven by constant voltage,
 # chosen such that a prescribe current flows
 let i = 1e-3, r=10e3, is=1e-12

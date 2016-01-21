@@ -6,6 +6,8 @@ module ACME
 import Base.run
 export Circuit, add!, connect!, DiscreteModel, run
 
+include("kdtree.jl")
+
 using Compat
 if VERSION < v"0.4.0-dev+2840"
     qr(A, ::Type{Val{true}}; thin::Bool=true) =
