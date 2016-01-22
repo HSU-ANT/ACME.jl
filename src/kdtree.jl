@@ -86,10 +86,16 @@ end
 
 function update_best_dist!(alts, dist)
     alts.best_dist = min(alts.best_dist, dist)
-    alts_drop = find(alts.delta_norms .≥ alts.best_dist)
-    deleteat!(alts.idx, alts_drop)
-    deleteat!(alts.delta_norms, alts_drop)
-    deleteat!(alts.delta, alts_drop)
+    i = 1
+    while i ≤ length(alts.delta_norms)
+        if alts.delta_norms[i] .≥ alts.best_dist
+            deleteat!(alts.idx, i)
+            deleteat!(alts.delta_norms, i)
+            deleteat!(alts.delta, i)
+        else
+            i += 1
+        end
+    end
 end
 
 indnearest(tree::KDTree, p::AbstractVector, alt = Alts(eltype(p), length(p))) =
@@ -120,7 +126,11 @@ function indnearest(tree::KDTree, p::AbstractVector, max_leaves::Int,
         idx -= 2^depth - 1
 
         p_idx = tree.ps_idx[idx]
-        update_best_dist!(alt, sumabs2((p - tree.ps[:,p_idx])))
+        dist = 0.
+        for i in 1:length(p)
+            dist += (p[i] - tree.ps[i, p_idx])^2
+        end
+        update_best_dist!(alt, dist)
 
         l += 1
     end
