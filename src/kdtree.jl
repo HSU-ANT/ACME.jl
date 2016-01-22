@@ -62,29 +62,33 @@ end
 type Alts{T}
     idx::Vector{Int}
     delta::Matrix{T}
+    delta_norms::Vector{T}
     best_dist::T
 end
 
-Alts(T, k) = Alts([1], zeros(T, k, 1), Inf)
+Alts(T, k) = Alts([1], zeros(T, k, 1), zeros(T, 1), typemax(T))
 
 function pop_best_alt!(alts)
-    min_idx = indmin(sum(alts.delta.^2, 1))
+    min_idx = indmin(alts.delta_norms)
     idx = alts.idx[min_idx]
     delta = alts.delta[:,min_idx]
     deleteat!(alts.idx, min_idx)
+    deleteat!(alts.delta_norms, min_idx)
     alts.delta = [alts.delta[:,1:min_idx-1] alts.delta[:,min_idx+1:end]]
     return idx, delta
 end
 
 function append_alts!(alts, new_idx, new_delta)
     append!(alts.idx, new_idx)
+    append!(alts.delta_norms, vec(sum(new_delta.^2, 1)))
     alts.delta = [alts.delta new_delta]
 end
 
 function update_best_dist!(alts, dist)
     alts.best_dist = min(alts.best_dist, dist)
-    alts_keep = vec(sum(alts.delta.^2, 1) .< alts.best_dist)
+    alts_keep = alts.delta_norms .< alts.best_dist
     alts.idx = alts.idx[alts_keep]
+    alts.delta_norms = alts.delta_norms[alts_keep]
     alts.delta = alts.delta[:,alts_keep]
 end
 
