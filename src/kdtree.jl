@@ -59,18 +59,19 @@ function KDTree(p::AbstractMatrix)
     return KDTree{eltype(p),typeof(cut_val),typeof(p)}(cut_dim, cut_val, vec(p_idx_final), p)
 end
 
-type Alts
-    idx
-    delta
-    best_dist
+type Alts{T}
+    idx::Vector{Int}
+    delta::Matrix{T}
+    best_dist::T
 end
 
-indnearest(tree::KDTree, p::AbstractVector,
-           alt = Alts([1], zeros(eltype(p), length(p), 1), Inf)) =
+Alts(T, k) = Alts([1], zeros(T, k, 1), Inf)
+
+indnearest(tree::KDTree, p::AbstractVector, alt = Alts(eltype(p), length(p))) =
     indnearest(tree, p, typemax(Int), alt)
 
 function indnearest(tree::KDTree, p::AbstractVector, max_leaves::Int,
-                    alt = Alts([1], zeros(eltype(p), length(p), 1), Inf))
+                    alt = Alts(eltype(p), length(p)))
     depth = round(Int, log2(length(tree.cut_dim)+1))
 
     l = 0
