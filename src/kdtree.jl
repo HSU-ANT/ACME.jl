@@ -67,6 +67,27 @@ end
 
 Alts(T, k) = Alts([1], zeros(T, k, 1), Inf)
 
+function pop_best_alt!(alts)
+    min_idx = indmin(sum(alts.delta.^2, 1))
+    idx = alts.idx[min_idx]
+    delta = alts.delta[:,min_idx]
+    deleteat!(alts.idx, min_idx)
+    alts.delta = [alts.delta[:,1:min_idx-1] alts.delta[:,min_idx+1:end]]
+    return idx, delta
+end
+
+function append_alts!(alts, new_idx, new_delta)
+    append!(alts.idx, new_idx)
+    alts.delta = [alts.delta new_delta]
+end
+
+function update_best_dist!(alts, dist)
+    alts.best_dist = min(alts.best_dist, dist)
+    alts_keep = vec(sum(alts.delta.^2, 1) .< alts.best_dist)
+    alts.idx = alts.idx[alts_keep]
+    alts.delta = alts.delta[:,alts_keep]
+end
+
 indnearest(tree::KDTree, p::AbstractVector, alt = Alts(eltype(p), length(p))) =
     indnearest(tree, p, typemax(Int), alt)
 
@@ -77,13 +98,11 @@ function indnearest(tree::KDTree, p::AbstractVector, max_leaves::Int,
     l = 0
     p_idx = 0
     while l < max_leaves && ~isempty(alt.idx)
-        min_idx = indmin(sum(alt.delta.^2, 1))
-        idx = alt.idx[min_idx]
+        idx, delta = pop_best_alt!(alt)
         start_depth = floor(Int, log2(idx)) + 1
         new_alt_idx = zeros(Int, depth - start_depth + 1)
-        new_alt_delta = repmat(alt.delta[:,min_idx], 1, depth - start_depth + 1)
-        deleteat!(alt.idx, min_idx)
-        alt.delta = [alt.delta[:,1:min_idx-1] alt.delta[:,min_idx+1:end]]
+        new_alt_delta = repmat(delta, 1, depth - start_depth + 1)
+
         for d in 1:depth - start_depth + 1
             dim = tree.cut_dim[idx]
             new_alt_delta[dim,d] = p[dim] - tree.cut_val[idx]
@@ -96,13 +115,11 @@ function indnearest(tree::KDTree, p::AbstractVector, max_leaves::Int,
             end
         end
         idx -= 2^depth - 1
-        append!(alt.idx, new_alt_idx)
-        alt.delta = [alt.delta new_alt_delta]
+
+        append_alts!(alt, new_alt_idx, new_alt_delta)
         p_idx = tree.ps_idx[idx]
-        alt.best_dist = min(alt.best_dist, sum((p - tree.ps[:,p_idx]).^2))
-        alt_keep = vec(sum(alt.delta.^2, 1) .< alt.best_dist)
-        alt.idx = alt.idx[alt_keep]
-        alt.delta = alt.delta[:,alt_keep]
+        update_best_dist!(alt, sum((p - tree.ps[:,p_idx]).^2))
+
         l += 1
     end
 
