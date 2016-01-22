@@ -72,15 +72,16 @@ function pop_best_alt!(alts)
     min_idx = indmin(alts.delta_norms)
     idx = alts.idx[min_idx]
     delta = alts.delta[min_idx]
+    delta_norm = alts.delta_norms[min_idx]
     deleteat!(alts.idx, min_idx)
     deleteat!(alts.delta_norms, min_idx)
     deleteat!(alts.delta, min_idx)
-    return idx, delta
+    return idx, delta, delta_norm
 end
 
-function push_alt!(alts, new_idx, new_delta)
+function push_alt!(alts, new_idx, new_delta, new_delta_norm=sumabs2(new_delta))
     push!(alts.idx, new_idx)
-    push!(alts.delta_norms, sumabs2(new_delta))
+    push!(alts.delta_norms, new_delta_norm)
     push!(alts.delta, new_delta)
 end
 
@@ -108,18 +109,24 @@ function indnearest(tree::KDTree, p::AbstractVector, max_leaves::Int,
     l = 0
     p_idx = 0
     while l < max_leaves && ~isempty(alt.idx)
-        idx, delta = pop_best_alt!(alt)
+        idx, delta, delta_norm = pop_best_alt!(alt)
         start_depth = floor(Int, log2(idx)) + 1
 
         for d in 1:depth - start_depth + 1
             dim = tree.cut_dim[idx]
-            new_alt_delta = copy(delta)
-            new_alt_delta[dim] = p[dim] - tree.cut_val[idx]
+            new_alt_delta_norm = delta_norm - delta[dim]^2 + (p[dim] - tree.cut_val[idx])^2
+            if new_alt_delta_norm < alt.best_dist
+                new_alt_delta = copy(delta)
+                new_alt_delta[dim] = p[dim] - tree.cut_val[idx]
+                if p[dim] ≤ tree.cut_val[idx]
+                    push_alt!(alt, 2idx+1, new_alt_delta, new_alt_delta_norm)
+                else
+                    push_alt!(alt, 2idx, new_alt_delta, new_alt_delta_norm)
+                end
+            end
             if p[dim] ≤ tree.cut_val[idx]
-                push_alt!(alt, 2idx+1, new_alt_delta)
                 idx *= 2
             else
-                push_alt!(alt, 2idx, new_alt_delta)
                 idx = 2idx + 1
             end
         end
