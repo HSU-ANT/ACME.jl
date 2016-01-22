@@ -80,7 +80,7 @@ end
 
 function push_alt!(alts, new_idx, new_delta)
     push!(alts.idx, new_idx)
-    push!(alts.delta_norms, sum(new_delta.^2))
+    push!(alts.delta_norms, sumabs2(new_delta))
     push!(alts.delta, new_delta)
 end
 
@@ -120,7 +120,7 @@ function indnearest(tree::KDTree, p::AbstractVector, max_leaves::Int,
         idx -= 2^depth - 1
 
         p_idx = tree.ps_idx[idx]
-        update_best_dist!(alt, sum((p - tree.ps[:,p_idx]).^2))
+        update_best_dist!(alt, sumabs2((p - tree.ps[:,p_idx])))
 
         l += 1
     end
