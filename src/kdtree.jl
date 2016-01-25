@@ -74,9 +74,15 @@ function pop_best_alt!(alts)
     idx = alts.idx[min_idx]
     delta = alts.delta[min_idx]
     delta_norm = alts.delta_norms[min_idx]
-    deleteat!(alts.idx, min_idx)
-    deleteat!(alts.delta_norms, min_idx)
-    deleteat!(alts.delta, min_idx)
+
+    last_idx = length(alts.idx)
+    alts.idx[min_idx] = alts.idx[last_idx]
+    deleteat!(alts.idx, last_idx)
+    alts.delta_norms[min_idx] = alts.delta_norms[last_idx]
+    deleteat!(alts.delta_norms, last_idx)
+    alts.delta[min_idx] = alts.delta[last_idx]
+    deleteat!(alts.delta, last_idx)
+
     return idx, delta, delta_norm
 end
 
