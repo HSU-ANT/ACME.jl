@@ -64,9 +64,10 @@ type Alts{T}
     delta::Vector{Vector{T}}
     delta_norms::Vector{T}
     best_dist::T
+    best_pidx::Int
 end
 
-Alts(T, k) = Alts([1], [zeros(T, k) for i in 1], zeros(T, 1), typemax(T))
+Alts(T, k) = Alts([1], [zeros(T, k) for i in 1], zeros(T, 1), typemax(T), 0)
 
 function pop_best_alt!(alts)
     min_idx = indmin(alts.delta_norms)
@@ -85,8 +86,11 @@ function push_alt!(alts, new_idx, new_delta, new_delta_norm=sumabs2(new_delta))
     push!(alts.delta, new_delta)
 end
 
-function update_best_dist!(alts, dist)
-    alts.best_dist = min(alts.best_dist, dist)
+function update_best_dist!(alts, dist, p_idx)
+    if dist < alts.best_dist
+        alts.best_dist = dist
+        alts.best_pidx = p_idx
+    end
     i = 1
     while i ≤ length(alts.delta_norms)
         if alts.delta_norms[i] .≥ alts.best_dist
@@ -137,10 +141,10 @@ function indnearest(tree::KDTree, p::AbstractVector, max_leaves::Int,
         for i in 1:length(p)
             dist += (p[i] - tree.ps[i, p_idx])^2
         end
-        update_best_dist!(alt, dist)
+        update_best_dist!(alt, dist, p_idx)
 
         l += 1
     end
 
-    return p_idx, alt
+    return alt.best_pidx, alt
 end
