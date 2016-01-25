@@ -98,15 +98,20 @@ function update_best_dist!(alts, dist, p_idx)
     if dist < alts.best_dist
         alts.best_dist = dist
         alts.best_pidx = p_idx
-        i = 1
-        while i ≤ length(alts.delta_norms)
+        i = length(alts.delta_norms)
+        while i > 0
             if alts.delta_norms[i] .≥ alts.best_dist
-                deleteat!(alts.idx, i)
-                deleteat!(alts.delta_norms, i)
-                deleteat!(alts.delta, i)
-            else
-                i += 1
+                last_idx = length(alts.delta_norms)
+                if last_idx ≠ i
+                    alts.idx[i] = alts.idx[last_idx]
+                    alts.delta_norms[i] = alts.delta_norms[last_idx]
+                    alts.delta[i] = alts.delta[last_idx]
+                end
+                deleteat!(alts.idx, last_idx)
+                deleteat!(alts.delta_norms, last_idx)
+                deleteat!(alts.delta, last_idx)
             end
+            i -= 1
         end
     end
 end
