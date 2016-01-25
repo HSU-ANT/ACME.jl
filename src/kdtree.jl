@@ -87,24 +87,26 @@ function pop_best_alt!(alts)
 end
 
 function push_alt!(alts, new_idx, new_delta, new_delta_norm=sumabs2(new_delta))
-    push!(alts.idx, new_idx)
-    push!(alts.delta_norms, new_delta_norm)
-    push!(alts.delta, new_delta)
+    if new_delta_norm < alts.best_dist
+        push!(alts.idx, new_idx)
+        push!(alts.delta_norms, new_delta_norm)
+        push!(alts.delta, new_delta)
+    end
 end
 
 function update_best_dist!(alts, dist, p_idx)
     if dist < alts.best_dist
         alts.best_dist = dist
         alts.best_pidx = p_idx
-    end
-    i = 1
-    while i ≤ length(alts.delta_norms)
-        if alts.delta_norms[i] .≥ alts.best_dist
-            deleteat!(alts.idx, i)
-            deleteat!(alts.delta_norms, i)
-            deleteat!(alts.delta, i)
-        else
-            i += 1
+        i = 1
+        while i ≤ length(alts.delta_norms)
+            if alts.delta_norms[i] .≥ alts.best_dist
+                deleteat!(alts.idx, i)
+                deleteat!(alts.delta_norms, i)
+                deleteat!(alts.delta, i)
+            else
+                i += 1
+            end
         end
     end
 end
