@@ -69,21 +69,16 @@ end
 
 Alts(T, k) = Alts([1], [zeros(T, k) for i in 1], zeros(T, 1), typemax(T), 0)
 
-function pop_best_alt!(alts)
-    min_idx = indmin(alts.delta_norms)
-    idx = alts.idx[min_idx]
-    delta = alts.delta[min_idx]
-    delta_norm = alts.delta_norms[min_idx]
+find_best_pos(alts) = indmin(alts.delta_norms)
 
+function deletepos!(alts, pos)
     last_idx = length(alts.idx)
-    alts.idx[min_idx] = alts.idx[last_idx]
+    alts.idx[pos] = alts.idx[last_idx]
     deleteat!(alts.idx, last_idx)
-    alts.delta_norms[min_idx] = alts.delta_norms[last_idx]
+    alts.delta_norms[pos] = alts.delta_norms[last_idx]
     deleteat!(alts.delta_norms, last_idx)
-    alts.delta[min_idx] = alts.delta[last_idx]
+    alts.delta[pos] = alts.delta[last_idx]
     deleteat!(alts.delta, last_idx)
-
-    return idx, delta, delta_norm
 end
 
 function push_alt!(alts, new_idx, new_delta, new_delta_norm=sumabs2(new_delta))
@@ -126,7 +121,12 @@ function indnearest(tree::KDTree, p::AbstractVector, max_leaves::Int,
     l = 0
     p_idx = 0
     while l < max_leaves && ~isempty(alt.idx)
-        idx, delta, delta_norm = pop_best_alt!(alt)
+        best_pos = find_best_pos(alt)
+        idx = alt.idx[best_pos]
+        delta = alt.delta[best_pos]
+        delta_norm = alt.delta_norms[best_pos]
+        deletepos!(alt, best_pos)
+
         start_depth = floor(Int, log2(idx)) + 1
 
         for d in 1:depth - start_depth + 1
