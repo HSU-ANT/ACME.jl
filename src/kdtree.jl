@@ -9,6 +9,10 @@ type KDTree{Tcv<:AbstractVector,Tp<:AbstractMatrix}
 end
 
 function KDTree(p::AbstractMatrix)
+    if size(p)[2] == 0
+        return KDTree{Vector{eltype(p)},typeof(p)}([], [], [], p)
+    end
+
     depth = ceil(Int, log2(size(p)[2]))
     min_idx = zeros(Int, 2^depth-1)
     max_idx = zeros(Int, 2^depth-1)
