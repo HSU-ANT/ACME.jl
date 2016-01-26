@@ -27,7 +27,7 @@ function KDTree(p::AbstractMatrix)
     dim = indmax(var(p,2))
     p_idx = sortperm(vec(p[dim,:]))
 
-    min_idx[1] = 1;
+    min_idx[1] = 1
     max_idx[1] = size(p)[2]
     cut_idx[1] = div(size(p)[2]+1, 2)
     cut_dim[1] = dim
