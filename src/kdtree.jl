@@ -1,7 +1,7 @@
 # Copyright 2016 Martin Holters
 # See accompanying license file.
 
-type KDTree{E<:Number,Tcv<:AbstractVector{E},Tp<:AbstractMatrix{E}}
+type KDTree{Tcv<:AbstractVector,Tp<:AbstractMatrix}
     cut_dim::Vector{Int}
     cut_val::Tcv
     ps_idx::Vector{Int}
@@ -17,7 +17,7 @@ function KDTree(p::AbstractMatrix)
     cut_val = zeros(eltype(p), 2^depth-1)
 
     if depth == 0
-        return KDTree{eltype(p),typeof(cut_val),typeof(p)}(cut_dim, cut_val, [1], p)
+        return KDTree{typeof(cut_val),typeof(p)}(cut_dim, cut_val, [1], p)
     end
 
     dim = indmax(var(p,2))
@@ -56,7 +56,7 @@ function KDTree(p::AbstractMatrix)
         end
     end
 
-    return KDTree{eltype(p),typeof(cut_val),typeof(p)}(cut_dim, cut_val, vec(p_idx_final), p)
+    return KDTree{typeof(cut_val),typeof(p)}(cut_dim, cut_val, vec(p_idx_final), p)
 end
 
 type Alts{T}
