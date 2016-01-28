@@ -32,6 +32,7 @@ y = run(model, sin(2π*1000/44100*(0:44099)'))
 ```
 
 Note that the solver used to solve the non-linear equation when running the
-model is at present a very simple one which is likely not to converge. Hence,
-ACME can at the moment be used primarily to compute all the model matrices, but
-not so much for actually running the model.
+model saves solutions to use as starting points in the future. Model execution
+will therefore become faster after an initial learning phase.  Nevertheless,
+ACME is at present more geared towards computing all the model matrices than to
+actually running the model.
