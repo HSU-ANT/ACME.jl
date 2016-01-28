@@ -444,6 +444,10 @@ type SimpleSolver
     end
 end
 
+function hasconverged(solver::SimpleSolver)
+    return sumabs2(solver.res) < 1e-20
+end
+
 function solve(solver::SimpleSolver, p::AbstractVector{Float64}, maxiter=500)
     solver.z += solver.dzdp * (p - solver.last_p)
     local JLU
@@ -451,9 +455,7 @@ function solve(solver::SimpleSolver, p::AbstractVector{Float64}, maxiter=500)
         solver.func(solver.res, solver.J, solver.Jp, p, solver.z)
         # explictly allow factorization to change J
         JLU = lufact!(solver.J)
-        if dot(solver.res, solver.res) < 1e-20
-            break;
-        end
+        hasconverged(solver) && break
         solver.z -= JLU\solver.res
     end
     copy!(solver.last_p, p)
