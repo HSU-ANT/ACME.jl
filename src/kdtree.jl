@@ -71,7 +71,8 @@ type Alts{T}
     best_pidx::Int
 end
 
-Alts(T, k) = Alts([1], [zeros(T, k) for i in 1], zeros(T, 1), typemax(T), 0)
+Alts{T}(p::Vector{T}) =
+    Alts([1], [zeros(T, length(p)) for i in 1], zeros(T, 1), typemax(T), 0)
 
 find_best_pos(alts) = indmin(alts.delta_norms)
 
@@ -115,11 +116,11 @@ function update_best_dist!(alts, dist, p_idx)
     end
 end
 
-indnearest(tree::KDTree, p::AbstractVector, alt = Alts(eltype(p), length(p))) =
+indnearest(tree::KDTree, p::AbstractVector, alt = Alts(p)) =
     indnearest(tree, p, typemax(Int), alt)
 
 function indnearest(tree::KDTree, p::AbstractVector, max_leaves::Int,
-                    alt = Alts(eltype(p), length(p)))
+                    alt = Alts(p))
     depth = round(Int, log2(length(tree.cut_dim)+1))
 
     l = 0
