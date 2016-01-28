@@ -421,6 +421,13 @@ function run(model::DiscreteModel, u::AbstractMatrix{Float64})
     for n = 1:size(u)[2]
         p = model.dq * model.x + model.eq * u[:,n]
         z = solve(model.solver, p)
+        if ~hasconverged(model.solver)
+            if all(isfinite(z))
+                warn("Failed to converge while solving non-linear equation.")
+            else
+                error("Failed to converge while solving non-linear equation, got non-finite result.")
+            end
+        end
         y[:,n] = model.dy * model.x + model.ey * u[:,n] + model.fy * z + model.y0
         model.x = model.a * model.x + model.b * u[:,n] + model.c * z + model.x0
     end
@@ -446,6 +453,10 @@ type SimpleSolver
     end
 end
 
+function hasconverged(solver::SimpleSolver)
+    return sumabs2(solver.res) < 1e-20
+end
+
 function solve(solver::SimpleSolver, p::AbstractVector{Float64}, maxiter=500)
     solver.z += solver.dzdp * (p - solver.last_p)
     local JLU
@@ -453,9 +464,7 @@ function solve(solver::SimpleSolver, p::AbstractVector{Float64}, maxiter=500)
         solver.func(solver.res, solver.J, solver.Jp, p, solver.z)
         # explictly allow factorization to change J
         JLU = lufact!(solver.J)
-        if dot(solver.res, solver.res) < 1e-20
-            break;
-        end
+        hasconverged(solver) && break
         solver.z -= JLU\solver.res
     end
     copy!(solver.last_p, p)
