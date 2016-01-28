@@ -419,6 +419,13 @@ function run(model::DiscreteModel, u::AbstractMatrix{Float64})
     for n = 1:size(u)[2]
         p = model.dq * model.x + model.eq * u[:,n]
         z = solve(model.solver, p)
+        if ~hasconverged(model.solver)
+            if all(isfinite(z))
+                warn("Failed to converge while solving non-linear equation.")
+            else
+                error("Failed to converge while solving non-linear equation, got non-finite result.")
+            end
+        end
         y[:,n] = model.dy * model.x + model.ey * u[:,n] + model.fy * z + model.y0
         model.x = model.a * model.x + model.b * u[:,n] + model.c * z + model.x0
     end
