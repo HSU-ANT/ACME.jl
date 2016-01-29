@@ -14,9 +14,6 @@ if VERSION < v"0.4.0-dev+2840"
         Base.qr(A, pivot=false, thin=thin)
 end
 
-include("kdtree.jl")
-include("cachingsolver.jl")
-
 import Base.getindex
 
 type Element
@@ -483,6 +480,9 @@ function solve(solver::SimpleSolver, p::AbstractVector{Float64}, maxiter=500)
     solver.dzdp[:,:] = -(JLU\solver.Jp)
     return solver.z
 end
+
+include("kdtree.jl")
+include("cachingsolver.jl")
 
 function swaprows!(a::SparseMatrixCSC, row1, row2)
     # This sometimes gives a wrong result with julia 0.3.2:
