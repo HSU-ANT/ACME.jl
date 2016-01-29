@@ -13,6 +13,11 @@ tv, ti = ACME.topomat(sparse([1 -1 1; -1 1 -1]))
 # two nodes, one branch between them -> voltage arbitrary, current==0
 @test ACME.topomat(sparse([1,2], [1,1], [1,-1])) == (sparse([]), sparse([1]))
 
+let circ = Circuit()
+    model=DiscreteModel(circ, 1.)
+    @test run(model, zeros(0, 20)) == zeros(0, 20)
+end
+
 # simple circuit: resistor and diode in series, driven by constant voltage,
 # chosen such that a prescribe current flows
 let i = 1e-3, r=10e3, is=1e-12

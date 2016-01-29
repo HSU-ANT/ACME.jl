@@ -514,8 +514,14 @@ gensolve(a, b, thresh=0.1) =
 
 consecranges(lengths) = map(range, cumsum([1; lengths[1:end-1]]), lengths)
 
-matsplit(m, rowsizes, colsizes=[size(m)[2]]) =
-    [m[rs, cs] for rs in consecranges(rowsizes), cs in consecranges(colsizes)]
+if VERSION < v"0.4.0-dev+2833"
+    # work around a bug when indexing with empty ranges
+    matsplit(m, rowsizes, colsizes=[size(m)[2]]) =
+        [m[[rs], cs] for rs in consecranges(rowsizes), cs in consecranges(colsizes)]
+else
+    matsplit(m, rowsizes, colsizes=[size(m)[2]]) =
+        [m[rs, cs] for rs in consecranges(rowsizes), cs in consecranges(colsizes)]
+end
 
 sparsemat(A::SparseMatrixCSC) = A
 sparsemat(A::AbstractMatrix) = sparse(A)
