@@ -119,7 +119,10 @@ for n in [:nb; :nx; :nq; :nu; :nl; :ny; :nn]
 end
 
 for mat in [:mv; :mi; :mx; :mxd; :mq; :mu; :pv; :pi; :px; :pxd; :pq]
-    @eval ($mat)(c::Circuit) = blkdiag([elem.$mat for elem in c.elements]...)
+    # blkdiag() does not work, so include an empty matrix of desired type in
+    # case c.elements is empty
+    @eval ($mat)(c::Circuit) = blkdiag(spzeros(Number, 0, 0),
+                                       [elem.$mat for elem in c.elements]...)
 end
 
 u0(c::Circuit) = vcat([elem.u0 for elem in c.elements]...)
