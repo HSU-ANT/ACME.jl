@@ -527,8 +527,12 @@ consecranges(lengths) = map(range, cumsum([1; lengths[1:end-1]]), lengths)
 
 if VERSION < v"0.4.0-dev+2833"
     # work around a bug when indexing with empty ranges
-    matsplit(m, rowsizes, colsizes=[size(m)[2]]) =
-        [m[[rs], cs] for rs in consecranges(rowsizes), cs in consecranges(colsizes)]
+    function matsplit(m, rowsizes, colsizes=[size(m)[2]])
+        fixed_getindex(A, rs, cs) = isempty(rs) || isempty(cs) ?
+            similar(A, length(rs), length(cs)) : return A[rs, cs]
+        return [fixed_getindex(m, rs, cs) for rs in consecranges(rowsizes),
+                                              cs in consecranges(colsizes)]
+    end
 else
     matsplit(m, rowsizes, colsizes=[size(m)[2]]) =
         [m[rs, cs] for rs in consecranges(rowsizes), cs in consecranges(colsizes)]
