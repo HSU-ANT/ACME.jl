@@ -14,6 +14,9 @@ if VERSION < v"0.4.0-dev+2840"
         Base.qr(A, pivot=false, thin=thin)
 end
 
+include("kdtree.jl")
+include("cachingsolver.jl")
+
 import Base.getindex
 
 type Element
@@ -348,7 +351,7 @@ type DiscreteModel{Solver}
     end
 end
 
-function DiscreteModel(circ::Circuit, t::Float64, solver::Type = SimpleSolver)
+function DiscreteModel(circ::Circuit, t::Float64, solver::Type = CachingSolver{SimpleSolver})
     x, f = gensolve([mv(circ) mi(circ) 1/t*mxd(circ)+0.5*mx(circ) mq(circ);
                      blkdiag(topomat(circ)...) spzeros(nb(circ), nx(circ) + nq(circ))],
                     [u0(circ) mu(circ) 1/t*mxd(circ)-0.5*mx(circ);
@@ -452,6 +455,14 @@ type SimpleSolver
         dzdp = zeros(Float64,nn(model),np(model))
         new(model.nonlinear_eq_func, res, Jp, J, z, last_p, dzdp)
     end
+end
+
+function set_extrapolation_origin(solver::SimpleSolver, p, z)
+    copy!(solver.last_p, p)
+    copy!(solver.z, z)
+    solver.func(solver.res, solver.J, solver.Jp, solver.last_p, solver.z)
+    JLU = lufact!(solver.J)
+    solver.dzdp[:,:] = -(JLU\solver.Jp)
 end
 
 function hasconverged(solver::SimpleSolver)
