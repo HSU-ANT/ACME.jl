@@ -238,6 +238,9 @@ function connect!(c::Circuit, pins::(@compat Union{Pin,Symbol})...)
     end
 end
 
+# lines marked with !SV avoid creation of SparseVector by indexing with Ranges
+# instead of Ints; a better way for cross-julia-version compatibilty would be
+# nice; maybe Compat helps in the future...
 function topomat!{T<:Integer}(incidence::SparseMatrixCSC{T})
     @assert all(abs(nonzeros(incidence)) .== 1)
     @assert all(sum(incidence, 1) .== 0)
@@ -246,7 +249,7 @@ function topomat!{T<:Integer}(incidence::SparseMatrixCSC{T})
 
     row = 1;
     for col = 1:size(incidence)[2]
-        rows = filter(r -> r ≥ row, find(incidence[:,col]))
+        rows = filter(r -> r ≥ row, find(incidence[:,col:col])) # !SV
         @assert length(rows) ≤ 2
 
         isempty(rows) && continue
@@ -260,13 +263,13 @@ function topomat!{T<:Integer}(incidence::SparseMatrixCSC{T})
             incidence[rows[2],:] = incidence[rows[2],:] + incidence[row,:]
         end
         if incidence[row, col] < 0
-            cols = find(incidence[row,:])
+            cols = find(incidence[row:row,:]) # !SV
             incidence[row,cols] = -incidence[row,cols]
         end
-        rows = find(incidence[1:row-1,col] .== 1)
-        incidence[rows,:] = broadcast(-, incidence[rows, :], incidence[row,:])
-        rows = find(incidence[1:row-1,col] .== -1)
-        incidence[rows,:] = broadcast(+, incidence[rows, :], incidence[row,:])
+        rows = find(incidence[1:row-1,col:col] .== 1) # !SV
+        incidence[rows,:] = broadcast(-, incidence[rows, :], incidence[row:row,:]) # !SV
+        rows = find(incidence[1:row-1,col:col] .== -1) # !SV
+        incidence[rows,:] = broadcast(+, incidence[rows, :], incidence[row:row,:]) # !SV
         row += 1
     end
 
@@ -495,11 +498,14 @@ function swaprows!(a::SparseMatrixCSC, row1, row2)
     a[:,:] = sparse(i, j, v, size(a)...)
 end
 
+# lines marked with !SV avoid creation of SparseVector by indexing with Ranges
+# instead of Ints; a better way for cross-julia-version compatibilty would be
+# nice; maybe Compat helps in the future...
 function gensolve(a::SparseMatrixCSC, b, x, h, thresh=0.1)
     m = size(a)[1]
     t = sortperm(vec(sum(spones(a),2))) # row indexes in ascending order of nnz
     for i in 1:m
-        ait = a[t[i],:] # ait is a row of the a matrix
+        ait = a[t[i:i],:] # ait is a row of the a matrix # !SV
         s = ait * h;
         if nnz(s) == 0
             continue
@@ -508,11 +514,11 @@ function gensolve(a::SparseMatrixCSC, b, x, h, thresh=0.1)
         nz_abs_vals = abs(nz_vals)
         jat = jnz[nz_abs_vals .≥ thresh*maximum(nz_abs_vals)] # cols above threshold
         j = jat[indmin(sum(spones(h[:,jat])))]
-        q = h[:,j]
+        q = h[:,j:j] # !SV
         # ait*q only has a single element!
         x = x + convert(typeof(x), q * ((b[t[i],:] - ait*x) * (1 / (ait*q)[1])));
         if size(h)[2] > 1
-            h = h[:,[1:j-1;j+1:end]] - convert(typeof(h), q * s[1,[1:j-1;j+1:end]]*(1/s[1,j]))
+            h = h[:,[1:j-1;j+1:end]] - convert(typeof(h), q * s[1:1,[1:j-1;j+1:end]]*(1/s[1,j])) # !SV
         else
             h = similar(h, eltype(h), (size(h)[1], 0))
         end
