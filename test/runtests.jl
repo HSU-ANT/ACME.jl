@@ -9,9 +9,9 @@ tv, ti = ACME.topomat(sparse([1 -1 1; -1 1 -1]))
 
 # Pathological cases for topomat:
 # two nodes, one loop branch (short-circuited) -> voltage==0, current arbitrary
-@test ACME.topomat(spzeros(Int, 2, 1)) == (sparse([1]), sparse([]))
+@test ACME.topomat(spzeros(Int, 2, 1)) == (speye(1), spzeros(0, 1))
 # two nodes, one branch between them -> voltage arbitrary, current==0
-@test ACME.topomat(sparse([1,2], [1,1], [1,-1])) == (sparse([]), sparse([1]))
+@test ACME.topomat(sparse([1,2], [1,1], [1,-1])) == (spzeros(0, 1), speye(1))
 
 let circ = Circuit()
     model=DiscreteModel(circ, 1.)
