@@ -55,3 +55,17 @@ let i = 1e-3, r=10e3, is=1e-12
     y = run(model, zeros(0, 1))
     @test_approx_eq_eps y[1] v_d 1e-6
 end
+
+include("../examples/sallenkey.jl")
+let model=sallenkey()
+    y = run(model, sin(2π*1000/44100*(0:44099)'))
+    @test size(y) == (1,44100)
+    # TODO: further validate y
+end
+
+include("../examples/diodeclipper.jl")
+let model=diodeclipper()
+    y = run(model, sin(2π*1000/44100*(0:44099)'))
+    @test size(y) == (1,44100)
+    # TODO: further validate y
+end
