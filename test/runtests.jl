@@ -43,7 +43,7 @@ let i = 1e-3, r=10e3, is=1e-12
     v_d = 25e-3 * log(i/is+1)
     vsrc = voltagesource(v_r + v_d)
     r1 = resistor(r)
-    d = diode(is)
+    d = diode(is=is)
     vprobe = voltageprobe()
     circ = Circuit()
     connect!(circ, vsrc[:+], :vcc)

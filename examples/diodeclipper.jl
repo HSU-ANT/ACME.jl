@@ -1,4 +1,4 @@
-# Copyright 2015 Martin Holters
+# Copyright 2015, 2016 Martin Holters
 # See accompanying license file.
 
 using ACME
@@ -7,8 +7,8 @@ function diodeclipper()
     j_in = voltagesource()
     r1 = resistor(1e3)
     c1 = capacitor(47e-9)
-    d1 = diode(1e-15)
-    d2 = diode(1.8e-15)
+    d1 = diode(is=1e-15)
+    d2 = diode(is=1.8e-15)
     j_out = voltageprobe()
 
     circ = Circuit()
