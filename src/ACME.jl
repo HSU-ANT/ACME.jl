@@ -516,7 +516,7 @@ function gensolve(a::SparseMatrixCSC, b, x, h, thresh=0.1)
         j = jat[indmin(sum(spones(h[:,jat])))]
         q = h[:,j:j] # !SV
         # ait*q only has a single element!
-        x = x + convert(typeof(x), q * ((b[t[i],:] - ait*x) * (1 / (ait*q)[1])));
+        x = x + convert(typeof(x), q * ((b[t[i:i],:] - ait*x) * (1 / (ait*q)[1]))); # !SV
         if size(h)[2] > 1
             h = h[:,[1:j-1;j+1:end]] - convert(typeof(h), q * s[1:1,[1:j-1;j+1:end]]*(1/s[1,j])) # !SV
         else
