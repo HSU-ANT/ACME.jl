@@ -12,7 +12,7 @@ type CachingSolver{BaseSolver}
         p = zeros(np(model))
         z = solve(basesolver, p, 2500)
         if ~hasconverged(basesolver)
-            error("Falied to find initial solution.")
+            error("Failed to find initial solution.")
         end
         ps_tree = KDTree(zeros(np(model), 1))
         zs = reshape(z, nn(model), 1)
