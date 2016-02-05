@@ -45,7 +45,7 @@ function solve(solver::CachingSolver, p, recurse=true)
     set_extrapolation_origin(solver.basesolver,
                              solver.ps_tree.ps[:,idx], solver.zs[:,idx])
 
-    z = solve(solver.basesolver, p, 2)
+    z = solve(solver.basesolver, p, 5)
     if ~hasconverged(solver.basesolver)
         z = solve(solver.basesolver, p, 2500)
         if recurse && ~hasconverged(solver)
