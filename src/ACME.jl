@@ -444,6 +444,7 @@ type SimpleSolver
     Jp::Matrix{Float64}
     J::Matrix{Float64}
     z::Vector{Float64}
+    last_z::Vector{Float64}
     last_p::Vector{Float64}
     dzdp::Matrix{Float64}
     function SimpleSolver(model::DiscreteModel)
@@ -451,18 +452,23 @@ type SimpleSolver
         Jp = zeros(Float64,nn(model),np(model))
         J = zeros(Float64,nn(model),nn(model))
         z = zeros(Float64,nn(model))
+        last_z = zeros(Float64,nn(model))
         last_p = zeros(Float64,np(model))
         dzdp = zeros(Float64,nn(model),np(model))
-        new(model.nonlinear_eq_func, res, Jp, J, z, last_p, dzdp)
+        new(model.nonlinear_eq_func, res, Jp, J, z, last_z, last_p, dzdp)
     end
 end
 
 function set_extrapolation_origin(solver::SimpleSolver, p, z)
-    copy!(solver.last_p, p)
-    copy!(solver.z, z)
-    solver.func(solver.res, solver.J, solver.Jp, solver.last_p, solver.z)
+    solver.func(solver.res, solver.J, solver.Jp, p, z)
     JLU = lufact!(solver.J)
+    set_extrapolation_origin(solver, p, z, JLU)
+end
+
+function set_extrapolation_origin(solver::SimpleSolver, p, z, JLU)
     solver.dzdp[:,:] = -(JLU\solver.Jp)
+    copy!(solver.last_p, p)
+    copy!(solver.last_z, z)
 end
 
 function hasconverged(solver::SimpleSolver)
@@ -470,7 +476,7 @@ function hasconverged(solver::SimpleSolver)
 end
 
 function solve(solver::SimpleSolver, p::AbstractVector{Float64}, maxiter=500)
-    solver.z += solver.dzdp * (p - solver.last_p)
+    solver.z[:] = solver.last_z + solver.dzdp * (p - solver.last_p)
     local JLU
     for i=1:maxiter
         solver.func(solver.res, solver.J, solver.Jp, p, solver.z)
@@ -479,8 +485,7 @@ function solve(solver::SimpleSolver, p::AbstractVector{Float64}, maxiter=500)
         hasconverged(solver) && break
         solver.z -= JLU\solver.res
     end
-    copy!(solver.last_p, p)
-    solver.dzdp[:,:] = -(JLU\solver.Jp)
+    hasconverged(solver) && set_extrapolation_origin(solver, p, solver.z, JLU)
     return solver.z
 end
 
