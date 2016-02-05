@@ -480,8 +480,14 @@ function solve(solver::SimpleSolver, p::AbstractVector{Float64}, maxiter=500)
     local JLU
     for i=1:maxiter
         solver.func(solver.res, solver.J, solver.Jp, p, solver.z)
+        if ~all(isfinite(solver.res)) || ~all(isfinite(solver.J))
+            return solver.z
+        end
         # explictly allow factorization to change J
         JLU = lufact!(solver.J)
+        if JLU.info > 0 # J was singular
+            return solver.z
+        end
         hasconverged(solver) && break
         solver.z -= JLU\solver.res
     end
