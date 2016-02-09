@@ -7,12 +7,6 @@ import Base.run
 export Circuit, add!, connect!, DiscreteModel, run
 
 using Compat
-if VERSION < v"0.4.0-dev+2840"
-    qr(A, ::Type{Val{true}}; thin::Bool=true) =
-        Base.qr(A, pivot=true, thin=thin)
-    qr(A, ::Type{Val{false}}; thin::Bool=true) =
-        Base.qr(A, pivot=false, thin=thin)
-end
 
 import Base.getindex
 
