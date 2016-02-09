@@ -321,7 +321,7 @@ type DiscreteModel{Solver}
             if issubtype(expected_type, Matrix)
                 model.(key) = full(val)
             elseif  issubtype(expected_type, Vector)
-                model.(key) = squeeze(full(val),2)
+                model.(key) = squeeze(full(val), (2:ndims(val))...)
             else
                 model.(key) = val
             end
@@ -346,47 +346,7 @@ type DiscreteModel{Solver}
 end
 
 function DiscreteModel(circ::Circuit, t::Float64, solver::Type = CachingSolver{SimpleSolver})
-    x, f = gensolve([mv(circ) mi(circ) 1/t*mxd(circ)+0.5*mx(circ) mq(circ);
-                     blkdiag(topomat(circ)...) spzeros(nb(circ), nx(circ) + nq(circ))],
-                    [u0(circ) mu(circ) 1/t*mxd(circ)-0.5*mx(circ);
-                     spzeros(nb(circ), 1+nu(circ)+nx(circ))])
-    rowsizes = [nb(circ); nb(circ); nx(circ); nq(circ)]
-    fv, fi, c, fq = matsplit(f, rowsizes)
-
-    # choose particular solution such that the rows corresponding to q are
-    # column-wise orthogonal to the column space of fq (and hence have a column
-    # space of minimal dimension)
-    x = x - full(f)/(full(fq)'*fq)*fq'*x[end-nq(circ)+1:end,:]
-
-    v0, i0, x0, q0, ev, ei, b, eq_full, dv, di, a, dq_full =
-        matsplit(x, rowsizes, [1; nu(circ); nx(circ)])
-
-    if size(dq_full)[1] > 0
-        # decompose [dq_full eq_full] into pexp*[dq eq] with [dq eq] having minimum
-        # number of rows based on the QR factorization
-        pexp, r, piv = qr([dq_full eq_full], Val{true})
-        ref_err = vecnorm([dq_full eq_full][:,piv] - pexp*r)
-        local rowcount
-        for rowcount=size(r)[1]:-1:0
-            err = vecnorm([dq_full eq_full][:,piv] - pexp[:,1:rowcount]*r[1:rowcount,:])
-            if err > ref_err
-                rowcount += 1
-                break
-            end
-        end
-        dq, eq = matsplit(r[1:rowcount,sortperm(piv)], [rowcount], [nx(circ); nu(circ)])
-        pexp = pexp[:,1:rowcount]
-    else
-        dq = zeros(0, nx(circ))
-        eq = zeros(0, nu(circ))
-        pexp = zeros(0, 0)
-    end
-
-    p = [pv(circ) pi(circ) 0.5*px(circ)+1/t*pxd(circ) pq(circ)]
-    dy = p * [dv; di; a;  dq_full] + 0.5*px(circ)-1/t*pxd(circ)
-    ey = p * [ev; ei; b;  eq_full]
-    fy = p * [fv; fi; c;  fq]
-    y0 = p * [v0; i0; x0; q0]
+    mats = model_matrices(circ, t)
 
     nl_eq = quote
         #copy!(q, q0 + pexp * p + fq * z)
@@ -402,10 +362,62 @@ function DiscreteModel(circ::Circuit, t::Float64, solver::Type = CachingSolver{S
         BLAS.gemm!('N', 'N', 1., Jq, pexp, 0., Jp)
     end
 
-    DiscreteModel{solver}(a=a, b=b, c=c, x0=x0,
-                          pexp=pexp, dq=dq, eq=eq, fq=fq, q0=q0,
-                          dy=dy, ey=ey, fy=fy, y0=y0,
+    DiscreteModel{solver}(a=mats[:a], b=mats[:b], c=mats[:c], x0=mats[:x0],
+                          pexp=mats[:pexp], dq=mats[:dq], eq=mats[:eq], fq=mats[:fq], q0=mats[:q0],
+                          dy=mats[:dy], ey=mats[:ey], fy=mats[:fy], y0=mats[:y0],
                           nonlinear_eq=nl_eq)
+end
+
+function model_matrices(circ::Circuit, t)
+    x, f = gensolve([mv(circ) mi(circ) 1/t*mxd(circ)+0.5*mx(circ) mq(circ);
+                     blkdiag(topomat(circ)...) spzeros(nb(circ), nx(circ) + nq(circ))],
+                    [u0(circ) mu(circ) 1/t*mxd(circ)-0.5*mx(circ);
+                     spzeros(nb(circ), 1+nu(circ)+nx(circ))])
+
+    rowsizes = [nb(circ); nb(circ); nx(circ); nq(circ)]
+    res = Dict{Symbol,AbstractArray}(zip([:fv; :fi; :c; :fq], matsplit(f, rowsizes)))
+
+    # choose particular solution such that the rows corresponding to q are
+    # column-wise orthogonal to the column space of fq (and hence have a column
+    # space of minimal dimension)
+    fq = res[:fq]
+    x = x - full(f)/(full(fq)'*fq)*fq'*x[end-nq(circ)+1:end,:]
+
+    merge!(res, Dict(zip([:v0 :ev :dv; :i0 :ei :di; :x0 :b :a; :q0 :eq_full :dq_full],
+                         matsplit(x, rowsizes, [1; nu(circ); nx(circ)]))))
+
+    dq_full = res[:dq_full]
+    eq_full = res[:eq_full]
+    if size(dq_full)[1] > 0
+        # decompose [dq_full eq_full] into pexp*[dq eq] with [dq eq] having minimum
+        # number of rows based on the QR factorization
+        pexp, r, piv = qr([dq_full eq_full], Val{true})
+        ref_err = vecnorm([dq_full eq_full][:,piv] - pexp*r)
+        local rowcount
+        for rowcount=size(r)[1]:-1:0
+            err = vecnorm([dq_full eq_full][:,piv] - pexp[:,1:rowcount]*r[1:rowcount,:])
+            if err > ref_err
+                rowcount += 1
+                break
+            end
+        end
+        res[:dq], res[:eq] =
+            matsplit(r[1:rowcount,sortperm(piv)], [rowcount], [nx(circ); nu(circ)])
+        res[:pexp] = pexp[:,1:rowcount]
+    else
+        res[:dq] = zeros(0, nx(circ))
+        res[:eq] = zeros(0, nu(circ))
+        res[:pexp] = zeros(0, 0)
+    end
+
+    p = [pv(circ) pi(circ) 0.5*px(circ)+1/t*pxd(circ) pq(circ)]
+    res[:dy] = p * x[:,2+nu(circ):end] + 0.5*px(circ)-1/t*pxd(circ)
+    #          p * [dv; di; a;  dq_full] + 0.5*px(circ)-1/t*pxd(circ)
+    res[:ey] = p * x[:,2:1+nu(circ)] # p * [ev; ei; b;  eq_full]
+    res[:fy] = p * f                 # p * [fv; fi; c;  fq]
+    res[:y0] = p * x[:,1]            # p * [v0; i0; x0; q0]
+
+    return res
 end
 
 nx(model::DiscreteModel) = length(model.x0)
