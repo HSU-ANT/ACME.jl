@@ -321,7 +321,7 @@ type DiscreteModel{Solver}
             if issubtype(expected_type, Matrix)
                 model.(key) = full(val)
             elseif  issubtype(expected_type, Vector)
-                model.(key) = squeeze(full(val), (2:ndims(val))...)
+                model.(key) = squeeze(full(val), tuple((2:ndims(val))...))
             else
                 model.(key) = val
             end
