@@ -2,6 +2,7 @@
 # See accompanying license file.
 
 import Base.isless
+import Base.isempty
 
 type KDTree{Tcv<:AbstractVector,Tp<:AbstractMatrix}
     cut_dim::Vector{Int}
@@ -95,9 +96,7 @@ function siftup!(alts::Alts, i)
     entries = alts.entries
     parent = div(i, 2)
     while i > 1 && entries[i] < entries[parent]
-        t = entries[i]
-        entries[i] = entries[parent]
-        entries[parent] = t
+        entries[i], entries[parent] = entries[parent], entries[i]
         i = parent
         parent = div(i, 2)
     end
@@ -108,29 +107,27 @@ function siftdown!(alts::Alts, i)
     N = length(entries)
     while true
         min = i
-        if 2i <= N && entries[2i] < entries[min]
+        if 2i ≤ N && entries[2i] < entries[min]
             min = 2i
         end
-        if 2i+1 <= N && entries[2i+1] < entries[min]
+        if 2i+1 ≤ N && entries[2i+1] < entries[min]
             min = 2i+1
         end
         if min == i
             break
         end
-        t = entries[i]
-        entries[i] = entries[min]
-        entries[min] = t
+        entries[i], entries[min] = entries[min], entries[i]
         i = min
     end
 end
 
-peek(alts::Alts) = minimum(alts.entries)
+isempty(alts::Alts) = isempty(alts.entries)
+peek(alts::Alts) = alts.entries[1]
 
 function dequeue!(alts::Alts)
     e = alts.entries[1]
-    last_idx = length(alts.entries)
-    alts.entries[1] = alts.entries[last_idx]
-    deleteat!(alts.entries, last_idx)
+    alts.entries[1] = alts.entries[end]
+    deleteat!(alts.entries, length(alts.entries))
     siftdown!(alts, 1)
     return e
 end
@@ -149,10 +146,8 @@ function update_best_dist!(alts, dist, p_idx)
         i = length(alts.entries)
         while i > 0
             if alts.entries[i].delta_norm .≥ alts.best_dist
+                alts.entries[i] = alts.entries[end]
                 last_idx = length(alts.entries)
-                if last_idx ≠ i
-                    alts.entries[i] = alts.entries[last_idx]
-                end
                 deleteat!(alts.entries, last_idx)
                 if last_idx ≠ i
                     if i==1 || alts.entries[i] > alts.entries[div(i,2)]
@@ -174,7 +169,7 @@ function indnearest(tree::KDTree, p::AbstractVector, max_leaves::Int,
                     alt = Alts(p))
     l = 0
     p_idx = 0
-    while l < max_leaves && ~isempty(alt.entries)
+    while l < max_leaves && ~isempty(alt)
         best_alt = dequeue!(alt)
         idx = best_alt.idx
         delta = best_alt.delta
