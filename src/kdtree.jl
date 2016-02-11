@@ -1,6 +1,8 @@
 # Copyright 2016 Martin Holters
 # See accompanying license file.
 
+import Base.isless
+
 type KDTree{Tcv<:AbstractVector,Tp<:AbstractMatrix}
     cut_dim::Vector{Int}
     cut_val::Tcv
@@ -72,34 +74,34 @@ function KDTree(p::AbstractMatrix)
     return KDTree{typeof(cut_val),typeof(p)}(cut_dim, cut_val, vec(p_idx_final), p)
 end
 
+type AltEntry{T}
+    idx::Int
+    delta::Vector{T}
+    delta_norm::T
+end
+
+isless(e1::AltEntry, e2::AltEntry) = isless(e1.delta_norm, e2.delta_norm)
+
 type Alts{T}
-    idx::Vector{Int}
-    delta::Vector{Vector{T}}
-    delta_norms::Vector{T}
+    entries::Vector{AltEntry{T}}
     best_dist::T
     best_pidx::Int
 end
 
 Alts{T}(p::Vector{T}) =
-    Alts([1], [zeros(T, length(p)) for i in 1], zeros(T, 1), typemax(T), 0)
+    Alts([AltEntry(1, zeros(T, length(p)), zero(T))], typemax(T), 0)
 
-find_best_pos(alts) = indmin(alts.delta_norms)
+find_best_pos(alts) = indmin(alts.entries)
 
 function deletepos!(alts, pos)
-    last_idx = length(alts.idx)
-    alts.idx[pos] = alts.idx[last_idx]
-    deleteat!(alts.idx, last_idx)
-    alts.delta_norms[pos] = alts.delta_norms[last_idx]
-    deleteat!(alts.delta_norms, last_idx)
-    alts.delta[pos] = alts.delta[last_idx]
-    deleteat!(alts.delta, last_idx)
+    last_idx = length(alts.entries)
+    alts.entries[pos] = alts.entries[last_idx]
+    deleteat!(alts.entries, last_idx)
 end
 
 function push_alt!(alts, new_idx, new_delta, new_delta_norm=sumabs2(new_delta))
     if new_delta_norm < alts.best_dist
-        push!(alts.idx, new_idx)
-        push!(alts.delta_norms, new_delta_norm)
-        push!(alts.delta, new_delta)
+        push!(alts.entries, AltEntry(new_idx, new_delta, new_delta_norm))
     end
 end
 
@@ -107,18 +109,14 @@ function update_best_dist!(alts, dist, p_idx)
     if dist < alts.best_dist
         alts.best_dist = dist
         alts.best_pidx = p_idx
-        i = length(alts.delta_norms)
+        i = length(alts.entries)
         while i > 0
-            if alts.delta_norms[i] .≥ alts.best_dist
-                last_idx = length(alts.delta_norms)
+            if alts.entries[i].delta_norm .≥ alts.best_dist
+                last_idx = length(alts.entries)
                 if last_idx ≠ i
-                    alts.idx[i] = alts.idx[last_idx]
-                    alts.delta_norms[i] = alts.delta_norms[last_idx]
-                    alts.delta[i] = alts.delta[last_idx]
+                    alts.entries[i] = alts.entries[last_idx]
                 end
-                deleteat!(alts.idx, last_idx)
-                deleteat!(alts.delta_norms, last_idx)
-                deleteat!(alts.delta, last_idx)
+                deleteat!(alts.entries, last_idx)
             end
             i -= 1
         end
@@ -132,11 +130,11 @@ function indnearest(tree::KDTree, p::AbstractVector, max_leaves::Int,
                     alt = Alts(p))
     l = 0
     p_idx = 0
-    while l < max_leaves && ~isempty(alt.idx)
+    while l < max_leaves && ~isempty(alt.entries)
         best_pos = find_best_pos(alt)
-        idx = alt.idx[best_pos]
-        delta = alt.delta[best_pos]
-        delta_norm = alt.delta_norms[best_pos]
+        idx = alt.entries[best_pos].idx
+        delta = alt.entries[best_pos].delta
+        delta_norm = alt.entries[best_pos].delta_norm
         deletepos!(alt, best_pos)
 
         while idx ≤ length(tree.cut_dim)
