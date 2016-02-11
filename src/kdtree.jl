@@ -91,20 +91,54 @@ end
 Alts{T}(p::Vector{T}) =
     Alts([AltEntry(1, zeros(T, length(p)), zero(T))], typemax(T), 0)
 
+function siftup!(alts::Alts, i)
+    entries = alts.entries
+    parent = div(i, 2)
+    while i > 1 && entries[i] < entries[parent]
+        t = entries[i]
+        entries[i] = entries[parent]
+        entries[parent] = t
+        i = parent
+        parent = div(i, 2)
+    end
+end
+
+function siftdown!(alts::Alts, i)
+    entries = alts.entries
+    N = length(entries)
+    while true
+        min = i
+        if 2i <= N && entries[2i] < entries[min]
+            min = 2i
+        end
+        if 2i+1 <= N && entries[2i+1] < entries[min]
+            min = 2i+1
+        end
+        if min == i
+            break
+        end
+        t = entries[i]
+        entries[i] = entries[min]
+        entries[min] = t
+        i = min
+    end
+end
+
 peek(alts::Alts) = minimum(alts.entries)
 
 function dequeue!(alts::Alts)
-    best_idx = indmin(alts.entries)
-    e = alts.entries[best_idx]
+    e = alts.entries[1]
     last_idx = length(alts.entries)
-    alts.entries[best_idx] = alts.entries[last_idx]
+    alts.entries[1] = alts.entries[last_idx]
     deleteat!(alts.entries, last_idx)
+    siftdown!(alts, 1)
     return e
 end
 
 function enqueue!(alts::Alts, entry::AltEntry)
     if entry.delta_norm < alts.best_dist
         push!(alts.entries, entry)
+        siftup!(alts, length(alts.entries))
     end
 end
 
@@ -120,6 +154,13 @@ function update_best_dist!(alts, dist, p_idx)
                     alts.entries[i] = alts.entries[last_idx]
                 end
                 deleteat!(alts.entries, last_idx)
+                if last_idx ≠ i
+                    if i==1 || alts.entries[i] > alts.entries[div(i,2)]
+                        siftdown!(alts, i)
+                    else
+                        siftup!(alts, i)
+                    end
+                end
             end
             i -= 1
         end
