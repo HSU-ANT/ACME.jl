@@ -6,6 +6,7 @@ module ACME
 import Base.run
 export Circuit, add!, connect!, DiscreteModel, run
 
+using ProgressMeter
 using Compat
 
 import Base.getindex
@@ -428,7 +429,7 @@ nn(model::DiscreteModel) = size(model.fq)[2]
 
 function run(model::DiscreteModel, u::AbstractMatrix{Float64})
     y = Array(Float64, ny(model), size(u)[2])
-    for n = 1:size(u)[2]
+    @showprogress 1 "Running model: " for n = 1:size(u)[2]
         p = model.dq * model.x + model.eq * u[:,n]
         z = solve(model.solver, p)
         if ~hasconverged(model.solver)
