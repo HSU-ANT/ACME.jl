@@ -91,17 +91,20 @@ end
 Alts{T}(p::Vector{T}) =
     Alts([AltEntry(1, zeros(T, length(p)), zero(T))], typemax(T), 0)
 
-find_best_pos(alts) = indmin(alts.entries)
+peek(alts::Alts) = minimum(alts.entries)
 
-function deletepos!(alts, pos)
+function dequeue!(alts::Alts)
+    best_idx = indmin(alts.entries)
+    e = alts.entries[best_idx]
     last_idx = length(alts.entries)
-    alts.entries[pos] = alts.entries[last_idx]
+    alts.entries[best_idx] = alts.entries[last_idx]
     deleteat!(alts.entries, last_idx)
+    return e
 end
 
-function push_alt!(alts, new_idx, new_delta, new_delta_norm=sumabs2(new_delta))
-    if new_delta_norm < alts.best_dist
-        push!(alts.entries, AltEntry(new_idx, new_delta, new_delta_norm))
+function enqueue!(alts::Alts, entry::AltEntry)
+    if entry.delta_norm < alts.best_dist
+        push!(alts.entries, entry)
     end
 end
 
@@ -131,11 +134,10 @@ function indnearest(tree::KDTree, p::AbstractVector, max_leaves::Int,
     l = 0
     p_idx = 0
     while l < max_leaves && ~isempty(alt.entries)
-        best_pos = find_best_pos(alt)
-        idx = alt.entries[best_pos].idx
-        delta = alt.entries[best_pos].delta
-        delta_norm = alt.entries[best_pos].delta_norm
-        deletepos!(alt, best_pos)
+        best_alt = dequeue!(alt)
+        idx = best_alt.idx
+        delta = best_alt.delta
+        delta_norm = best_alt.delta_norm
 
         while idx ≤ length(tree.cut_dim)
             dim = tree.cut_dim[idx]
@@ -143,11 +145,8 @@ function indnearest(tree::KDTree, p::AbstractVector, max_leaves::Int,
             if new_alt_delta_norm < alt.best_dist
                 new_alt_delta = copy(delta)
                 new_alt_delta[dim] = p[dim] - tree.cut_val[idx]
-                if p[dim] ≤ tree.cut_val[idx]
-                    push_alt!(alt, 2idx+1, new_alt_delta, new_alt_delta_norm)
-                else
-                    push_alt!(alt, 2idx, new_alt_delta, new_alt_delta_norm)
-                end
+                new_alt_idx = p[dim] ≤ tree.cut_val[idx] ? 2idx+1 : 2idx;
+                enqueue!(alt, AltEntry(new_alt_idx, new_alt_delta, new_alt_delta_norm))
             end
             if p[dim] ≤ tree.cut_val[idx]
                 idx *= 2
