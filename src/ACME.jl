@@ -473,7 +473,7 @@ function set_extrapolation_origin(solver::SimpleSolver, p, z)
 end
 
 function set_extrapolation_origin(solver::SimpleSolver, p, z, JLU)
-    solver.dzdp[:,:] = -(JLU\solver.Jp)
+    copy!(solver.dzdp, -(JLU\solver.Jp))
     copy!(solver.last_p, p)
     copy!(solver.last_z, z)
 end
@@ -483,7 +483,7 @@ function hasconverged(solver::SimpleSolver)
 end
 
 function solve(solver::SimpleSolver, p::AbstractVector{Float64}, maxiter=500)
-    solver.z[:] = solver.last_z + solver.dzdp * (p - solver.last_p)
+    copy!(solver.z, solver.last_z + solver.dzdp * (p - solver.last_p))
     local JLU
     for i=1:maxiter
         solver.func(solver.res, solver.J, solver.Jp, p, solver.z)
