@@ -453,7 +453,8 @@ type SimpleSolver
     z::Vector{Float64}
     last_z::Vector{Float64}
     last_p::Vector{Float64}
-    dzdp::Matrix{Float64}
+    last_Jp::Matrix{Float64}
+    JLU::Base.LU{Float64,Matrix{Float64}}
     function SimpleSolver(model::DiscreteModel)
         res = Array(Float64,nn(model))
         Jp = zeros(Float64,nn(model),np(model))
@@ -461,19 +462,21 @@ type SimpleSolver
         z = zeros(Float64,nn(model))
         last_z = zeros(Float64,nn(model))
         last_p = zeros(Float64,np(model))
-        dzdp = zeros(Float64,nn(model),np(model))
-        new(model.nonlinear_eq_func, res, Jp, J, z, last_z, last_p, dzdp)
+        last_Jp = zeros(Float64,nn(model),np(model))
+        JLU = lufact(eye(nn(model)))
+        new(model.nonlinear_eq_func, res, Jp, J, z, last_z, last_p, last_Jp, JLU)
     end
 end
 
 function set_extrapolation_origin(solver::SimpleSolver, p, z)
     solver.func(solver.res, solver.J, solver.Jp, p, z)
-    JLU = lufact!(solver.J)
-    set_extrapolation_origin(solver, p, z, JLU)
+    JLU = lufact(solver.J)
+    set_extrapolation_origin(solver, p, z, solver.Jp, JLU)
 end
 
-function set_extrapolation_origin(solver::SimpleSolver, p, z, JLU)
-    copy!(solver.dzdp, -(JLU\solver.Jp))
+function set_extrapolation_origin(solver::SimpleSolver, p, z, Jp, JLU)
+    solver.JLU = JLU
+    copy!(solver.last_Jp, Jp)
     copy!(solver.last_p, p)
     copy!(solver.last_z, z)
 end
@@ -483,22 +486,21 @@ function hasconverged(solver::SimpleSolver)
 end
 
 function solve(solver::SimpleSolver, p::AbstractVector{Float64}, maxiter=500)
-    copy!(solver.z, solver.last_z + solver.dzdp * (p - solver.last_p))
+    copy!(solver.z, solver.last_z - solver.JLU\(solver.last_Jp * (p - solver.last_p)))
     local JLU
     for i=1:maxiter
         solver.func(solver.res, solver.J, solver.Jp, p, solver.z)
         if ~all(isfinite(solver.res)) || ~all(isfinite(solver.J))
             return solver.z
         end
-        # explictly allow factorization to change J
-        JLU = lufact!(solver.J)
+        JLU = lufact(solver.J)
         if JLU.info > 0 # J was singular
             return solver.z
         end
         hasconverged(solver) && break
         solver.z -= JLU\solver.res
     end
-    hasconverged(solver) && set_extrapolation_origin(solver, p, solver.z, JLU)
+    hasconverged(solver) && set_extrapolation_origin(solver, p, solver.z, solver.Jp, JLU)
     return solver.z
 end
 
