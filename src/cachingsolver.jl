@@ -7,6 +7,7 @@ type CachingSolver{BaseSolver}
     zs::Matrix{Float64}
     new_count::Int
     new_count_limit::Int
+    iters::Int
     function CachingSolver(model::DiscreteModel)
         basesolver = BaseSolver(model)
         p = zeros(np(model))
@@ -16,11 +17,12 @@ type CachingSolver{BaseSolver}
         end
         ps_tree = KDTree(zeros(np(model), 1))
         zs = reshape(z, nn(model), 1)
-        return new(basesolver, ps_tree, zs, 0, 50)
+        return new(basesolver, ps_tree, zs, 0, 50, 0)
     end
 end
 
 hasconverged(solver::CachingSolver) = hasconverged(solver.basesolver)
+needediterations(solver::CachingSolver) = solver.iters
 
 function solve(solver::CachingSolver, p, recurse=true)
     idx = indnearest(solver.ps_tree, p)[1]
@@ -45,9 +47,14 @@ function solve(solver::CachingSolver, p, recurse=true)
     set_extrapolation_origin(solver.basesolver,
                              solver.ps_tree.ps[:,idx], solver.zs[:,idx])
 
+    if recurse
+        solver.iters = 0
+    end
     z = solve(solver.basesolver, p, 5)
+    solver.iters += needediterations(solver.basesolver)
     if ~hasconverged(solver.basesolver)
         z = solve(solver.basesolver, p, 2500)
+        solver.iters += needediterations(solver.basesolver)
         if recurse && ~hasconverged(solver)
             a = 0.5
             best_a = 0

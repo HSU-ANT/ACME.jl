@@ -455,6 +455,7 @@ type SimpleSolver
     last_p::Vector{Float64}
     last_Jp::Matrix{Float64}
     JLU::Base.LU{Float64,Matrix{Float64}}
+    iters::Int
     function SimpleSolver(model::DiscreteModel)
         res = Array(Float64,nn(model))
         Jp = zeros(Float64,nn(model),np(model))
@@ -464,7 +465,7 @@ type SimpleSolver
         last_p = zeros(Float64,np(model))
         last_Jp = zeros(Float64,nn(model),np(model))
         JLU = lufact(eye(nn(model)))
-        new(model.nonlinear_eq_func, res, Jp, J, z, last_z, last_p, last_Jp, JLU)
+        new(model.nonlinear_eq_func, res, Jp, J, z, last_z, last_p, last_Jp, JLU, 0)
     end
 end
 
@@ -485,10 +486,12 @@ function hasconverged(solver::SimpleSolver)
     return sumabs2(solver.res) < 1e-20
 end
 
+needediterations(solver::SimpleSolver) = solver.iters
+
 function solve(solver::SimpleSolver, p::AbstractVector{Float64}, maxiter=500)
     copy!(solver.z, solver.last_z - solver.JLU\(solver.last_Jp * (p - solver.last_p)))
     local JLU
-    for i=1:maxiter
+    for solver.iters=1:maxiter
         solver.func(solver.res, solver.J, solver.Jp, p, solver.z)
         if ~all(isfinite(solver.res)) || ~all(isfinite(solver.J))
             return solver.z
