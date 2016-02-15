@@ -16,7 +16,7 @@ type CachingSolver{BaseSolver}
             error("Failed to find initial solution.")
         end
         ps_tree = KDTree(zeros(np(model), 1))
-        zs = reshape(z, nn(model), 1)
+        zs = reshape(copy(z), nn(model), 1)
         return new(basesolver, ps_tree, zs, 0, 50, 0)
     end
 end

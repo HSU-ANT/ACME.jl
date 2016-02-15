@@ -72,6 +72,8 @@ end
 
 include("../examples/birdie.jl")
 let model=birdie(0.8)
+    ACME.solve(model.solver, [0.003, -0.0002])
+    @assert ACME.hasconverged(model.solver)
     y = run(model, sin(2π*1000/44100*(0:44099)'))
     @test size(y) == (1,44100)
     # TODO: further validate y
