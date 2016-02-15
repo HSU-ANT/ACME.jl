@@ -94,8 +94,11 @@ Alts{T}(p::Vector{T}) =
 
 function siftup!(alts::Alts, i)
     entries = alts.entries
+    if i > length(entries)
+        throw(BoundsError())
+    end
     parent = div(i, 2)
-    while i > 1 && entries[i] < entries[parent]
+    @inbounds while i > 1 && entries[i] < entries[parent]
         entries[i], entries[parent] = entries[parent], entries[i]
         i = parent
         parent = div(i, 2)
@@ -103,9 +106,12 @@ function siftup!(alts::Alts, i)
 end
 
 function siftdown!(alts::Alts, i)
+    if i < 1
+        throw(BoundsError())
+    end
     entries = alts.entries
     N = length(entries)
-    while true
+    @inbounds while true
         min = i
         if 2i ≤ N && entries[2i] < entries[min]
             min = 2i
@@ -144,7 +150,7 @@ function update_best_dist!(alts, dist, p_idx)
         alts.best_dist = dist
         alts.best_pidx = p_idx
         i = length(alts.entries)
-        while i > 0
+        @inbounds while i > 0
             if alts.entries[i].delta_norm .≥ alts.best_dist
                 alts.entries[i] = alts.entries[end]
                 last_idx = length(alts.entries)
@@ -167,6 +173,9 @@ indnearest(tree::KDTree, p::AbstractVector, alt = Alts(p)) =
 
 function indnearest(tree::KDTree, p::AbstractVector, max_leaves::Int,
                     alt = Alts(p))
+    if length(p) ≠ size(tree.ps, 1)
+        throw(DimensionMismatch())
+    end
     l = 0
     p_idx = 0
     while l < max_leaves && ~isempty(alt)
@@ -193,9 +202,12 @@ function indnearest(tree::KDTree, p::AbstractVector, max_leaves::Int,
         idx -= length(tree.cut_dim)
 
         p_idx = tree.ps_idx[idx]
+        if p_idx < 1 || p_idx > size(tree.ps, 2)
+            throw(BoundsError)
+        end
         dist = 0.
-        for i in 1:length(p)
-            dist += (p[i] - tree.ps[i, p_idx])^2
+        @simd for i in 1:length(p)
+            @inbounds dist += (p[i] - tree.ps[i, p_idx])^2
         end
         update_best_dist!(alt, dist, p_idx)
 
