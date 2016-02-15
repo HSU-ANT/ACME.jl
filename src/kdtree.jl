@@ -15,10 +15,10 @@ function KDTree(p::AbstractMatrix)
     function calc_cut_idx(min_idx, max_idx)
         N = max_idx - min_idx + 1
         N2 = 2^floor(Int, log2(N-1))
-        if 3*N2/2 ≤ N
+        if 3*div(N2, 2) ≤ N
             return min_idx+N2-1
         else
-            return min_idx+N-(N2/2)-1
+            return min_idx+N-div(N2, 2)-1
         end
     end
 
