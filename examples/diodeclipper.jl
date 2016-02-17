@@ -3,7 +3,7 @@
 
 using ACME
 
-function diodeclipper()
+function diodeclipper(::Type{Circuit})
     j_in = voltagesource()
     r1 = resistor(1e3)
     c1 = capacitor(47e-9)
@@ -18,5 +18,9 @@ function diodeclipper()
     connect!(circ, r1[2], c1[1], d1[:+], d2[:-], j_out[:+])
     connect!(circ, :gnd, c1[2], d1[:-], d2[:+], j_out[:-])
 
-    return DiscreteModel(circ, 1./44100)
+    return circ
 end
+
+diodeclipper(::Type{DiscreteModel}; fs=44100) =
+    DiscreteModel(diodeclipper(Circuit), 1/fs)
+diodeclipper(; fs=44100) = diodeclipper(DiscreteModel, fs=fs)

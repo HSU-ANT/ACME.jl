@@ -10,7 +10,7 @@ using ACME
 # model, C5 and D1 are connected directly to the power supply; R6 is in series
 # with LED1 only, which has been omitted from the model, though.
 
-function birdie(vol; fs=44100)
+function birdie(::Type{Circuit}, vol; fs=44100)
     c1 = capacitor(2.2e-9)
     c3 = capacitor(2.2e-9)
     c5 = capacitor(100e-6)
@@ -47,5 +47,9 @@ function birdie(vol; fs=44100)
     connect!(circ, p1b[2], j2[:+])
     connect!(circ, p1a[2], j2[:-], :gnd)
 
-    return DiscreteModel(circ, 1/fs)
+    return circ
 end
+
+birdie(::Type{DiscreteModel}, vol; fs=44100) =
+    DiscreteModel(birdie(Circuit, vol), 1/fs)
+birdie(vol; fs=44100) = birdie(DiscreteModel, vol, fs=fs)

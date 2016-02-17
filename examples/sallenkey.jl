@@ -3,7 +3,7 @@
 
 using ACME
 
-function sallenkey()
+function sallenkey(::Type{Circuit})
     r1 = resistor(10e3)
     r2 = resistor(10e3)
     c1 = capacitor(10e-9)
@@ -21,5 +21,9 @@ function sallenkey()
     connect!(circ, c2[2], u1["out-"], j_out[:-], :gnd)
     connect!(circ, u1["in-"], u1["out+"], j_out[:+])
 
-    return DiscreteModel(circ, 1./44100)
+    return circ
 end
+
+sallenkey(::Type{DiscreteModel}; fs=44100) =
+    DiscreteModel(sallenkey(Circuit), 1/fs)
+sallenkey(; fs=44100) = sallenkey(DiscreteModel, fs=fs)
