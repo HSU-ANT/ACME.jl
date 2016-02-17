@@ -78,3 +78,10 @@ let model=birdie(0.8)
     @test size(y) == (1,44100)
     # TODO: further validate y
 end
+
+include("../examples/superover.jl")
+let model=superover(1.0, 1.0, 1.0)
+    y = run(model, sin(2π*1000/44100*(0:44099)'))
+    @test size(y) == (1,44100)
+    # TODO: further validate y
+end
