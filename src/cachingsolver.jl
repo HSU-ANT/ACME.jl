@@ -25,25 +25,23 @@ hasconverged(solver::CachingSolver) = hasconverged(solver.basesolver)
 needediterations(solver::CachingSolver) = solver.iters
 
 function solve(solver::CachingSolver, p, recurse=true)
-    idx = indnearest(solver.ps_tree, p)[1]
-
-    best_new_diff = Inf
-    best_new_idx = 0
+    best_diff = Inf
+    idx = 0
     num_ps = size(solver.ps_tree.ps, 2)
     for i in (num_ps-solver.new_count+1):num_ps
         diff = 0.
         for j in 1:size(solver.ps_tree.ps, 1)
             diff += abs2(solver.ps_tree.ps[j,i] - p[j])
         end
-        if diff < best_new_diff
-            best_new_diff = diff
-            best_new_idx = i
+        if diff < best_diff
+            best_diff = diff
+            idx = i
         end
     end
 
-    if best_new_diff < sumabs2(solver.ps_tree.ps[:,idx] - p)
-        idx = best_new_idx
-    end
+    idx = indnearest(solver.ps_tree, p,
+                     Alts([AltEntry(1, zeros(p), 0.0)], best_diff, idx))[1]
+
     set_extrapolation_origin(solver.basesolver,
                              solver.ps_tree.ps[:,idx], solver.zs[:,idx])
 
