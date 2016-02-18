@@ -50,11 +50,10 @@ function solve(solver::CachingSolver, p, recurse=true)
     if recurse
         solver.iters = 0
     end
-    z = solve(solver.basesolver, p, 5)
+
+    z = solve(solver.basesolver, p, 2500)
     solver.iters += needediterations(solver.basesolver)
-    if ~hasconverged(solver.basesolver)
-        z = solve(solver.basesolver, p, 2500)
-        solver.iters += needediterations(solver.basesolver)
+    if needediterations(solver.basesolver) > 5 || ~hasconverged(solver.basesolver)
         if recurse && ~hasconverged(solver)
             a = 0.5
             best_a = 0
