@@ -33,7 +33,7 @@ function solve(solver::CachingSolver, p, recurse=true)
     for i in (num_ps-solver.new_count+1):num_ps
         diff = 0.
         for j in 1:size(solver.ps_tree.ps, 1)
-            diff += (solver.ps_tree.ps[j,i] - p[j])^2
+            diff += abs2(solver.ps_tree.ps[j,i] - p[j])
         end
         if diff < best_new_diff
             best_new_diff = diff
@@ -56,13 +56,13 @@ function solve(solver::CachingSolver, p, recurse=true)
     if needediterations(solver.basesolver) > 5 || ~hasconverged(solver.basesolver)
         if recurse && ~hasconverged(solver)
             a = 0.5
-            best_a = 0
+            best_a = 0.0
             while best_a < 1 && a > 0
                 pa = (1-a) * solver.ps_tree.ps[:,idx] + a * p
                 z = solve(solver, pa, false)
                 if hasconverged(solver)
                     best_a = a
-                    a = 1
+                    a = 1.0
                 else
                     a = (a + best_a) / 2
                 end
