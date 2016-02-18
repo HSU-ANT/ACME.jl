@@ -17,7 +17,7 @@ type CachingSolver{BaseSolver}
         end
         ps_tree = KDTree(zeros(np(model), 1))
         zs = reshape(copy(z), nn(model), 1)
-        return new(basesolver, ps_tree, zs, 0, 50, 0)
+        return new(basesolver, ps_tree, zs, 0, 2, 0)
     end
 end
 
@@ -73,14 +73,14 @@ function solve(solver::CachingSolver, p, recurse=true)
             solver.zs = [solver.zs z]
             solver.new_count += 1
         end
-        if solver.new_count > 0
-            solver.new_count_limit -= 1
-        end
-        if solver.new_count > solver.new_count_limit
-            solver.ps_tree = KDTree(solver.ps_tree.ps)
-            solver.new_count = 0
-            solver.new_count_limit = 50
-        end
+    end
+    if solver.new_count > 0
+        solver.new_count_limit -= 1
+    end
+    if solver.new_count > solver.new_count_limit
+        solver.ps_tree = KDTree(solver.ps_tree.ps)
+        solver.new_count = 0
+        solver.new_count_limit = 2size(solver.ps_tree.ps, 2)
     end
     return z
 end
