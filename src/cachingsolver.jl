@@ -1,6 +1,41 @@
 # Copyright 2016 Martin Holters
 # See accompanying license file.
 
+type HomotopySolver{BaseSolver}
+    basesolver::BaseSolver
+    start_p::Vector{Float64}
+    iters::Int
+    function HomotopySolver(model::DiscreteModel)
+        basesolver = BaseSolver(model)
+        return new(basesolver, zeros(np(model)), 0)
+    end
+end
+
+function solve(solver::HomotopySolver, p)
+    z = solve(solver.basesolver, p)
+    solver.iters = needediterations(solver.basesolver)
+    if ~hasconverged(solver)
+        a = 0.5
+        best_a = 0.0
+        copy!(solver.start_p, solver.basesolver.last_p)
+        while best_a < 1 && a > 0
+            pa = (1-a) * solver.start_p + a * p
+            z = solve(solver.basesolver, pa)
+            if hasconverged(solver)
+                best_a = a
+                a = 1.0
+            else
+                a = (a + best_a) / 2
+            end
+        end
+    end
+    return z
+end
+
+hasconverged(solver::HomotopySolver) = hasconverged(solver.basesolver)
+needediterations(solver::HomotopySolver) = solver.iters
+
+
 type CachingSolver{BaseSolver}
     basesolver::BaseSolver
     ps_tree::KDTree{Vector{Float64}, Matrix{Float64}}
