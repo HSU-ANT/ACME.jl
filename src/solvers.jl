@@ -38,6 +38,8 @@ function set_extrapolation_origin(solver::SimpleSolver, p, z, Jp, JLU)
     copy!(solver.last_z, z)
 end
 
+get_extrapolation_origin(solver::SimpleSolver) = solver.last_p, solver.last_z
+
 function hasconverged(solver::SimpleSolver)
     return sumabs2(solver.res) < 1e-20
 end
@@ -63,6 +65,7 @@ function solve(solver::SimpleSolver, p::AbstractVector{Float64}, maxiter=500)
     return solver.z
 end
 
+
 type HomotopySolver{BaseSolver}
     basesolver::BaseSolver
     start_p::Vector{Float64}
@@ -79,7 +82,7 @@ function solve(solver::HomotopySolver, p)
     if ~hasconverged(solver)
         a = 0.5
         best_a = 0.0
-        copy!(solver.start_p, solver.basesolver.last_p)
+        copy!(solver.start_p, get_extrapolation_origin(solver.basesolver)[1])
         while best_a < 1 && a > 0
             pa = (1-a) * solver.start_p + a * p
             z = solve(solver.basesolver, pa)
