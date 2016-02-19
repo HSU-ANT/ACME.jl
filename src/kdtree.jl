@@ -22,7 +22,7 @@ function KDTree(p::AbstractMatrix)
         end
     end
 
-    if size(p)[2] == 0
+    if size(p,2) == 0
         return KDTree{Vector{eltype(p)},typeof(p)}([], [], [], p)
     end
 
@@ -40,7 +40,7 @@ function KDTree(p::AbstractMatrix)
     p_idx = sortperm(vec(p[dim,:]))
 
     min_idx[1] = 1
-    max_idx[1] = size(p)[2]
+    max_idx[1] = size(p,2)
     cut_idx[1] = calc_cut_idx(min_idx[1], max_idx[1])
     cut_dim[1] = dim
     cut_val[1] = mean(p[dim, p_idx[cut_idx[1]:cut_idx[1]+1]])
@@ -62,7 +62,7 @@ function KDTree(p::AbstractMatrix)
         cut_val[n] = mean(p[dim, p_idx[cut_idx[n]:cut_idx[n]+1]])
     end
 
-    p_idx_final = zeros(Int, 1, size(p,2))
+    p_idx_final = zeros(Int, size(p,2))
     for n in 1:size(p,2)
         parent_n = div(n+size(p,2)-1, 2);
         if mod(n+size(p,2),2) == 1
@@ -72,7 +72,7 @@ function KDTree(p::AbstractMatrix)
         end
     end
 
-    return KDTree{typeof(cut_val),typeof(p)}(cut_dim, cut_val, vec(p_idx_final), p)
+    return KDTree{typeof(cut_val),typeof(p)}(cut_dim, cut_val, p_idx_final, p)
 end
 
 immutable AltEntry{T}
@@ -89,8 +89,7 @@ type Alts{T}
     best_pidx::Int
 end
 
-Alts{T}(p::Vector{T}) =
-    Alts([AltEntry(1, zeros(T, length(p)), zero(T))], typemax(T), 0)
+Alts{T}(p::Vector{T}) = Alts([AltEntry(1, zeros(p), zero(T))], typemax(T), 0)
 
 function siftup!(alts::Alts, i)
     entries = alts.entries
