@@ -127,7 +127,7 @@ hasconverged(solver::CachingSolver) = hasconverged(solver.basesolver)
 needediterations(solver::CachingSolver) = needediterations(solver.basesolver)
 
 function solve(solver::CachingSolver, p)
-    best_diff = Inf
+    best_diff = sumabs2(p - get_extrapolation_origin(solver.basesolver)[1])
     idx = 0
     num_ps = size(solver.ps_tree.ps, 2)
     for i in (num_ps-solver.new_count+1):num_ps
@@ -144,8 +144,10 @@ function solve(solver::CachingSolver, p)
     idx = indnearest(solver.ps_tree, p,
                      Alts([AltEntry(1, zeros(p), 0.0)], best_diff, idx))[1]
 
-    set_extrapolation_origin(solver.basesolver,
-                             solver.ps_tree.ps[:,idx], solver.zs[:,idx])
+    if idx ≠ 0
+        set_extrapolation_origin(solver.basesolver,
+                                 solver.ps_tree.ps[:,idx], solver.zs[:,idx])
+    end
 
     z = solve(solver.basesolver, p)
     if needediterations(solver.basesolver) > 5 && hasconverged(solver.basesolver)
