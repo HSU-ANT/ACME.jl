@@ -348,7 +348,8 @@ type DiscreteModel{Solver}
     end
 end
 
-function DiscreteModel(circ::Circuit, t::Float64, solver::Type = CachingSolver{SimpleSolver})
+function DiscreteModel(circ::Circuit, t::Float64,
+                       solver::Type = HomotopySolver{CachingSolver{SimpleSolver}})
     mats = model_matrices(circ, t)
 
     nl_eq = quote

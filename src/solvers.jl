@@ -76,6 +76,9 @@ type HomotopySolver{BaseSolver}
     end
 end
 
+set_extrapolation_origin(solver::HomotopySolver, p, z) =
+    set_extrapolation_origin(solver.basesolver, p, z)
+
 function solve(solver::HomotopySolver, p)
     z = solve(solver.basesolver, p)
     solver.iters = needediterations(solver.basesolver)
@@ -107,24 +110,23 @@ type CachingSolver{BaseSolver}
     zs::Matrix{Float64}
     new_count::Int
     new_count_limit::Int
-    iters::Int
     function CachingSolver(model::DiscreteModel)
         basesolver = BaseSolver(model)
         p = zeros(np(model))
-        z = solve(basesolver, p, 2500)
+        z = solve(basesolver, p)
         if ~hasconverged(basesolver)
             error("Failed to find initial solution.")
         end
         ps_tree = KDTree(zeros(np(model), 1))
         zs = reshape(copy(z), nn(model), 1)
-        return new(basesolver, ps_tree, zs, 0, 2, 0)
+        return new(basesolver, ps_tree, zs, 0, 2)
     end
 end
 
 hasconverged(solver::CachingSolver) = hasconverged(solver.basesolver)
-needediterations(solver::CachingSolver) = solver.iters
+needediterations(solver::CachingSolver) = needediterations(solver.basesolver)
 
-function solve(solver::CachingSolver, p, recurse=true)
+function solve(solver::CachingSolver, p)
     best_diff = Inf
     idx = 0
     num_ps = size(solver.ps_tree.ps, 2)
@@ -145,32 +147,11 @@ function solve(solver::CachingSolver, p, recurse=true)
     set_extrapolation_origin(solver.basesolver,
                              solver.ps_tree.ps[:,idx], solver.zs[:,idx])
 
-    if recurse
-        solver.iters = 0
-    end
-
-    z = solve(solver.basesolver, p, 2500)
-    solver.iters += needediterations(solver.basesolver)
-    if needediterations(solver.basesolver) > 5 || ~hasconverged(solver.basesolver)
-        if recurse && ~hasconverged(solver)
-            a = 0.5
-            best_a = 0.0
-            while best_a < 1 && a > 0
-                pa = (1-a) * solver.ps_tree.ps[:,idx] + a * p
-                z = solve(solver, pa, false)
-                if hasconverged(solver)
-                    best_a = a
-                    a = 1.0
-                else
-                    a = (a + best_a) / 2
-                end
-            end
-        end
-        if hasconverged(solver)
-            solver.ps_tree.ps = [solver.ps_tree.ps p]
-            solver.zs = [solver.zs z]
-            solver.new_count += 1
-        end
+    z = solve(solver.basesolver, p)
+    if needediterations(solver.basesolver) > 5 && hasconverged(solver.basesolver)
+        solver.ps_tree.ps = [solver.ps_tree.ps p]
+        solver.zs = [solver.zs z]
+        solver.new_count += 1
     end
     if solver.new_count > 0
         solver.new_count_limit -= 1
@@ -182,3 +163,6 @@ function solve(solver::CachingSolver, p, recurse=true)
     end
     return z
 end
+
+get_extrapolation_origin(solver::CachingSolver) =
+    get_extrapolation_origin(solver.basesolver)
