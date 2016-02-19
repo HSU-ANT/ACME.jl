@@ -447,70 +447,8 @@ function run(model::DiscreteModel, u::AbstractMatrix{Float64})
     return y
 end
 
-type SimpleSolver
-    func::Function
-    res::Vector{Float64}
-    Jp::Matrix{Float64}
-    J::Matrix{Float64}
-    z::Vector{Float64}
-    last_z::Vector{Float64}
-    last_p::Vector{Float64}
-    last_Jp::Matrix{Float64}
-    JLU::Base.LU{Float64,Matrix{Float64}}
-    iters::Int
-    function SimpleSolver(model::DiscreteModel)
-        res = Array(Float64,nn(model))
-        Jp = zeros(Float64,nn(model),np(model))
-        J = zeros(Float64,nn(model),nn(model))
-        z = zeros(Float64,nn(model))
-        last_z = zeros(Float64,nn(model))
-        last_p = zeros(Float64,np(model))
-        last_Jp = zeros(Float64,nn(model),np(model))
-        JLU = lufact(eye(nn(model)))
-        new(model.nonlinear_eq_func, res, Jp, J, z, last_z, last_p, last_Jp, JLU, 0)
-    end
-end
-
-function set_extrapolation_origin(solver::SimpleSolver, p, z)
-    solver.func(solver.res, solver.J, solver.Jp, p, z)
-    JLU = lufact(solver.J)
-    set_extrapolation_origin(solver, p, z, solver.Jp, JLU)
-end
-
-function set_extrapolation_origin(solver::SimpleSolver, p, z, Jp, JLU)
-    solver.JLU = JLU
-    copy!(solver.last_Jp, Jp)
-    copy!(solver.last_p, p)
-    copy!(solver.last_z, z)
-end
-
-function hasconverged(solver::SimpleSolver)
-    return sumabs2(solver.res) < 1e-20
-end
-
-needediterations(solver::SimpleSolver) = solver.iters
-
-function solve(solver::SimpleSolver, p::AbstractVector{Float64}, maxiter=500)
-    copy!(solver.z, solver.last_z - solver.JLU\(solver.last_Jp * (p - solver.last_p)))
-    local JLU
-    for solver.iters=1:maxiter
-        solver.func(solver.res, solver.J, solver.Jp, p, solver.z)
-        if ~all(isfinite(solver.res)) || ~all(isfinite(solver.J))
-            return solver.z
-        end
-        JLU = lufact(solver.J)
-        if JLU.info > 0 # J was singular
-            return solver.z
-        end
-        hasconverged(solver) && break
-        solver.z -= JLU\solver.res
-    end
-    hasconverged(solver) && set_extrapolation_origin(solver, p, solver.z, solver.Jp, JLU)
-    return solver.z
-end
-
 include("kdtree.jl")
-include("cachingsolver.jl")
+include("solvers.jl")
 
 function swaprows!(a::SparseMatrixCSC, row1, row2)
     # This sometimes gives a wrong result with julia 0.3.2:
