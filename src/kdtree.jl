@@ -75,7 +75,7 @@ function KDTree(p::AbstractMatrix)
     return KDTree{typeof(cut_val),typeof(p)}(cut_dim, cut_val, vec(p_idx_final), p)
 end
 
-type AltEntry{T}
+immutable AltEntry{T}
     idx::Int
     delta::Vector{T}
     delta_norm::T
