@@ -13,6 +13,10 @@ using Compat
 
 import Base.getindex
 
+include("kdtree.jl")
+include("solvers.jl")
+
+
 type Element
   mv :: SparseMatrixCSC{Number,Int}
   mi :: SparseMatrixCSC{Number,Int}
@@ -310,7 +314,6 @@ type DiscreteModel{Solver}
     y0::Vector{Float64}
 
     nonlinear_eq :: Expr
-    nonlinear_eq_func :: Function
 
     solver::Solver
     x::Vector{Float64}
@@ -334,7 +337,7 @@ type DiscreteModel{Solver}
         # use a preallocated q and Jq
         q = zeros(nq(model))
         Jq = zeros(nn(model), nq(model))
-        model.nonlinear_eq_func = eval(quote
+        nonlinear_eq_func = eval(quote
             # wrap up in named function until anonymous functions are as fast...
             function $(gensym())(res, J, Jp, p, z)
                 let q0=$(model.q0), pexp=$(model.pexp), q=$(q), Jq=$(Jq), fq=$(model.fq)
@@ -343,7 +346,8 @@ type DiscreteModel{Solver}
                 return nothing
             end
         end)
-        model.solver = Solver(model)
+        model.solver =
+            Solver(ParametricNonLinEq(nonlinear_eq_func, nn(model), np(model)))
         return model
     end
 end
@@ -447,9 +451,6 @@ function run(model::DiscreteModel, u::AbstractMatrix{Float64})
     end
     return y
 end
-
-include("kdtree.jl")
-include("solvers.jl")
 
 function swaprows!(a::SparseMatrixCSC, row1, row2)
     # This sometimes gives a wrong result with julia 0.3.2:

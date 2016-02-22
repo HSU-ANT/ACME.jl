@@ -1,34 +1,48 @@
 # Copyright 2016 Martin Holters
 # See accompanying license file.
 
-type SimpleSolver
+type ParametricNonLinEq
     func::Function
     res::Vector{Float64}
     Jp::Matrix{Float64}
     J::Matrix{Float64}
+    function ParametricNonLinEq(func::Function, nn::Integer, np::Integer)
+        res = zeros(nn)
+        Jp = zeros(nn, np)
+        J = zeros(nn, nn)
+        return new(func, res, Jp, J)
+    end
+end
+
+nn(nleq::ParametricNonLinEq) = length(nleq.res)
+np(nleq::ParametricNonLinEq) = size(nleq.Jp, 2)
+
+evaluate!(nleq::ParametricNonLinEq, p, z) =
+    nleq.func(nleq.res, nleq.J, nleq.Jp, p, z)
+
+
+type SimpleSolver
+    nleq::ParametricNonLinEq
     z::Vector{Float64}
     last_z::Vector{Float64}
     last_p::Vector{Float64}
     last_Jp::Matrix{Float64}
     JLU::Base.LU{Float64,Matrix{Float64}}
     iters::Int
-    function SimpleSolver(model::DiscreteModel)
-        res = Array(Float64,nn(model))
-        Jp = zeros(Float64,nn(model),np(model))
-        J = zeros(Float64,nn(model),nn(model))
-        z = zeros(Float64,nn(model))
-        last_z = zeros(Float64,nn(model))
-        last_p = zeros(Float64,np(model))
-        last_Jp = zeros(Float64,nn(model),np(model))
-        JLU = lufact(eye(nn(model)))
-        new(model.nonlinear_eq_func, res, Jp, J, z, last_z, last_p, last_Jp, JLU, 0)
+    function SimpleSolver(nleq::ParametricNonLinEq)
+        z = zeros(nn(nleq))
+        last_z = zeros(nn(nleq))
+        last_p = zeros(np(nleq))
+        last_Jp = zeros(nn(nleq), np(nleq))
+        JLU = lufact(eye(nn(nleq)))
+        new(nleq, z, last_z, last_p, last_Jp, JLU, 0)
     end
 end
 
 function set_extrapolation_origin(solver::SimpleSolver, p, z)
-    solver.func(solver.res, solver.J, solver.Jp, p, z)
-    JLU = lufact(solver.J)
-    set_extrapolation_origin(solver, p, z, solver.Jp, JLU)
+    evaluate!(solver.nleq, p, z)
+    JLU = lufact(solver.nleq.J)
+    set_extrapolation_origin(solver, p, z, solver.nleq.Jp, JLU)
 end
 
 function set_extrapolation_origin(solver::SimpleSolver, p, z, Jp, JLU)
@@ -41,7 +55,7 @@ end
 get_extrapolation_origin(solver::SimpleSolver) = solver.last_p, solver.last_z
 
 function hasconverged(solver::SimpleSolver)
-    return sumabs2(solver.res) < 1e-20
+    return sumabs2(solver.nleq.res) < 1e-20
 end
 
 needediterations(solver::SimpleSolver) = solver.iters
@@ -50,18 +64,20 @@ function solve(solver::SimpleSolver, p::AbstractVector{Float64}, maxiter=500)
     copy!(solver.z, solver.last_z - solver.JLU\(solver.last_Jp * (p - solver.last_p)))
     local JLU
     for solver.iters=1:maxiter
-        solver.func(solver.res, solver.J, solver.Jp, p, solver.z)
-        if ~all(isfinite(solver.res)) || ~all(isfinite(solver.J))
+        evaluate!(solver.nleq, p, solver.z)
+        if ~all(isfinite(solver.nleq.res)) || ~all(isfinite(solver.nleq.J))
             return solver.z
         end
-        JLU = lufact(solver.J)
+        JLU = lufact(solver.nleq.J)
         if JLU.info > 0 # J was singular
             return solver.z
         end
         hasconverged(solver) && break
-        solver.z -= JLU\solver.res
+        solver.z -= JLU\solver.nleq.res
     end
-    hasconverged(solver) && set_extrapolation_origin(solver, p, solver.z, solver.Jp, JLU)
+    if hasconverged(solver)
+        set_extrapolation_origin(solver, p, solver.z, solver.nleq.Jp, JLU)
+    end
     return solver.z
 end
 
@@ -70,9 +86,9 @@ type HomotopySolver{BaseSolver}
     basesolver::BaseSolver
     start_p::Vector{Float64}
     iters::Int
-    function HomotopySolver(model::DiscreteModel)
-        basesolver = BaseSolver(model)
-        return new(basesolver, zeros(np(model)), 0)
+    function HomotopySolver(nleq::ParametricNonLinEq)
+        basesolver = BaseSolver(nleq)
+        return new(basesolver, zeros(np(nleq)), 0)
     end
 end
 
@@ -110,15 +126,15 @@ type CachingSolver{BaseSolver}
     zs::Matrix{Float64}
     new_count::Int
     new_count_limit::Int
-    function CachingSolver(model::DiscreteModel)
-        basesolver = BaseSolver(model)
-        p = zeros(np(model))
+    function CachingSolver(nleq::ParametricNonLinEq)
+        basesolver = BaseSolver(nleq)
+        p = zeros(np(nleq))
         z = solve(basesolver, p)
         if ~hasconverged(basesolver)
             error("Failed to find initial solution.")
         end
-        ps_tree = KDTree(zeros(np(model), 1))
-        zs = reshape(copy(z), nn(model), 1)
+        ps_tree = KDTree(zeros(np(nleq), 1))
+        zs = reshape(copy(z), nn(nleq), 1)
         return new(basesolver, ps_tree, zs, 0, 2)
     end
 end
