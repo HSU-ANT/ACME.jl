@@ -15,7 +15,7 @@ tv, ti = ACME.topomat(sparse([1 -1 1; -1 1 -1]))
 
 let circ = Circuit()
     model=DiscreteModel(circ, 1.)
-    @test run(model, zeros(0, 20)) == zeros(0, 20)
+    @test run!(model, zeros(0, 20)) == zeros(0, 20)
 end
 
 for num = 1:50
@@ -52,20 +52,20 @@ let i = 1e-3, r=10e3, is=1e-12
     connect!(circ, d[:-], vprobe[:-], :gnd)
     connect!(circ, r1[2], d[:+], vprobe[:+])
     model = DiscreteModel(circ, 1.)
-    y = run(model, zeros(0, 1))
+    y = run!(model, zeros(0, 1))
     @test_approx_eq_eps y[1] v_d 1e-6
 end
 
 include("../examples/sallenkey.jl")
 let model=sallenkey()
-    y = run(model, sin(2π*1000/44100*(0:44099)'))
+    y = run!(model, sin(2π*1000/44100*(0:44099)'))
     @test size(y) == (1,44100)
     # TODO: further validate y
 end
 
 include("../examples/diodeclipper.jl")
 let model=diodeclipper()
-    y = run(model, sin(2π*1000/44100*(0:44099)'))
+    y = run!(model, sin(2π*1000/44100*(0:44099)'))
     @test size(y) == (1,44100)
     # TODO: further validate y
 end
@@ -74,14 +74,14 @@ include("../examples/birdie.jl")
 let model=birdie(0.8)
     ACME.solve(model.solver, [0.003, -0.0002])
     @assert ACME.hasconverged(model.solver)
-    y = run(model, sin(2π*1000/44100*(0:44099)'))
+    y = run!(model, sin(2π*1000/44100*(0:44099)'))
     @test size(y) == (1,44100)
     # TODO: further validate y
 end
 
 include("../examples/superover.jl")
 let model=superover(1.0, 1.0, 1.0)
-    y = run(model, sin(2π*1000/44100*(0:44099)'))
+    y = run!(model, sin(2π*1000/44100*(0:44099)'))
     @test size(y) == (1,44100)
     # TODO: further validate y
 end

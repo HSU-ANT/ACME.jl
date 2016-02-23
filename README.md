@@ -27,7 +27,7 @@ connect!(circ, :gnd, c1[2], d1[:-], d2[:+], j_out[:-])
 
 model = DiscreteModel(circ, 1./44100)
 
-y = run(model, sin(2π*1000/44100*(0:44099)'))
+y = run!(model, sin(2π*1000/44100*(0:44099)'))
 
 ```
 

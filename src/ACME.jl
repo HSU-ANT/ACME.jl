@@ -5,8 +5,7 @@ VERSION >= v"0.4.0-dev+6521" && __precompile__()
 
 module ACME
 
-import Base.run
-export Circuit, add!, connect!, DiscreteModel, run
+export Circuit, add!, connect!, DiscreteModel, run!
 
 using ProgressMeter
 using Compat
@@ -434,7 +433,7 @@ np(model::DiscreteModel) = size(model.dq)[1]
 ny(model::DiscreteModel) = length(model.y0)
 nn(model::DiscreteModel) = size(model.fq)[2]
 
-function run(model::DiscreteModel, u::AbstractMatrix{Float64})
+function run!(model::DiscreteModel, u::AbstractMatrix{Float64})
     y = Array(Float64, ny(model), size(u)[2])
     @showprogress 1 "Running model: " for n = 1:size(u)[2]
         p = model.dq * model.x + model.eq * u[:,n]
