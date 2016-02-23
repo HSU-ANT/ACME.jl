@@ -333,6 +333,24 @@ type DiscreteModel{Solver}
         end
         model.x = zeros(nx(model))
 
+        # determine an initial solution with a homotopy solver that may vary q0
+        # between 0 and the true q0
+        init_nl_eq_func = eval(quote
+            # wrap up in named function until anonymous functions are as fast...
+            function $(gensym())(res, J, Jp, p, z)
+                let q0=$(zeros(nq(model))), pexp=$(eye(nq(model))),
+                    q=$(zeros(nq(model))), Jq=$(zeros(nn(model), nq(model))),
+                    fq=$(model.fq)
+                    $(model.nonlinear_eq)
+                end
+                return nothing
+            end
+        end)
+        init_nleq = ParametricNonLinEq(init_nl_eq_func, nn(model), nq(model))
+        init_solver = HomotopySolver{SimpleSolver}(init_nleq, zeros(nq(model)),
+                                                   zeros(nn(model)))
+        init_z = solve(init_solver, model.q0)
+
         # use a preallocated q and Jq
         q = zeros(nq(model))
         Jq = zeros(nn(model), nq(model))
@@ -346,7 +364,8 @@ type DiscreteModel{Solver}
             end
         end)
         model.solver =
-            Solver(ParametricNonLinEq(nonlinear_eq_func, nn(model), np(model)))
+            Solver(ParametricNonLinEq(nonlinear_eq_func, nn(model), np(model)),
+                   zeros(np(model)), init_z)
         return model
     end
 end

@@ -29,13 +29,16 @@ type SimpleSolver
     last_Jp::Matrix{Float64}
     JLU::Base.LU{Float64,Matrix{Float64}}
     iters::Int
-    function SimpleSolver(nleq::ParametricNonLinEq)
+    function SimpleSolver(nleq::ParametricNonLinEq, initial_p::Vector{Float64},
+                          initial_z::Vector{Float64})
         z = zeros(nn(nleq))
         last_z = zeros(nn(nleq))
         last_p = zeros(np(nleq))
         last_Jp = zeros(nn(nleq), np(nleq))
         JLU = lufact(eye(nn(nleq)))
-        new(nleq, z, last_z, last_p, last_Jp, JLU, 0)
+        solver = new(nleq, z, last_z, last_p, last_Jp, JLU, 0)
+        set_extrapolation_origin(solver, initial_p, initial_z)
+        return solver
     end
 end
 
@@ -86,8 +89,10 @@ type HomotopySolver{BaseSolver}
     basesolver::BaseSolver
     start_p::Vector{Float64}
     iters::Int
-    function HomotopySolver(nleq::ParametricNonLinEq)
-        basesolver = BaseSolver(nleq)
+    function HomotopySolver(nleq::ParametricNonLinEq,
+                            initial_p::Vector{Float64},
+                            initial_z::Vector{Float64})
+        basesolver = BaseSolver(nleq, initial_p, initial_z)
         return new(basesolver, zeros(np(nleq)), 0)
     end
 end
@@ -126,15 +131,11 @@ type CachingSolver{BaseSolver}
     zs::Matrix{Float64}
     new_count::Int
     new_count_limit::Int
-    function CachingSolver(nleq::ParametricNonLinEq)
-        basesolver = BaseSolver(nleq)
-        p = zeros(np(nleq))
-        z = solve(basesolver, p)
-        if ~hasconverged(basesolver)
-            error("Failed to find initial solution.")
-        end
-        ps_tree = KDTree(zeros(np(nleq), 1))
-        zs = reshape(copy(z), nn(nleq), 1)
+    function CachingSolver(nleq::ParametricNonLinEq, initial_p::Vector{Float64},
+                          initial_z::Vector{Float64})
+        basesolver = BaseSolver(nleq, initial_p, initial_z)
+        ps_tree = KDTree(reshape(copy(initial_p), np(nleq), 1))
+        zs = reshape(copy(initial_z), nn(nleq), 1)
         return new(basesolver, ps_tree, zs, 0, 2)
     end
 end
