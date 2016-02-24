@@ -5,7 +5,7 @@ VERSION >= v"0.4.0-dev+6521" && __precompile__()
 
 module ACME
 
-export Circuit, add!, connect!, DiscreteModel, run!
+export Circuit, add!, connect!, DiscreteModel, run!, steadystate, steadystate!
 
 using ProgressMeter
 using Compat
@@ -444,6 +444,36 @@ np(model::DiscreteModel) = size(model.dq)[1]
 nu(model::DiscreteModel) = size(model.eq, 2)
 ny(model::DiscreteModel) = length(model.y0)
 nn(model::DiscreteModel) = size(model.fq)[2]
+
+function steadystate(model::DiscreteModel, u=zeros(nu(model)))
+    IA_LU = lufact(eye(nx(model))-model.a)
+    steady_nl_eq_func = eval(quote
+        (res, J, Jp, p, z) ->
+            let q0=$(zeros(nq(model))), pexp=$(eye(nq(model))),
+                q=$(zeros(nq(model))), Jq=$(zeros(nn(model), nq(model))),
+                fq=$(model.pexp*model.dq/IA_LU*model.c + model.fq)
+                $(model.nonlinear_eq)
+                return nothing
+            end
+    end)
+    steady_nleq = ParametricNonLinEq(steady_nl_eq_func, nn(model), nq(model))
+    steady_solver = HomotopySolver{SimpleSolver}(steady_nleq, zeros(nq(model)),
+                                                 zeros(nn(model)))
+    set_resabs2tol!(steady_solver, 1e-30)
+    steady_q0 = model.q0 + model.pexp*(model.dq/IA_LU*model.b + model.eq)*u +
+                model.pexp*model.dq/IA_LU*model.x0
+    steady_z = solve(steady_solver, steady_q0)
+    if !hasconverged(steady_solver)
+        error("Failed to find steady state solution")
+    end
+    return IA_LU\(model.b*u + model.c*steady_z + model.x0)
+end
+
+function steadystate!(model::DiscreteModel, u=zeros(nu(model)))
+    x_steady = steadystate(model, u)
+    copy!(model.x, x_steady)
+    return x_steady
+end
 
 function run!(model::DiscreteModel, u::AbstractMatrix{Float64})
     y = Array(Float64, ny(model), size(u)[2])

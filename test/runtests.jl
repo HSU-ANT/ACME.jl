@@ -56,11 +56,21 @@ let i = 1e-3, r=10e3, is=1e-12
     @test_approx_eq_eps y[1] v_d 1e-6
 end
 
+function checksteady!(model)
+    x_steady = steadystate!(model)
+    ACME.set_resabs2tol!(model.solver, 1e-25)
+    run!(model, zeros(1, 1))
+    @test_approx_eq model.x x_steady
+end
+
 include("../examples/sallenkey.jl")
 let model=sallenkey()
     y = run!(model, sin(2π*1000/44100*(0:44099)'))
     @test size(y) == (1,44100)
     # TODO: further validate y
+
+    # cannot check steady state: steadystate() does not work for matrix A having
+    # eigenvalue 1
 end
 
 include("../examples/diodeclipper.jl")
@@ -68,6 +78,7 @@ let model=diodeclipper()
     y = run!(model, sin(2π*1000/44100*(0:44099)'))
     @test size(y) == (1,44100)
     # TODO: further validate y
+    checksteady!(model)
 end
 
 include("../examples/birdie.jl")
@@ -77,6 +88,7 @@ let model=birdie(0.8)
     y = run!(model, sin(2π*1000/44100*(0:44099)'))
     @test size(y) == (1,44100)
     # TODO: further validate y
+    checksteady!(model)
 end
 
 include("../examples/superover.jl")
@@ -84,4 +96,5 @@ let model=superover(1.0, 1.0, 1.0)
     y = run!(model, sin(2π*1000/44100*(0:44099)'))
     @test size(y) == (1,44100)
     # TODO: further validate y
+    checksteady!(model)
 end
