@@ -29,6 +29,7 @@ type SimpleSolver
     last_Jp::Matrix{Float64}
     JLU::Base.LU{Float64,Matrix{Float64}}
     iters::Int
+    tol::Float64
     function SimpleSolver(nleq::ParametricNonLinEq, initial_p::Vector{Float64},
                           initial_z::Vector{Float64})
         z = zeros(nn(nleq))
@@ -36,11 +37,13 @@ type SimpleSolver
         last_p = zeros(np(nleq))
         last_Jp = zeros(nn(nleq), np(nleq))
         JLU = lufact(eye(nn(nleq)))
-        solver = new(nleq, z, last_z, last_p, last_Jp, JLU, 0)
+        solver = new(nleq, z, last_z, last_p, last_Jp, JLU, 0, 1e-20)
         set_extrapolation_origin(solver, initial_p, initial_z)
         return solver
     end
 end
+
+set_resabs2tol!(solver::SimpleSolver, tol) = solver.tol = tol
 
 function set_extrapolation_origin(solver::SimpleSolver, p, z)
     evaluate!(solver.nleq, p, z)
@@ -58,7 +61,7 @@ end
 get_extrapolation_origin(solver::SimpleSolver) = solver.last_p, solver.last_z
 
 function hasconverged(solver::SimpleSolver)
-    return sumabs2(solver.nleq.res) < 1e-20
+    return sumabs2(solver.nleq.res) < solver.tol
 end
 
 needediterations(solver::SimpleSolver) = solver.iters
@@ -96,6 +99,9 @@ type HomotopySolver{BaseSolver}
         return new(basesolver, zeros(np(nleq)), 0)
     end
 end
+
+set_resabs2tol!(solver::HomotopySolver, tol) =
+    set_resabs2tol!(solver.basesolver, tol)
 
 set_extrapolation_origin(solver::HomotopySolver, p, z) =
     set_extrapolation_origin(solver.basesolver, p, z)
@@ -139,6 +145,9 @@ type CachingSolver{BaseSolver}
         return new(basesolver, ps_tree, zs, 0, 2)
     end
 end
+
+set_resabs2tol!(solver::CachingSolver, tol) =
+    set_resabs2tol!(solver.basesolver, tol)
 
 hasconverged(solver::CachingSolver) = hasconverged(solver.basesolver)
 needediterations(solver::CachingSolver) = needediterations(solver.basesolver)
