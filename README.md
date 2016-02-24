@@ -106,7 +106,7 @@ The output `y` now likewise is a matrix with one row for the one probe we have
 added to the circuit and one column per sample.
 
 In the likely event that you would like to process real audio data, take a look
-at the [WAV]([https://github.com/dancasimiro/WAV.jl) package for reading writing
+at the [WAV](https://github.com/dancasimiro/WAV.jl) package for reading writing
 WAV files.
 
 Note that the solver used to solve the non-linear equation when running the
