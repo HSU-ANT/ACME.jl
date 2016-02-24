@@ -344,31 +344,12 @@ type DiscreteModel{Solver}
             BLAS.gemm!('N', 'N', 1., Jq, pexp, 0., Jp)
         end
 
-        # determine an initial solution with a homotopy solver that may vary q0
-        # between 0 and the true q0
-        init_nl_eq_func = eval(quote
-            # wrap up in named function until anonymous functions are as fast...
-            function $(gensym())(res, J, Jp, p, z)
-                let q0=$(zeros(nq(model))), pexp=$(eye(nq(model))),
-                    q=$(zeros(nq(model))), Jq=$(zeros(nn(model), nq(model))),
-                    fq=$(model.fq)
-                    $(model.nonlinear_eq)
-                end
-                return nothing
-            end
-        end)
-        init_nleq = ParametricNonLinEq(init_nl_eq_func, nn(model), nq(model))
-        init_solver = HomotopySolver{SimpleSolver}(init_nleq, zeros(nq(model)),
-                                                   zeros(nn(model)))
-        init_z = solve(init_solver, model.q0)
-
-        # use a preallocated q and Jq
-        q = zeros(nq(model))
-        Jq = zeros(nn(model), nq(model))
+        init_z = initial_solution(model.nonlinear_eq, model.q0, model.fq)
         nonlinear_eq_func = eval(quote
             # wrap up in named function until anonymous functions are as fast...
             function $(gensym())(res, J, Jp, p, z)
-                let q0=$(model.q0), pexp=$(model.pexp), q=$(q), Jq=$(Jq), fq=$(model.fq)
+                let q0=$(model.q0), pexp=$(model.pexp), q=$(zeros(nq(model))),
+                    Jq=$(zeros(nn(model), nq(model))), fq=$(model.fq)
                     $(model.nonlinear_eq)
                 end
                 return nothing
@@ -434,6 +415,27 @@ function model_matrices(circ::Circuit, t)
     res[:y0] = p * x[:,1]            # p * [v0; i0; x0; q0]
 
     return res
+end
+
+function initial_solution(nleq, q0, fq)
+    # determine an initial solution with a homotopy solver that may vary q0
+    # between 0 and the true q0 -> q0 takes the role of p
+    nq, nn = size(fq)
+    init_nl_eq_func = eval(quote
+        (res, J, Jp, p, z) ->
+            let q0=$(zeros(nq)), pexp=$(eye(nq)), q=$(zeros(nq)),
+                Jq=$(zeros(nn, nq)), fq=$(fq)
+                $(nleq)
+                return nothing
+            end
+    end)
+    init_nleq = ParametricNonLinEq(init_nl_eq_func, nn, nq)
+    init_solver = HomotopySolver{SimpleSolver}(init_nleq, zeros(nq), zeros(nn))
+    init_z = solve(init_solver, q0)
+    if !hasconverged(init_solver)
+        error("Failed to find initial solution")
+    end
+    return init_z
 end
 
 nx(model::DiscreteModel) = length(model.x0)
