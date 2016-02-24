@@ -441,6 +441,7 @@ end
 nx(model::DiscreteModel) = length(model.x0)
 nq(model::DiscreteModel) = length(model.q0)
 np(model::DiscreteModel) = size(model.dq)[1]
+nu(model::DiscreteModel) = size(model.eq, 2)
 ny(model::DiscreteModel) = length(model.y0)
 nn(model::DiscreteModel) = size(model.fq)[2]
 
