@@ -317,21 +317,32 @@ type DiscreteModel{Solver}
     solver::Solver
     x::Vector{Float64}
 
-    function DiscreteModel(;args...)
+    function DiscreteModel(circ::Circuit, t::Float64)
         model = new()
-        types = @compat Dict([name_type[1] => name_type[2] for
-                              name_type in zip(fieldnames(DiscreteModel), DiscreteModel.types)])
-        for (key, val) in args
-            expected_type = types[key]
-            if issubtype(expected_type, Matrix)
-                model.(key) = full(val)
-            elseif  issubtype(expected_type, Vector)
-                model.(key) = squeeze(full(val), tuple((2:ndims(val))...))
-            else
-                model.(key) = val
-            end
+
+        mats = model_matrices(circ, t)
+        for mat in [:a, :b, :c, :pexp, :dq, :eq, :fq, :dy, :ey, :fy]
+            model.(mat)=full(mats[mat])
         end
+        for vec in [:x0, :q0, :y0]
+            model.(vec)=squeeze(full(mats[vec]), tuple((2:ndims(mats[vec]))...))
+        end
+
         model.x = zeros(nx(model))
+
+        model.nonlinear_eq = quote
+            #copy!(q, q0 + pexp * p + fq * z)
+            copy!(q, q0)
+            BLAS.gemv!('N',1.,pexp,p,1.,q)
+            BLAS.gemv!('N',1.,fq,z,1.,q)
+            let J=Jq
+                $(nonlinear_eq(circ))
+            end
+            #copy!(J, Jq*model.fq)
+            BLAS.gemm!('N', 'N', 1., Jq, fq, 0., J)
+            #copy!(Jp, Jq*pexp)
+            BLAS.gemm!('N', 'N', 1., Jq, pexp, 0., Jp)
+        end
 
         # determine an initial solution with a homotopy solver that may vary q0
         # between 0 and the true q0
@@ -370,29 +381,8 @@ type DiscreteModel{Solver}
     end
 end
 
-function DiscreteModel(circ::Circuit, t::Float64,
-                       solver::Type = HomotopySolver{CachingSolver{SimpleSolver}})
-    mats = model_matrices(circ, t)
-
-    nl_eq = quote
-        #copy!(q, q0 + pexp * p + fq * z)
-        copy!(q, q0)
-        BLAS.gemv!('N',1.,pexp,p,1.,q)
-        BLAS.gemv!('N',1.,fq,z,1.,q)
-        let J=Jq
-            $(nonlinear_eq(circ))
-        end
-        #copy!(J, Jq*model.fq)
-        BLAS.gemm!('N', 'N', 1., Jq, fq, 0., J)
-        #copy!(Jp, Jq*pexp)
-        BLAS.gemm!('N', 'N', 1., Jq, pexp, 0., Jp)
-    end
-
-    DiscreteModel{solver}(a=mats[:a], b=mats[:b], c=mats[:c], x0=mats[:x0],
-                          pexp=mats[:pexp], dq=mats[:dq], eq=mats[:eq], fq=mats[:fq], q0=mats[:q0],
-                          dy=mats[:dy], ey=mats[:ey], fy=mats[:fy], y0=mats[:y0],
-                          nonlinear_eq=nl_eq)
-end
+DiscreteModel(circ::Circuit, t::Float64) =
+    DiscreteModel{HomotopySolver{CachingSolver{SimpleSolver}}}(circ, t)
 
 function model_matrices(circ::Circuit, t)
     x, f = gensolve([mv(circ) mi(circ) 1/t*mxd(circ)+0.5*mx(circ) mq(circ);
