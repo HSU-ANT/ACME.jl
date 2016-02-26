@@ -346,13 +346,26 @@ type DiscreteModel{Solver}
 
         init_z = initial_solution(model.nonlinear_eq, model.q0, model.fq)
         nonlinear_eq_func = eval(quote
-            # wrap up in named function until anonymous functions are as fast...
-            function $(gensym())(res, J, Jp, p, z)
-                let q0=$(model.q0), pexp=$(model.pexp), q=$(zeros(nq(model))),
-                    Jq=$(zeros(nn(model), nq(model))), fq=$(model.fq)
+            if VERSION < v"0.5.0-dev+2396"
+                # wrap up in named function because anonymous functions are slow
+                # in old Julia versions
+                function $(gensym())(res, J, Jp, p, z)
+                    q0=$(model.q0)
+                    pexp=$(model.pexp)
+                    q=$(zeros(nq(model)))
+                    Jq=$(zeros(nn(model), nq(model)))
+                    fq=$(model.fq)
                     $(model.nonlinear_eq)
+                    return nothing
                 end
-                return nothing
+            else
+                (res, J, Jp, p, z) ->
+                    let q0=$(model.q0), pexp=$(model.pexp),
+                        q=$(zeros(nq(model))),
+                        Jq=$(zeros(nn(model), nq(model))), fq=$(model.fq)
+                        $(model.nonlinear_eq)
+                        return nothing
+                    end
             end
         end)
         model.solver =
