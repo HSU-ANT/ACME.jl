@@ -2,7 +2,7 @@
 # See accompanying license file.
 
 export resistor, capacitor, inductor, transformer, voltagesource, currentsource,
-       voltageprobe, diode, bjt, opamp_ideal, opamp_macak
+       voltageprobe, currentprobe, diode, bjt, opamp_ideal, opamp_macak
 
 resistor(r) = Element(mv=-1, mi=r)
 
@@ -21,6 +21,7 @@ currentsource(i) = Element(mi=-1, u0=i, pins=[:+; :-])
 currentsource() = Element(mi=-1, mu=1, pins=[:+; :-])
 
 voltageprobe() = Element(mi=1, pv=1, pins=[:+; :-])
+currentprobe() = Element(mv=1, pi=1, pins=[:+; :-])
 
 diode(;is::Number=1e-12, η::Number = 1) =
   Element(mv=[1;0], mi=[0;1], mq=[-1 0; 0 -1], pins=[:+; :-], nonlinear_eq =
