@@ -1,5 +1,7 @@
 # ACME.jl - Analog Circuit Modeling and Emulation for Julia
 
+[![Join the chat at https://gitter.im/HSU-ANT/ACME.jl](https://badges.gitter.im/HSU-ANT/ACME.jl.svg)](https://gitter.im/HSU-ANT/ACME.jl?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+
 ACME is a [Julia](http://julialang.org/) package for the simulation of
 electrical circuits, focusing on audio effect circuits. It allows to
 programmatically describe a circuit in terms of elements and connections
