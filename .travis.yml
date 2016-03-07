@@ -5,3 +5,9 @@ julia:
   - 0.3
 notifications:
   email: false
+  webhooks:
+    urls:
+      - https://webhooks.gitter.im/e/ecfd7123156aeb0a3bf3
+    on_success: change
+    on_failure: always
+    on_start: never
