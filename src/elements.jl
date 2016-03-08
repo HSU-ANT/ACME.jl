@@ -2,7 +2,7 @@
 # See accompanying license file.
 
 export resistor, capacitor, inductor, transformer, voltagesource, currentsource,
-       voltageprobe, currentprobe, diode, bjt, opamp_ideal, opamp_macak
+       voltageprobe, currentprobe, diode, bjt, opamp
 
 resistor(r) = Element(mv=-1, mi=r)
 
@@ -68,10 +68,11 @@ function bjt(typ; is=1e-12, η=1, isc=is, ise=is, ηc=η, ηe=η, βf=1000, βr=
                    pins = [:base; :emitter; :base; :collector])
 end
 
-opamp_ideal() = Element(mv=[0 0; 1 0], mi=[1 0; 0 0],
-                        pins=[symbol("in+"); symbol(:"in-");
-                              symbol(:"out+"); symbol(:"out-")])
-function opamp_macak(gain, vomin, vomax)
+opamp() = Element(mv=[0 0; 1 0], mi=[1 0; 0 0],
+                  pins=[symbol("in+"); symbol(:"in-");
+                        symbol(:"out+"); symbol(:"out-")])
+
+function opamp(::Type{Val{:macak}}, gain, vomin, vomax)
     offset = 0.5 * (vomin + vomax)
     scale = 0.5 * (vomax - vomin)
     nonlinear_eq =
@@ -90,3 +91,6 @@ function opamp_macak(gain, vomin, vomax)
                    pins=[symbol("in+"); symbol(:"in-");
                          symbol(:"out+"); symbol(:"out-")])
 end
+
+@Base.deprecate(opamp_ideal, opamp)
+@Base.deprecate(opamp_macak(gain, vomin, vomax), opamp(Val{:macak}, gain, vomin, vomax))

@@ -52,8 +52,8 @@ function superover(::Type{Circuit}, drive::Real, tone::Real, level::Real, sym::B
     q1 = bjt(:npn, is=80e-15, βf=500, βr=10)
     q2 = bjt(:npn, is=80e-15, βf=500, βr=10)
 
-    ic1a = opamp_ideal()
-    ic1b = opamp_ideal()
+    ic1a = opamp()
+    ic1b = opamp()
 
     j1 = voltagesource() # input
     j2 = voltageprobe() # output
