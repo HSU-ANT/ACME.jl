@@ -15,6 +15,42 @@ transformer(l1, l2; coupling_coefficient=1,
             mx=[0 0; 0 0; -1 0; 0 -1], mxd=[-1 0; 0 -1; 0 0; 0 0],
             pins=[:primary1; :primary2; :secondary1; :secondary2])
 
+function transformer(::Type{Val{:JA}}; D=2.4e-2, A=4.54e-5, ns=[],
+                     a=14.1, α=5e-5, c=0.55/(1-0.55), k=17.8, Ms=2.75e5)
+    const μ0 = 1.2566370614e-6
+    nonlinear_eq =quote
+        L_q1 = abs(q[1]) < 1e-4 ? q[1]/3 : coth(q[1])-1/q[1]
+        Ld_q1 = abs(q[1]) < 1e-4 ? 1/3 : 1/q[1]^2-coth(q[1])^2+1
+        Ld2_q1 = abs(q[1]) < 1e-3 ? -2/15*q[1] :
+                                    2*coth(q[1])*(coth(q[1])^2 - 1) - 2/q[1]^3
+        δ = q[3] > 0 ? 1.0 : -1.0
+
+        Man = $(Ms)*L_q1
+        Man_dq1 = $(Ms)*Ld_q1
+        δM = sign(q[3]) == sign(Man - q[2]) ? 1.0 : 0.0
+
+        den = δ*$(k)-$(α)*(Man-q[2])
+        # at present, the error needs to be scaled to be comparable to those of
+        # the other elements, hence the factor 1e-4/Ms
+        res[1] = $(1e-4/Ms) * ($(1/(1+c)) * (δM*(Man-q[2])/den * q[3] +
+                                             $(c*Ms/a)*(q[3]+$(α)*q[4])*Ld_q1)
+                               - q[4])
+        J[1,1] = $(1e-4/Ms) * $(1/(1+c)) * (δM*Man_dq1*δ*$(k)/den^2 * q[3] +
+                                            $(c*Ms/a)*(q[3]+$(α)*q[4])*Ld2_q1)
+        J[1,2] = $(1e-4/Ms) * -$(1/(1+c)) * δM*δ*$(k)/den^2 * q[3]
+        J[1,3] = $(1e-4/Ms) * $(1/(1+c)) * (δM*(Man-q[2])/den + $(c*Ms/a)*Ld_q1)
+        J[1,4] = $(1e-4/Ms) * ($(c/(1+c) * Ms/a * α)*Ld_q1 - 1)
+    end
+    Element(mv=[speye(length(ns)); spzeros(5, length(ns))],
+            mi=[spzeros(length(ns), length(ns)); ns.'; spzeros(4, length(ns))],
+            mx=[spzeros(length(ns), 2); -π*D 0; -1/a -α/a; 0 -1; 0 0; 0 0],
+            mxd=[-μ0*A*ns -μ0*ns*A; 0 0; 0 0; 0 0; -1 0; 0 -1],
+            mq=[zeros(length(ns)+1,4); eye(4)], nonlinear_eq = nonlinear_eq)
+end
+
+inductor(::Type{Val{:JA}}; n=230, args...) =
+    transformer(Val{:JA}; ns=[n], args...)
+
 voltagesource(v) = Element(mv=1, u0=v, pins=[:+; :-])
 voltagesource() = Element(mv=1, mu=1, pins=[:+; :-])
 currentsource(i) = Element(mi=-1, u0=i, pins=[:+; :-])
