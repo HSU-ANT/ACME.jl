@@ -490,8 +490,15 @@ end
 
 function run!(model::DiscreteModel, u::AbstractMatrix{Float64})
     y = Array(Float64, ny(model), size(u)[2])
+    ucur = Array(Float64, nu(model))
+    p = Array(Float64, np(model))
+    ycur = Array(Float64, ny(model))
+    xnew = Array(Float64, nx(model))
     @showprogress 1 "Running model: " for n = 1:size(u)[2]
-        p = model.dq * model.x + model.eq * u[:,n]
+        copy!(ucur, u[:,n])
+        # copy!(p, model.dq * model.x + model.eq * u[:,n])
+        BLAS.gemv!('N', 1., model.dq, model.x, 0., p)
+        BLAS.gemv!('N', 1., model.eq, ucur, 1., p)
         z = solve(model.solver, p)
         if ~hasconverged(model.solver)
             if all(isfinite(z))
@@ -500,8 +507,18 @@ function run!(model::DiscreteModel, u::AbstractMatrix{Float64})
                 error("Failed to converge while solving non-linear equation, got non-finite result.")
             end
         end
-        y[:,n] = model.dy * model.x + model.ey * u[:,n] + model.fy * z + model.y0
-        model.x = model.a * model.x + model.b * u[:,n] + model.c * z + model.x0
+        #y[:,n] = model.dy * model.x + model.ey * u[:,n] + model.fy * z + model.y0
+        copy!(ycur, model.y0)
+        BLAS.gemv!('N', 1., model.dy, model.x, 1., ycur)
+        BLAS.gemv!('N', 1., model.ey, ucur, 1., ycur)
+        BLAS.gemv!('N', 1., model.fy, z, 1., ycur)
+        y[:,n] = ycur
+        #model.x = model.a * model.x + model.b * u[:,n] + model.c * z + model.x0
+        copy!(xnew, model.x0)
+        BLAS.gemv!('N', 1., model.a, model.x, 1., xnew)
+        BLAS.gemv!('N', 1., model.b, ucur, 1.,xnew)
+        BLAS.gemv!('N', 1., model.c, z, 1., xnew)
+        copy!(model.x, xnew)
     end
     return y
 end
