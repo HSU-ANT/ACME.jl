@@ -18,15 +18,15 @@ transformer(l1, l2; coupling_coefficient=1,
 function transformer(::Type{Val{:JA}}; D=2.4e-2, A=4.54e-5, ns=[],
                      a=14.1, α=5e-5, c=0.55/(1-0.55), k=17.8, Ms=2.75e5)
     const μ0 = 1.2566370614e-6
-    nonlinear_eq =quote
-        L_q1 = abs(q[1]) < 1e-4 ? q[1]/3 : coth(q[1])-1/q[1]
-        Ld_q1 = abs(q[1]) < 1e-4 ? 1/3 : 1/q[1]^2-coth(q[1])^2+1
-        Ld2_q1 = abs(q[1]) < 1e-3 ? -2/15*q[1] :
-                                    2*coth(q[1])*(coth(q[1])^2 - 1) - 2/q[1]^3
+    nonlinear_eq = quote
+        coth_q1 = coth(q[1])
+        a_q1 = abs(q[1])
+        L_q1 = a_q1 < 1e-4 ? q[1]/3 : coth_q1 - 1/q[1]
+        Ld_q1 = a_q1 < 1e-4 ? 1/3 : 1/q[1]^2 - coth_q1^2 + 1
+        Ld2_q1 = a_q1 < 1e-3 ? -2/15*q[1] : 2*coth_q1*(coth_q1^2 - 1) - 2/q[1]^3
         δ = q[3] > 0 ? 1.0 : -1.0
 
         Man = $(Ms)*L_q1
-        Man_dq1 = $(Ms)*Ld_q1
         δM = sign(q[3]) == sign(Man - q[2]) ? 1.0 : 0.0
 
         den = δ*$(k)-$(α)*(Man-q[2])
@@ -35,7 +35,7 @@ function transformer(::Type{Val{:JA}}; D=2.4e-2, A=4.54e-5, ns=[],
         res[1] = $(1e-4/Ms) * ($(1/(1+c)) * (δM*(Man-q[2])/den * q[3] +
                                              $(c*Ms/a)*(q[3]+$(α)*q[4])*Ld_q1)
                                - q[4])
-        J[1,1] = $(1e-4/Ms) * $(1/(1+c)) * (δM*Man_dq1*δ*$(k)/den^2 * q[3] +
+        J[1,1] = $(1e-4/Ms) * $(1/(1+c)) * (δM*Ld_q1*δ*$(Ms*k)/den^2 * q[3] +
                                             $(c*Ms/a)*(q[3]+$(α)*q[4])*Ld2_q1)
         J[1,2] = $(1e-4/Ms) * -$(1/(1+c)) * δM*δ*$(k)/den^2 * q[3]
         J[1,3] = $(1e-4/Ms) * $(1/(1+c)) * (δM*(Man-q[2])/den + $(c*Ms/a)*Ld_q1)
