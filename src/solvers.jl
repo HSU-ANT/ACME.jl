@@ -29,6 +29,7 @@ type SimpleSolver
     last_Jp::Matrix{Float64}
     JLU::Base.LU{Float64,Matrix{Float64}}
     iters::Int
+    ressumabs2::Float64
     tol::Float64
     function SimpleSolver(nleq::ParametricNonLinEq, initial_p::Vector{Float64},
                           initial_z::Vector{Float64})
@@ -37,7 +38,7 @@ type SimpleSolver
         last_p = zeros(np(nleq))
         last_Jp = zeros(nn(nleq), np(nleq))
         JLU = lufact(eye(nn(nleq)))
-        solver = new(nleq, z, last_z, last_p, last_Jp, JLU, 0, 1e-20)
+        solver = new(nleq, z, last_z, last_p, last_Jp, JLU, 0, 0.0, 1e-20)
         set_extrapolation_origin(solver, initial_p, initial_z)
         return solver
     end
@@ -60,9 +61,7 @@ end
 
 get_extrapolation_origin(solver::SimpleSolver) = solver.last_p, solver.last_z
 
-function hasconverged(solver::SimpleSolver)
-    return sumabs2(solver.nleq.res) < solver.tol
-end
+hasconverged(solver::SimpleSolver) = solver.ressumabs2 < solver.tol
 
 needediterations(solver::SimpleSolver) = solver.iters
 
@@ -71,6 +70,7 @@ function solve(solver::SimpleSolver, p::AbstractVector{Float64}, maxiter=500)
     local JLU
     for solver.iters=1:maxiter
         evaluate!(solver.nleq, p, solver.z)
+        solver.ressumabs2 = sumabs2(solver.nleq.res)
         if ~all(isfinite(solver.nleq.res)) || ~all(isfinite(solver.nleq.J))
             return solver.z
         end
