@@ -130,6 +130,9 @@ end
 hasconverged(solver::HomotopySolver) = hasconverged(solver.basesolver)
 needediterations(solver::HomotopySolver) = solver.iters
 
+if VERSION < v"0.5.0-dev+1343"
+    typealias RemoteChannel RemoteRef
+end
 
 type CachingSolver{BaseSolver}
     basesolver::BaseSolver
@@ -138,12 +141,15 @@ type CachingSolver{BaseSolver}
     num_ps::Int
     new_count::Int
     new_count_limit::Int
+    concurrency_threshold::Int
+    rebuild_running::Bool
+    new_tree::RemoteChannel
     function CachingSolver(nleq::ParametricNonLinEq, initial_p::Vector{Float64},
                           initial_z::Vector{Float64})
         basesolver = BaseSolver(nleq, initial_p, initial_z)
         ps_tree = KDTree(reshape(copy(initial_p), np(nleq), 1))
         zs = reshape(copy(initial_z), nn(nleq), 1)
-        return new(basesolver, ps_tree, zs, 1, 0, 2)
+        return new(basesolver, ps_tree, zs, 1, 0, 2, 10000, false, RemoteChannel())
     end
 end
 
@@ -165,6 +171,13 @@ function solve(solver::CachingSolver, p)
             best_diff = diff
             idx = i
         end
+    end
+
+    if solver.rebuild_running && isready(solver.new_tree)
+        old_ps = solver.ps_tree.ps
+        solver.ps_tree = fetch(solver.new_tree)
+        solver.ps_tree.ps = old_ps
+        solver.rebuild_running = false
     end
 
     idx = indnearest(solver.ps_tree, p,
@@ -189,14 +202,31 @@ function solve(solver::CachingSolver, p)
         solver.zs[:,solver.num_ps] = z
         solver.new_count += 1
     end
-    if solver.new_count > 0
-        solver.new_count_limit -= 1
+    if solver.num_ps > solver.concurrency_threshold && nprocs() > 1
+        if !solver.rebuild_running && solver.new_count > 0
+            solver.new_tree = RemoteChannel()
+            if VERSION ≥ v"0.5.0-"
+                new_tree = solver.new_tree
+                ps = solver.ps_tree.ps
+                num_ps = solver.num_ps
+                @spawn put!(new_tree, KDTree(ps, num_ps))
+            else
+                @spawn put!(solver.new_tree, KDTree(solver.ps_tree.ps, solver.num_ps))
+            end
+            solver.new_count = 0
+            solver.rebuild_running = true
+        end
+    else
+        if solver.new_count > 0
+            solver.new_count_limit -= 1
+        end
+        if !solver.rebuild_running && solver.new_count > solver.new_count_limit
+            solver.ps_tree = KDTree(solver.ps_tree.ps, solver.num_ps)
+            solver.new_count = 0
+            solver.new_count_limit = 2size(solver.ps_tree.ps, 2)
+        end
     end
-    if solver.new_count > solver.new_count_limit
-        solver.ps_tree = KDTree(solver.ps_tree.ps, solver.num_ps)
-        solver.new_count = 0
-        solver.new_count_limit = 2size(solver.ps_tree.ps, 2)
-    end
+
     return z
 end
 
