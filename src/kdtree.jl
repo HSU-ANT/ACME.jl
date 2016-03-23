@@ -11,7 +11,7 @@ type KDTree{Tcv<:AbstractVector,Tp<:AbstractMatrix}
     ps::Tp
 end
 
-function KDTree(p::AbstractMatrix)
+function KDTree(p::AbstractMatrix, Np=size(p,2))
     function calc_cut_idx(min_idx, max_idx)
         N = max_idx - min_idx + 1
         N2 = 2^floor(Int, log2(N-1))
@@ -22,30 +22,30 @@ function KDTree(p::AbstractMatrix)
         end
     end
 
-    if size(p,2) == 0
+    if Np == 0
         return KDTree{Vector{eltype(p)},typeof(p)}([], [], [], p)
     end
 
-    min_idx = zeros(Int, size(p,2)-1)
-    max_idx = zeros(Int, size(p,2)-1)
-    cut_idx = zeros(Int, size(p,2)-1)
-    cut_dim = zeros(Int, size(p,2)-1)
-    cut_val = zeros(eltype(p), size(p,2)-1)
+    min_idx = zeros(Int, Np-1)
+    max_idx = zeros(Int, Np-1)
+    cut_idx = zeros(Int, Np-1)
+    cut_dim = zeros(Int, Np-1)
+    cut_val = zeros(eltype(p), Np-1)
 
-    if size(p,2) == 1
+    if Np == 1
         return KDTree{typeof(cut_val),typeof(p)}(cut_dim, cut_val, [1], p)
     end
 
-    dim = indmax(var(p,2))
+    dim = indmax(var(p[:,1:Np],2))
     p_idx = sortperm(vec(p[dim,:]))
 
     min_idx[1] = 1
-    max_idx[1] = size(p,2)
+    max_idx[1] = Np
     cut_idx[1] = calc_cut_idx(min_idx[1], max_idx[1])
     cut_dim[1] = dim
     cut_val[1] = mean(p[dim, p_idx[cut_idx[1]:cut_idx[1]+1]])
 
-    for n in 2:size(p,2)-1
+    for n in 2:Np-1
         parent_n = div(n, 2)
         if mod(n, 2) == 0
             min_idx[n] = min_idx[parent_n]
@@ -62,10 +62,10 @@ function KDTree(p::AbstractMatrix)
         cut_val[n] = mean(p[dim, p_idx[cut_idx[n]:cut_idx[n]+1]])
     end
 
-    p_idx_final = zeros(Int, size(p,2))
-    for n in 1:size(p,2)
-        parent_n = div(n+size(p,2)-1, 2);
-        if mod(n+size(p,2),2) == 1
+    p_idx_final = zeros(Int, Np)
+    for n in 1:Np
+        parent_n = div(n+Np-1, 2);
+        if mod(n+Np, 2) == 1
             p_idx_final[n] = p_idx[min_idx[parent_n]]
         else
             p_idx_final[n] = p_idx[max_idx[parent_n]]

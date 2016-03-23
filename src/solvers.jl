@@ -135,6 +135,7 @@ type CachingSolver{BaseSolver}
     basesolver::BaseSolver
     ps_tree::KDTree{Vector{Float64}, Matrix{Float64}}
     zs::Matrix{Float64}
+    num_ps::Int
     new_count::Int
     new_count_limit::Int
     function CachingSolver(nleq::ParametricNonLinEq, initial_p::Vector{Float64},
@@ -142,7 +143,7 @@ type CachingSolver{BaseSolver}
         basesolver = BaseSolver(nleq, initial_p, initial_z)
         ps_tree = KDTree(reshape(copy(initial_p), np(nleq), 1))
         zs = reshape(copy(initial_z), nn(nleq), 1)
-        return new(basesolver, ps_tree, zs, 0, 2)
+        return new(basesolver, ps_tree, zs, 1, 0, 2)
     end
 end
 
@@ -155,8 +156,7 @@ needediterations(solver::CachingSolver) = needediterations(solver.basesolver)
 function solve(solver::CachingSolver, p)
     best_diff = sumabs2(p - get_extrapolation_origin(solver.basesolver)[1])
     idx = 0
-    num_ps = size(solver.ps_tree.ps, 2)
-    for i in (num_ps-solver.new_count+1):num_ps
+    for i in (solver.num_ps-solver.new_count+1):solver.num_ps
         diff = 0.
         for j in 1:size(solver.ps_tree.ps, 1)
             diff += abs2(solver.ps_tree.ps[j,i] - p[j])
@@ -177,15 +177,23 @@ function solve(solver::CachingSolver, p)
 
     z = solve(solver.basesolver, p)
     if needediterations(solver.basesolver) > 5 && hasconverged(solver.basesolver)
-        solver.ps_tree.ps = [solver.ps_tree.ps p]
-        solver.zs = [solver.zs z]
+        solver.num_ps += 1
+        if solver.num_ps > size(solver.ps_tree.ps, 2)
+            solver.ps_tree.ps =
+                copy!(zeros(size(solver.ps_tree.ps, 1), 2solver.num_ps),
+                      solver.ps_tree.ps)
+            solver.zs =
+                copy!(zeros(size(solver.zs, 1), 2solver.num_ps), solver.zs)
+        end
+        solver.ps_tree.ps[:,solver.num_ps] = p
+        solver.zs[:,solver.num_ps] = z
         solver.new_count += 1
     end
     if solver.new_count > 0
         solver.new_count_limit -= 1
     end
     if solver.new_count > solver.new_count_limit
-        solver.ps_tree = KDTree(solver.ps_tree.ps)
+        solver.ps_tree = KDTree(solver.ps_tree.ps, solver.num_ps)
         solver.new_count = 0
         solver.new_count_limit = 2size(solver.ps_tree.ps, 2)
     end
