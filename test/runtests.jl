@@ -1,6 +1,8 @@
 # Copyright 2015, 2016 Martin Holters
 # See accompanying license file.
 
+nprocs() < 2 && addprocs(1)
+
 using ACME
 using Base.Test
 
@@ -93,6 +95,7 @@ end
 
 include("../examples/superover.jl")
 let model=superover(1.0, 1.0, 1.0)
+    model.solver.basesolver.concurrency_threshold = 200
     y = run!(model, sin(2π*1000/44100*(0:44099)'))
     @test size(y) == (1,44100)
     # TODO: further validate y
