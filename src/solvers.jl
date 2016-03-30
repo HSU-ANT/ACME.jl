@@ -31,6 +31,8 @@ type SimpleSolver
     iters::Int
     ressumabs2::Float64
     tol::Float64
+    tmp_nn::Vector{Float64}
+    tmp_np::Vector{Float64}
     function SimpleSolver(nleq::ParametricNonLinEq, initial_p::Vector{Float64},
                           initial_z::Vector{Float64})
         z = zeros(nn(nleq))
@@ -38,7 +40,10 @@ type SimpleSolver
         last_p = zeros(np(nleq))
         last_Jp = zeros(nn(nleq), np(nleq))
         JLU = lufact(eye(nn(nleq)))
-        solver = new(nleq, z, last_z, last_p, last_Jp, JLU, 0, 0.0, 1e-20)
+        tmp_nn = zeros(nn(nleq))
+        tmp_np = zeros(np(nleq))
+        solver = new(nleq, z, last_z, last_p, last_Jp, JLU, 0, 0.0, 1e-20,
+                     tmp_nn, tmp_np)
         set_extrapolation_origin(solver, initial_p, initial_z)
         return solver
     end
@@ -48,12 +53,14 @@ set_resabs2tol!(solver::SimpleSolver, tol) = solver.tol = tol
 
 function set_extrapolation_origin(solver::SimpleSolver, p, z)
     evaluate!(solver.nleq, p, z)
-    JLU = lufact(solver.nleq.J)
+    JLU = lufact!(solver.nleq.J)
     set_extrapolation_origin(solver, p, z, solver.nleq.Jp, JLU)
 end
 
 function set_extrapolation_origin(solver::SimpleSolver, p, z, Jp, JLU)
-    solver.JLU = JLU
+    copy!(solver.JLU.factors, JLU.factors)
+    solver.JLU = Base.LU{Float64, Matrix{Float64}}(solver.JLU.factors, JLU.ipiv,
+                                                   JLU.info)
     copy!(solver.last_Jp, Jp)
     copy!(solver.last_p, p)
     copy!(solver.last_z, z)
@@ -66,7 +73,13 @@ hasconverged(solver::SimpleSolver) = solver.ressumabs2 < solver.tol
 needediterations(solver::SimpleSolver) = solver.iters
 
 function solve(solver::SimpleSolver, p::AbstractVector{Float64}, maxiter=500)
-    copy!(solver.z, solver.last_z - solver.JLU\(solver.last_Jp * (p - solver.last_p)))
+    #solver.z = solver.last_z - solver.JLU\(solver.last_Jp * (p-solver.last_p))
+    copy!(solver.tmp_np, p)
+    BLAS.axpy!(-1.0, solver.last_p, solver.tmp_np)
+    BLAS.gemv!('N', 1.,solver.last_Jp, solver.tmp_np, 0., solver.tmp_nn)
+    A_ldiv_B!(solver.JLU, solver.tmp_nn)
+    copy!(solver.z, solver.last_z)
+    BLAS.axpy!(-1.0, solver.tmp_nn, solver.z)
     local JLU
     for solver.iters=1:maxiter
         evaluate!(solver.nleq, p, solver.z)
@@ -74,12 +87,15 @@ function solve(solver::SimpleSolver, p::AbstractVector{Float64}, maxiter=500)
         if ~all(isfinite(solver.nleq.res)) || ~all(isfinite(solver.nleq.J))
             return solver.z
         end
-        JLU = lufact(solver.nleq.J)
+        JLU = lufact!(solver.nleq.J)
         if JLU.info > 0 # J was singular
             return solver.z
         end
         hasconverged(solver) && break
-        solver.z -= JLU\solver.nleq.res
+        #solver.z -= JLU\solver.nleq.res
+        copy!(solver.tmp_nn, solver.nleq.res)
+        A_ldiv_B!(JLU, solver.tmp_nn)
+        BLAS.axpy!(-1.0, solver.tmp_nn, solver.z)
     end
     if hasconverged(solver)
         set_extrapolation_origin(solver, p, solver.z, solver.nleq.Jp, JLU)
