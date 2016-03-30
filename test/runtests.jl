@@ -46,6 +46,8 @@ let i = 1e-3, r=10e3, is=1e-12
     d = diode(is=is)
     vprobe = voltageprobe()
     circ = Circuit()
+    add!(circ, vsrc)
+    add!(circ, r1, d)
     connect!(circ, vsrc[:+], :vcc)
     connect!(circ, vsrc[:-], :gnd)
     connect!(circ, r1[1], :vcc)

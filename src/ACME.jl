@@ -197,7 +197,7 @@ function add!(c::Circuit, elem::Element)
     nothing
 end
 
-add!(c::Circuit, elems::Element...) = for elem in es add!(c, elem) end
+add!(c::Circuit, elems::Element...) = for elem in elems add!(c, elem) end
 
 function branch_offset(c::Circuit, elem::Element)
     offset = 0
