@@ -1,6 +1,8 @@
 # Copyright 2016 Martin Holters
 # See accompanying license file.
 
+export SimpleSolver, HomotopySolver, CachingSolver
+
 type ParametricNonLinEq
     func::Function
     res::Vector{Float64}
