@@ -17,18 +17,18 @@ include("solvers.jl")
 
 
 type Element
-  mv :: SparseMatrixCSC{Number,Int}
-  mi :: SparseMatrixCSC{Number,Int}
-  mx :: SparseMatrixCSC{Number,Int}
-  mxd :: SparseMatrixCSC{Number,Int}
-  mq :: SparseMatrixCSC{Number,Int}
-  mu :: SparseMatrixCSC{Number,Int}
-  u0 :: SparseMatrixCSC{Number,Int}
-  pv :: SparseMatrixCSC{Number,Int}
-  pi :: SparseMatrixCSC{Number,Int}
-  px :: SparseMatrixCSC{Number,Int}
-  pxd :: SparseMatrixCSC{Number,Int}
-  pq :: SparseMatrixCSC{Number,Int}
+  mv :: SparseMatrixCSC{Real,Int}
+  mi :: SparseMatrixCSC{Real,Int}
+  mx :: SparseMatrixCSC{Real,Int}
+  mxd :: SparseMatrixCSC{Real,Int}
+  mq :: SparseMatrixCSC{Real,Int}
+  mu :: SparseMatrixCSC{Real,Int}
+  u0 :: SparseMatrixCSC{Real,Int}
+  pv :: SparseMatrixCSC{Real,Int}
+  pi :: SparseMatrixCSC{Real,Int}
+  px :: SparseMatrixCSC{Real,Int}
+  pxd :: SparseMatrixCSC{Real,Int}
+  pq :: SparseMatrixCSC{Real,Int}
   nonlinear_eq :: Expr
   pins :: Dict{Symbol, Vector{@compat Tuple{Int, Int}}}
 
@@ -121,7 +121,7 @@ end
 for mat in [:mv; :mi; :mx; :mxd; :mq; :mu; :pv; :pi; :px; :pxd; :pq]
     # blkdiag() does not work, so include an empty matrix of desired type in
     # case c.elements is empty
-    @eval ($mat)(c::Circuit) = blkdiag(spzeros(Number, 0, 0),
+    @eval ($mat)(c::Circuit) = blkdiag(spzeros(Real, 0, 0),
                                        [elem.$mat for elem in c.elements]...)
 end
 

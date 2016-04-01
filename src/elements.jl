@@ -59,7 +59,7 @@ currentsource() = Element(mi=-1, mu=1, pins=[:+; :-])
 voltageprobe() = Element(mi=1, pv=1, pins=[:+; :-])
 currentprobe() = Element(mv=1, pi=1, pins=[:+; :-])
 
-diode(;is::Number=1e-12, η::Number = 1) =
+diode(;is::Real=1e-12, η::Real = 1) =
   Element(mv=[1;0], mi=[0;1], mq=[-1 0; 0 -1], pins=[:+; :-], nonlinear_eq =
     quote
       let v = q[1], i = q[2], ex = exp(v*$(1./(25e-3 * η)))
