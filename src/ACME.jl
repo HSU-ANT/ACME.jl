@@ -89,19 +89,19 @@ type Element
 end
 
 for (n,m) in @compat Dict(:nb => :mv, :nx => :mx, :nq => :mq, :nu => :mu)
-  @eval ($n)(e::Element) = size(e.$m)[2]
+  @eval ($n)(e::Element) = size(e.$m, 2)
 end
-nl(e::Element) = size(e.mv)[1]
-ny(e::Element) = size(e.pv)[1]
+nl(e::Element) = size(e.mv, 1)
+ny(e::Element) = size(e.pv, 1)
 nn(e::Element) = nb(e) + nx(e) + nq(e) - nl(e)
 
 # a Pin combines an element with a branch/polarity list
-typealias Pin @compat Tuple{Element, Vector{@compat Tuple{Int,Int}}}
+typealias Pin @compat Tuple{Element, Vector{Tuple{Int,Int}}}
 
 # allow elem[:pin] notation to get an elements pin
 getindex(e::Element, p::Symbol) = (e, e.pins[p])
 getindex(e::Element, p::AbstractString) = getindex(e, symbol(p))
-getindex(e::Element, p::Int) = getindex(e, string(p))
+getindex(e::Element, p::Integer) = getindex(e, string(p))
 
 include("elements.jl")
 
@@ -453,10 +453,10 @@ end
 
 nx(model::DiscreteModel) = length(model.x0)
 nq(model::DiscreteModel) = length(model.q0)
-np(model::DiscreteModel) = size(model.dq)[1]
+np(model::DiscreteModel) = size(model.dq, 1)
 nu(model::DiscreteModel) = size(model.eq, 2)
 ny(model::DiscreteModel) = length(model.y0)
-nn(model::DiscreteModel) = size(model.fq)[2]
+nn(model::DiscreteModel) = size(model.fq, 2)
 
 function steadystate(model::DiscreteModel, u=zeros(nu(model)))
     IA_LU = lufact(eye(nx(model))-model.a)

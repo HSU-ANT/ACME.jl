@@ -114,9 +114,7 @@ function opamp(::Type{Val{:macak}}, gain, vomin, vomax)
     nonlinear_eq =
         quote
             let vi = q[1], vo = q[2], vi_scaled = vi * $(gain/scale)
-
                 res[1] = tanh(vi_scaled) * $(scale) - vo
-                #res[1] = tanh(q[1]) * $(scale) - vo
                 J[1,1] = $(gain) / cosh(vi_scaled)^2
                 J[1,2] = -1
             end

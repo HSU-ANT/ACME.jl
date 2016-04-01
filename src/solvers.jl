@@ -86,7 +86,7 @@ function solve(solver::SimpleSolver, p::AbstractVector{Float64}, maxiter=500)
     for solver.iters=1:maxiter
         evaluate!(solver.nleq, p, solver.z)
         solver.ressumabs2 = sumabs2(solver.nleq.res)
-        if ~all(isfinite(solver.nleq.res)) || ~all(isfinite(solver.nleq.J))
+        if ~isfinite(solver.ressumabs2) || ~all(isfinite(solver.nleq.J))
             return solver.z
         end
         JLU = lufact!(solver.nleq.J)
@@ -159,7 +159,7 @@ type CachingSolver{BaseSolver}
     function CachingSolver(nleq::ParametricNonLinEq, initial_p::Vector{Float64},
                           initial_z::Vector{Float64})
         basesolver = BaseSolver(nleq, initial_p, initial_z)
-        ps_tree = KDTree(reshape(copy(initial_p), np(nleq), 1))
+        ps_tree = KDTree(hcat(initial_p))
         zs = reshape(copy(initial_z), nn(nleq), 1)
         return new(basesolver, ps_tree, zs, 1, 0, 2)
     end
