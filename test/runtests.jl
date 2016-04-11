@@ -36,6 +36,19 @@ let ps = rand(6, 10000)
     @test_approx_eq sumabs2(p - best_p) sumabs2(p - ps[:, idx])
 end
 
+let nleq = ACME.ParametricNonLinEq((res, J, Jp, p, z) ->
+    begin
+        res[1] = z[1]^2 - 1 + p[1]
+        J[1,1] = 2*z[1]
+        Jp[1,1] = 1
+    end, 1, 1)
+    solver = ACME.HomotopySolver{ACME.SimpleSolver}(nleq, [0.0], [1.0])
+    ACME.solve(solver, [-0.5 + rand()])
+    @test ACME.hasconverged(solver)
+    ACME.solve(solver, [1.5 + rand()])
+    @test !ACME.hasconverged(solver)
+end
+
 # simple circuit: resistor and diode in series, driven by constant voltage,
 # chosen such that a prescribe current flows
 let i = 1e-3, r=10e3, is=1e-12

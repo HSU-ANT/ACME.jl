@@ -131,14 +131,19 @@ function solve(solver::HomotopySolver, p)
         a = 0.5
         best_a = 0.0
         copy!(solver.start_p, get_extrapolation_origin(solver.basesolver)[1])
-        while best_a < 1 && a > 0
+        while best_a < 1
             pa = (1-a) * solver.start_p + a * p
             z = solve(solver.basesolver, pa)
             if hasconverged(solver)
                 best_a = a
                 a = 1.0
             else
-                a = (a + best_a) / 2
+                new_a = (a + best_a) / 2
+                if !(best_a < new_a < a)
+                    # no floating point value inbetween best_a and a
+                    break
+                end
+                a = new_a
             end
         end
     end
