@@ -18,6 +18,22 @@ let circ = Circuit()
     @test run!(model, zeros(0, 20)) == zeros(0, 20)
 end
 
+let circ = Circuit(), r = resistor(0)
+    connect!(circ, r[1], r[2])
+    model = DiscreteModel(circ, 1.)
+    @test run!(model, zeros(0, 20)) == zeros(0, 20)
+end
+
+let circ = Circuit(), r = resistor(0), probe = currentprobe()
+    connect!(circ, r[1], probe[:+])
+    connect!(circ, r[2], probe[:-])
+    rd, wr = redirect_stderr()
+    model = DiscreteModel(circ, 1.)
+    # should warn because output is indeterminate
+    @test !isempty(search(readavailable(rd), "WARNING"))
+    redirect_stderr(STDERR)
+end
+
 for num = 1:50
     let ps = rand(4, num)
         t = ACME.KDTree(ps)

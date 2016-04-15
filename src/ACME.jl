@@ -328,6 +328,8 @@ type DiscreteModel{Solver}
             model.(vec)=squeeze(full(mats[vec]), tuple((2:ndims(mats[vec]))...))
         end
 
+        @assert nn(circ) == nn(model)
+
         model.x = zeros(nx(model))
 
         model.nonlinear_eq = quote
@@ -387,6 +389,21 @@ function model_matrices(circ::Circuit, t)
     rowsizes = [nb(circ); nb(circ); nx(circ); nq(circ)]
     res = Dict{Symbol,AbstractArray}(zip([:fv; :fi; :c; :fq], matsplit(f, rowsizes)))
 
+    indeterminates = zeros(size(f,1), 0)
+    if size(res[:fq], 2) > nn(circ)
+        fq = full(res[:fq])
+        q, r, piv = qr(fq.', Val{true}, thin=false)
+        # fq[piv,:]*q ~ r'
+        indeterminates = f * q[:,nn(circ)+1:end]
+        if sumabs2(res[:c] * q[:,nn(circ)+1:end]) > 1e-20
+            warn("State update depends on indeterminate quantity")
+        end
+        f *= q[:,1:nn(circ)]
+        for k in [:fv; :fi; :c; :fq]
+            res[k] *= q[:,1:nn(circ)]
+        end
+    end
+
     # choose particular solution such that the rows corresponding to q are
     # column-wise orthogonal to the column space of fq (and hence have a column
     # space of minimal dimension)
@@ -421,6 +438,9 @@ function model_matrices(circ::Circuit, t)
     end
 
     p = [pv(circ) pi(circ) 0.5*px(circ)+1/t*pxd(circ) pq(circ)]
+    if sumabs2(p * indeterminates) > 1e-20
+        warn("Model output depends on indeterminate quantity")
+    end
     res[:dy] = p * x[:,2+nu(circ):end] + 0.5*px(circ)-1/t*pxd(circ)
     #          p * [dv; di; a;  dq_full] + 0.5*px(circ)-1/t*pxd(circ)
     res[:ey] = p * x[:,2:1+nu(circ)] # p * [ev; ei; b;  eq_full]
