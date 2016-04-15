@@ -27,11 +27,12 @@ end
 let circ = Circuit(), r = resistor(0), probe = currentprobe()
     connect!(circ, r[1], probe[:+])
     connect!(circ, r[2], probe[:-])
+    orig_stderr = STDERR
     rd, wr = redirect_stderr()
     model = DiscreteModel(circ, 1.)
     # should warn because output is indeterminate
     @test !isempty(search(convert(ASCIIString, readavailable(rd)), "WARNING"))
-    redirect_stderr(STDERR)
+    redirect_stderr(orig_stderr)
 end
 
 for num = 1:50
