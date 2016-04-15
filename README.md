@@ -1,6 +1,7 @@
 # ACME.jl - Analog Circuit Modeling and Emulation for Julia
 
 [![Join the chat at https://gitter.im/HSU-ANT/ACME.jl](https://badges.gitter.im/HSU-ANT/ACME.jl.svg)](https://gitter.im/HSU-ANT/ACME.jl?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+[![Documentation Status](https://readthedocs.org/projects/acmejl/badge/?version=latest)](http://acmejl.readthedocs.org/en/latest/?badge=latest)
 
 ACME is a [Julia](http://julialang.org/) package for the simulation of
 electrical circuits, focusing on audio effect circuits. It allows to
@@ -120,6 +121,11 @@ fail to run altogether.
 
 ## Moving on
 
-At the moment, this is all the available documentation. Sorry. But you can take
-a look at the examples that can be found in the `examples` directory below
-`Pkg.dir("ACME")`.
+There is some [documentation](http://acmejl.readthedocs.org) available for how
+to use ACME. Additionally, you can take a look at the examples that can be found
+in the `examples` directory below `Pkg.dir("ACME")`.
+
+If you would like to extend and improve ACME, that's great! But unfortunately,
+there is no developer documentation as of now, so you will to delve into the
+source code to figure out how things work, or try to ask on
+[gitter](https://gitter.im/HSU-ANT/ACME.jl).
