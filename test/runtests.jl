@@ -30,7 +30,7 @@ let circ = Circuit(), r = resistor(0), probe = currentprobe()
     rd, wr = redirect_stderr()
     model = DiscreteModel(circ, 1.)
     # should warn because output is indeterminate
-    @test !isempty(search(readavailable(rd), "WARNING"))
+    @test !isempty(search(string(readavailable(rd)), "WARNING"))
     redirect_stderr(STDERR)
 end
 
