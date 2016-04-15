@@ -1,10 +1,34 @@
 # Copyright 2015, 2016 Martin Holters
 # See accompanying license file.
 
-export resistor, capacitor, inductor, transformer, voltagesource, currentsource,
+export resistor, potentiometer, capacitor, inductor, transformer,
+       voltagesource, currentsource,
        voltageprobe, currentprobe, diode, bjt, opamp
 
 resistor(r) = Element(mv=-1, mi=r)
+
+potentiometer(r, pos) = Element(mv=-eye(2), mi=[r*pos 0; 0 r*(1-pos)],
+                                pins=map(symbol, ["1", "2", "2", "3"]))
+potentiometer(r) =
+    Element(mv=[eye(2); zeros(3, 2)], mi=[zeros(2, 2); eye(2); zeros(1, 2)],
+            mq=-eye(5), mu=[zeros(4, 1); -1],
+            nonlinear_eq = quote
+                let v1=q[1], v2=q[2], i1=q[3], i2=q[4], pos=q[5]
+                    res[1] = v1 - $(r)*pos*i1
+                    res[2] = v2 - $(r)*(1-pos)*i2
+                    J[1,1] = 1
+                    J[1,2] = 0
+                    J[1,3] = $(-r)*pos
+                    J[1,4] = 0
+                    J[1,5] = $(-r)*i1
+                    J[2,1] = 0
+                    J[2,2] = 1
+                    J[2,3] = 0
+                    J[2,4] = $(-r)*(1-pos)
+                    J[2,5] = $(-r)*i2
+                end
+            end,
+            pins=map(symbol, ["1", "2", "2", "3"]))
 
 capacitor(c) = Element(mv=[c;0], mi=[0; 1], mx=[-1;0], mxd=[0;-1])
 inductor(l) = Element(mv=[1;0], mi=[0; l], mx=[0;-1], mxd=[-1;0])

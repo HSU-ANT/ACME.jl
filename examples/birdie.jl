@@ -10,7 +10,7 @@ using ACME
 # model, C5 and D1 are connected directly to the power supply; R6 is in series
 # with LED1 only, which has been omitted from the model, though.
 
-function birdie(::Type{Circuit}, vol)
+function birdie(::Type{Circuit}; vol=nothing)
     c1 = capacitor(2.2e-9)
     c3 = capacitor(2.2e-9)
     c5 = capacitor(100e-6)
@@ -20,8 +20,11 @@ function birdie(::Type{Circuit}, vol)
     r3 = resistor(430e3)
     r4 = resistor(390)
     r5 = resistor(10e3)
-    p1a = resistor(vol*100e3)
-    p1b = resistor((1-vol)*100e3)
+    if vol == nothing
+        p1 = potentiometer(100e3)
+    else
+        p1 = potentiometer(100e3, vol)
+    end
 
     d1 = diode(is=350e-12, η=1.6);
     t1 = bjt(:npn, isc=154.1e-15, ise=64.53e-15, ηc=1.10, ηe=1.06, βf=500, βr=12)
@@ -42,14 +45,12 @@ function birdie(::Type{Circuit}, vol)
     connect!(circ, r4[2], :gnd)
     connect!(circ, r5[1], c3[1], t1[:collector])
     connect!(circ, r5[2], :vcc)
-    connect!(circ, c3[2], p1b[1])
-    connect!(circ, p1a[1], p1b[2])
-    connect!(circ, p1b[2], j2[:+])
-    connect!(circ, p1a[2], j2[:-], :gnd)
+    connect!(circ, c3[2], p1[3])
+    connect!(circ, p1[2], j2[:+])
+    connect!(circ, p1[1], j2[:-], :gnd)
 
     return circ
 end
 
-birdie(::Type{DiscreteModel}, vol; fs=44100) =
-    DiscreteModel(birdie(Circuit, vol), 1/fs)
-birdie(vol; fs=44100) = birdie(DiscreteModel, vol, fs=fs)
+birdie{T<:DiscreteModel}(::Type{T}=DiscreteModel; vol=nothing, fs=44100) =
+    T(birdie(Circuit, vol=vol), 1/fs)

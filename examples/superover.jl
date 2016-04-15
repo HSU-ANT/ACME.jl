@@ -8,7 +8,7 @@ using ACME
 # for schematics.
 # Note: R19 and LED D5 have been omitted from the model.
 
-function superover(::Type{Circuit}, drive::Real, tone::Real, level::Real, sym::Bool=false)
+function superover(::Type{Circuit}; drive=nothing, tone=nothing, level=nothing, sym::Bool=false)
     r1 = resistor(2.2e6)
     r2 = resistor(10e3)
     r3 = resistor(470e3)
@@ -27,11 +27,21 @@ function superover(::Type{Circuit}, drive::Real, tone::Real, level::Real, sym::B
     r17 = resistor(33e3)
     r18 = resistor(33e3)
     r20 = resistor(22e3)
-    p1 = resistor(1e6 * drive)
-    p2a = resistor(20e3 * tone)
-    p2b = resistor(20e3 * (1-tone))
-    p3a = resistor(10e3 * level)
-    p3b = resistor(10e3 * (1-level))
+    if drive == nothing
+        p1 = potentiometer(1e6)
+    else
+        p1 = potentiometer(1e6, drive)
+    end
+    if tone == nothing
+        p2 = potentiometer(20e3)
+    else
+        p2 = potentiometer(20e3, tone)
+    end
+    if level == nothing
+        p3 = potentiometer(10e3)
+    else
+        p3 = potentiometer(10e3, level)
+    end
 
     c1 = capacitor(47e-9)
     c2 = capacitor(18e-9)
@@ -84,7 +94,7 @@ function superover(::Type{Circuit}, drive::Real, tone::Real, level::Real, sym::B
 
     # distortion stage
     connect!(circ, c2[2], ic1a["in+"])
-    connect!(circ, ic1a["out+"], d3[:+], d1[:-], p1[2])
+    connect!(circ, ic1a["out+"], d3[:+], d1[:-], p1[2], p1[3])
     connect!(circ, ic1a["in-"], d2[:-], d1[:+], r6[1], c4[1])
     connect!(circ, ic1a["out-"], :gnd)
     if sym
@@ -100,19 +110,19 @@ function superover(::Type{Circuit}, drive::Real, tone::Real, level::Real, sym::B
     connect!(circ, r8[2], c5[1], ic1b["in+"])
     connect!(circ, c5[2], :gnd)
     connect!(circ, ic1b["out+"], r10[1], c7[1])
-    connect!(circ, ic1b["in-"], r10[2], c7[2], p2b[2])
+    connect!(circ, ic1b["in-"], r10[2], c7[2], p2[3])
     connect!(circ, ic1b["out-"], :gnd)
-    connect!(circ, ic1b["in+"], p2a[1])
-    connect!(circ, p2a[2], p2b[1], c6[1])
+    connect!(circ, ic1b["in+"], p2[1])
+    connect!(circ, p2[2], c6[1])
     connect!(circ, c6[2], r11[1])
     connect!(circ, r11[2], :gnd)
 
     # output stage
     connect!(circ, ic1b["out+"], c8[1])
     connect!(circ, c8[2], r12[1])
-    connect!(circ, r12[2], p3b[2])
-    connect!(circ, p3a[2], p3b[1], r20[1])
-    connect!(circ, p3a[1], :vb)
+    connect!(circ, r12[2], p3[3])
+    connect!(circ, p3[2], r20[1])
+    connect!(circ, p3[1], :vb)
     connect!(circ, r20[2], c9[1])
     connect!(circ, c9[2], r13[1], q2[:base])
     connect!(circ, r13[2], :vb)
@@ -128,6 +138,5 @@ function superover(::Type{Circuit}, drive::Real, tone::Real, level::Real, sym::B
     return circ
 end
 
-superover(::Type{DiscreteModel}, args...; fs=44100) =
-    DiscreteModel(superover(Circuit, args...), 1/fs)
-superover(args...; fs=44100) = superover(DiscreteModel, args..., fs=fs)
+superover{T<:DiscreteModel}(::Type{T}=DiscreteModel; drive=nothing, tone=nothing, level=nothing, sym::Bool=false, fs=44100) =
+    T(superover(Circuit, drive=drive, tone=tone, level=level, sym=sym), 1/fs)

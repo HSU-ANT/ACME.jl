@@ -24,6 +24,5 @@ function sallenkey(::Type{Circuit})
     return circ
 end
 
-sallenkey(::Type{DiscreteModel}; fs=44100) =
-    DiscreteModel(sallenkey(Circuit), 1/fs)
-sallenkey(; fs=44100) = sallenkey(DiscreteModel, fs=fs)
+sallenkey{T<:DiscreteModel}(::Type{T}=DiscreteModel; fs=44100) =
+    T(sallenkey(Circuit), 1/fs)

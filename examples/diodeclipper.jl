@@ -21,6 +21,5 @@ function diodeclipper(::Type{Circuit})
     return circ
 end
 
-diodeclipper(::Type{DiscreteModel}; fs=44100) =
-    DiscreteModel(diodeclipper(Circuit), 1/fs)
-diodeclipper(; fs=44100) = diodeclipper(DiscreteModel, fs=fs)
+diodeclipper{T<:DiscreteModel}(::Type{T}=DiscreteModel; fs=44100) =
+    T(diodeclipper(Circuit), 1/fs)
