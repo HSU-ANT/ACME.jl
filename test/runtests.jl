@@ -142,7 +142,7 @@ let model=superover(drive=1.0, tone=1.0, level=1.0)
 end
 let model=superover()
     println("Running superover with varying potentiometer values")
-    y = run!(model, [sin(2π*1000/44100*(0:44099)'); linspace(1,0,44100).'; linspace(0,1,44100).'; linspace(1,0,44100).'])
-    @test size(y) == (1,44100)
+    y = run!(model, [sin(2π*1000/44100*(0:999)'); linspace(1,0,1000).'; linspace(0,1,1000).'; linspace(1,0,1000).'])
+    @test size(y) == (1,1000)
     # TODO: further validate y
 end
