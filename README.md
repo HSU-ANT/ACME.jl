@@ -23,7 +23,7 @@ be fine.)
 To install ACME, start Julia and run:
 
 ```Julia
-Pkg.clone("https://github.com/HSU-ANT/ACME.jl.git")
+Pkg.add("ACME")
 ```
 
 This will download ACME and all of its dependencies.
