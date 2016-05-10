@@ -8,7 +8,7 @@ export resistor, potentiometer, capacitor, inductor, transformer,
 resistor(r) = Element(mv=-1, mi=r)
 
 potentiometer(r, pos) = Element(mv=-eye(2), mi=[r*pos 0; 0 r*(1-pos)],
-                                pins=map(symbol, ["1", "2", "2", "3"]))
+                                pins=[1, 2, 2, 3])
 potentiometer(r) =
     Element(mv=[eye(2); zeros(3, 2)], mi=[zeros(2, 2); eye(2); zeros(1, 2)],
             mq=-eye(5), mu=[zeros(4, 1); -1],
@@ -28,7 +28,7 @@ potentiometer(r) =
                     J[2,5] = $(-r)*i2
                 end
             end,
-            pins=map(symbol, ["1", "2", "2", "3"]))
+            pins=[1, 2, 2, 3])
 
 capacitor(c) = Element(mv=[c;0], mi=[0; 1], mx=[-1;0], mxd=[0;-1])
 inductor(l) = Element(mv=[1;0], mi=[0; l], mx=[0;-1], mxd=[-1;0])
@@ -129,8 +129,7 @@ function bjt(typ; is=1e-12, η=1, isc=is, ise=is, ηc=η, ηe=η, βf=1000, βr=
 end
 
 opamp() = Element(mv=[0 0; 1 0], mi=[1 0; 0 0],
-                  pins=[symbol("in+"); symbol(:"in-");
-                        symbol(:"out+"); symbol(:"out-")])
+                  pins=["in+", "in-", "out+", "out-"])
 
 function opamp(::Type{Val{:macak}}, gain, vomin, vomax)
     offset = 0.5 * (vomin + vomax)
@@ -146,8 +145,7 @@ function opamp(::Type{Val{:macak}}, gain, vomin, vomax)
     return Element(mv=[0 0; 1 0; 0 1], mi=[1 0; 0 0; 0 0], mq=[0 0; -1 0; 0 -1],
                    u0=[0; 0; offset],
                    nonlinear_eq = nonlinear_eq,
-                   pins=[symbol("in+"); symbol(:"in-");
-                         symbol(:"out+"); symbol(:"out-")])
+                   pins=["in+", "in-", "out+", "out-"])
 end
 
 @Base.deprecate(opamp_ideal, opamp)

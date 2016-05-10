@@ -50,7 +50,7 @@ type Element
       for i in 1:length(syms)
         branch = div(i+1, 2)
         polarity = 2mod(i, 2) - 1
-        push!(get!(dict, symbol(syms[i]), []), (branch, polarity))
+        push!(get!(dict, @compat(Symbol(syms[i])), []), (branch, polarity))
       end
       dict
     end
@@ -82,7 +82,7 @@ type Element
       elem.nonlinear_eq = Expr(:block)
     end
     if !isdefined(elem, :pins)
-      elem.pins = make_pin_dict(map(string,1:2nb(elem)))
+      elem.pins = make_pin_dict(1:2nb(elem))
     end
     elem
   end
@@ -99,9 +99,7 @@ nn(e::Element) = nb(e) + nx(e) + nq(e) - nl(e)
 typealias Pin @compat Tuple{Element, Vector{Tuple{Int,Int}}}
 
 # allow elem[:pin] notation to get an elements pin
-getindex(e::Element, p::Symbol) = (e, e.pins[p])
-getindex(e::Element, p::AbstractString) = getindex(e, symbol(p))
-getindex(e::Element, p::Integer) = getindex(e, string(p))
+getindex(e::Element, p) = (e, e.pins[@compat Symbol(p)])
 
 include("elements.jl")
 
