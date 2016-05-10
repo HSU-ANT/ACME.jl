@@ -141,14 +141,14 @@ function incidence(c::Circuit)
     sparse(findnz(sparse(i,j,v))..., length(c.nets), nb(c))
 end
 
-function nonlinear_eq(c::Circuit)
+function nonlinear_eq(c::Circuit, elem_idxs=1:length(c.elements))
     # construct a block expression containing all element's expressions after
     # offsetting their indexes into q, J and res
 
     row_offset = 0
     col_offset = 0
     nl_expr = Expr(:block)
-    for elem in c.elements
+    for elem in c.elements[elem_idxs]
         index_offsets = Dict( :q => (col_offset,),
                               :J => (row_offset, col_offset),
                               :res => (row_offset,) )
