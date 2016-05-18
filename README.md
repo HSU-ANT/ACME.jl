@@ -3,6 +3,13 @@
 [![Join the chat at https://gitter.im/HSU-ANT/ACME.jl](https://badges.gitter.im/HSU-ANT/ACME.jl.svg)](https://gitter.im/HSU-ANT/ACME.jl?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 [![Documentation Status](https://readthedocs.org/projects/acmejl/badge/?version=latest)](http://acmejl.readthedocs.io/en/latest/?badge=latest)
 
+[![ACME](http://pkg.julialang.org/badges/ACME_0.3.svg)](http://pkg.julialang.org/?pkg=ACME)
+[![ACME](http://pkg.julialang.org/badges/ACME_0.4.svg)](http://pkg.julialang.org/?pkg=ACME)
+
+[![Build Status](https://travis-ci.org/HSU-ANT/ACME.jl.svg?branch=develop)](https://travis-ci.org/HSU-ANT/ACME.jl)
+[![codecov](https://codecov.io/gh/HSU-ANT/ACME.jl/branch/develop/graph/badge.svg)](https://codecov.io/gh/HSU-ANT/ACME.jl)
+[![Coverage Status](https://coveralls.io/repos/github/HSU-ANT/ACME.jl/badge.svg?branch=develop)](https://coveralls.io/github/HSU-ANT/ACME.jl)
+
 ACME is a [Julia](http://julialang.org/) package for the simulation of
 electrical circuits, focusing on audio effect circuits. It allows to
 programmatically describe a circuit in terms of elements and connections
