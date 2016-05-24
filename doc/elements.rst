@@ -85,11 +85,11 @@ Passives
     :param k: amount of hysteresis (in Ampere-per-meter)
     :param Ms: saturation magnetization (in Ampere-per-meter)
 
-    A detailed discussion of the paramters can be found in D. C. Jiles and D. L.
+    A detailed discussion of the parameters can be found in D. C. Jiles and D. L.
     Atherton, “Theory of ferromagnetic hysteresis,” J. Magn. Magn. Mater., vol.
     61, no. 1–2, pp. 48–60, Sep. 1986 and J. H. B. Deane, “Modeling the dynamics
     of nonlinear inductor circuits,” IEEE Trans. Magn., vol. 30, no. 5, pp.
-    2795–2801, 1994.
+    2795–2801, 1994, where the definition of ``c`` is taken from the latter.
 
     Pins: ``1`` and ``2`` for primary winding, ``3`` and ``4`` for secondary
     winding, and so on
