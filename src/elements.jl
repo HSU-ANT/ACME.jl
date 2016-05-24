@@ -56,14 +56,14 @@ function transformer(::Type{Val{:JA}}; D=2.4e-2, A=4.54e-5, ns=[],
         den = δ*$(k)-$(α)*(Man-q[2])
         # at present, the error needs to be scaled to be comparable to those of
         # the other elements, hence the factor 1e-4/Ms
-        res[1] = $(1e-4/Ms) * ($(1/(1+c)) * (δM*(Man-q[2])/den * q[3] +
-                                             $(c*Ms/a)*(q[3]+$(α)*q[4])*Ld_q1)
+        res[1] = $(1e-4/Ms) * ($(1-c) * δM*(Man-q[2])/den * q[3]
+                               + $(c*Ms/a)*(q[3]+$(α)*q[4])*Ld_q1
                                - q[4])
-        J[1,1] = $(1e-4/Ms) * $(1/(1+c)) * (δM*Ld_q1*δ*$(Ms*k)/den^2 * q[3] +
-                                            $(c*Ms/a)*(q[3]+$(α)*q[4])*Ld2_q1)
-        J[1,2] = $(1e-4/Ms) * -$(1/(1+c)) * δM*δ*$(k)/den^2 * q[3]
-        J[1,3] = $(1e-4/Ms) * $(1/(1+c)) * (δM*(Man-q[2])/den + $(c*Ms/a)*Ld_q1)
-        J[1,4] = $(1e-4/Ms) * ($(c/(1+c) * Ms/a * α)*Ld_q1 - 1)
+        J[1,1] = $(1e-4/Ms) * ($(1-c) * δM*Ld_q1*δ*$(Ms*k)/den^2 * q[3]
+                               + $(c*Ms/a)*(q[3]+$(α)*q[4])*Ld2_q1)
+        J[1,2] = $(1e-4/Ms) * -$(1-c) * δM*δ*$(k)/den^2 * q[3]
+        J[1,3] = $(1e-4/Ms) * ($(1-c) * δM*(Man-q[2])/den + $(c*Ms/a)*Ld_q1)
+        J[1,4] = $(1e-4/Ms) * ($(c * Ms/a * α)*Ld_q1 - 1)
     end
     Element(mv=[speye(length(ns)); spzeros(5, length(ns))],
             mi=[spzeros(length(ns), length(ns)); ns.'; spzeros(4, length(ns))],
