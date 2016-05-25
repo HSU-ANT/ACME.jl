@@ -40,7 +40,7 @@ transformer(l1, l2; coupling_coefficient=1,
             pins=[:primary1; :primary2; :secondary1; :secondary2])
 
 function transformer(::Type{Val{:JA}}; D=2.4e-2, A=4.54e-5, ns=[],
-                     a=14.1, α=5e-5, c=0.55/(1-0.55), k=17.8, Ms=2.75e5)
+                     a=14.1, α=5e-5, c=0.55, k=17.8, Ms=2.75e5)
     const μ0 = 1.2566370614e-6
     nonlinear_eq = quote
         coth_q1 = coth(q[1])
@@ -53,15 +53,14 @@ function transformer(::Type{Val{:JA}}; D=2.4e-2, A=4.54e-5, ns=[],
         Man = $(Ms)*L_q1
         δM = sign(q[3]) == sign(Man - q[2]) ? 1.0 : 0.0
 
-        den = δ*$(k)-$(α)*(Man-q[2])
+        den = δ*$(k*(1-c))-$(α)*(Man-q[2])
         # at present, the error needs to be scaled to be comparable to those of
         # the other elements, hence the factor 1e-4/Ms
         res[1] = $(1e-4/Ms) * ($(1-c) * δM*(Man-q[2])/den * q[3]
-                               + $(c*Ms/a)*(q[3]+$(α)*q[4])*Ld_q1
-                               - q[4])
-        J[1,1] = $(1e-4/Ms) * ($(1-c) * δM*Ld_q1*δ*$(Ms*k)/den^2 * q[3]
+                               + $(c*Ms/a)*(q[3]+$(α)*q[4])*Ld_q1 - q[4])
+        J[1,1] = $(1e-4/Ms) * ($((1-c)^2*k*Ms) * δM*Ld_q1*δ/den^2 * q[3]
                                + $(c*Ms/a)*(q[3]+$(α)*q[4])*Ld2_q1)
-        J[1,2] = $(1e-4/Ms) * -$(1-c) * δM*δ*$(k)/den^2 * q[3]
+        J[1,2] = $(1e-4/Ms) * -$((1-c)^2*k) * δM*δ/den^2 * q[3]
         J[1,3] = $(1e-4/Ms) * ($(1-c) * δM*(Man-q[2])/den + $(c*Ms/a)*Ld_q1)
         J[1,4] = $(1e-4/Ms) * ($(c * Ms/a * α)*Ld_q1 - 1)
     end
