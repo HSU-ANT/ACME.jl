@@ -66,16 +66,16 @@ type Element
     elem = new()
     for (key, val) in args
       if haskey(mat_dims, key)
-        val = sparse(hcat(val)) # turn val into a sparse matrix whatever it is
+        val = convert(SparseMatrixCSC{Real}, sparse(hcat(val))) # turn val into a sparse matrix whatever it is
         update_sizes(val, mat_dims[key])
       elseif key == :pins
         val = make_pin_dict(val)
       end
-      elem.(key) = val
+      setfield!(elem, key, val)
     end
     for (m, ns) in mat_dims
       if !isdefined(elem, m)
-        elem.(m) = spzeros(Int, get(sizes, ns[1], 0), get(sizes, ns[2], 0))
+        setfield!(elem, m, spzeros(Real, get(sizes, ns[1], 0), get(sizes, ns[2], 0)))
       end
     end
     if !isdefined(elem, :nonlinear_eq)
@@ -320,10 +320,10 @@ type DiscreteModel{Solver}
 
         mats = model_matrices(circ, t)
         for mat in [:a, :b, :c, :pexp, :dq, :eq, :fq, :dy, :ey, :fy]
-            model.(mat)=full(mats[mat])
+            setfield!(model, mat, convert(Matrix{Float64}, full(mats[mat])))
         end
-        for vec in [:x0, :q0, :y0]
-            model.(vec)=squeeze(full(mats[vec]), tuple((2:ndims(mats[vec]))...))
+        for vect in [:x0, :q0, :y0]
+            setfield!(model, vect, convert(Vector{Float64}, vec(full(mats[vect]))))
         end
 
         @assert nn(circ) == nn(model)
