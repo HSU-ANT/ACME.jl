@@ -8,7 +8,7 @@ export resistor, potentiometer, capacitor, inductor, transformer,
 resistor(r) = Element(mv=-1, mi=r)
 
 potentiometer(r, pos) = Element(mv=-eye(2), mi=[r*pos 0; 0 r*(1-pos)],
-                                pins=map(symbol, ["1", "2", "2", "3"]))
+                                pins=[1, 2, 2, 3])
 potentiometer(r) =
     Element(mv=[eye(2); zeros(3, 2)], mi=[zeros(2, 2); eye(2); zeros(1, 2)],
             mq=-eye(5), mu=[zeros(4, 1); -1],
@@ -28,7 +28,7 @@ potentiometer(r) =
                     J[2,5] = $(-r)*i2
                 end
             end,
-            pins=map(symbol, ["1", "2", "2", "3"]))
+            pins=[1, 2, 2, 3])
 
 capacitor(c) = Element(mv=[c;0], mi=[0; 1], mx=[-1;0], mxd=[0;-1])
 inductor(l) = Element(mv=[1;0], mi=[0; l], mx=[0;-1], mxd=[-1;0])
@@ -40,7 +40,7 @@ transformer(l1, l2; coupling_coefficient=1,
             pins=[:primary1; :primary2; :secondary1; :secondary2])
 
 function transformer(::Type{Val{:JA}}; D=2.4e-2, A=4.54e-5, ns=[],
-                     a=14.1, α=5e-5, c=0.55/(1-0.55), k=17.8, Ms=2.75e5)
+                     a=14.1, α=5e-5, c=0.55, k=17.8, Ms=2.75e5)
     const μ0 = 1.2566370614e-6
     nonlinear_eq = quote
         coth_q1 = coth(q[1])
@@ -53,17 +53,16 @@ function transformer(::Type{Val{:JA}}; D=2.4e-2, A=4.54e-5, ns=[],
         Man = $(Ms)*L_q1
         δM = sign(q[3]) == sign(Man - q[2]) ? 1.0 : 0.0
 
-        den = δ*$(k)-$(α)*(Man-q[2])
+        den = δ*$(k*(1-c))-$(α)*(Man-q[2])
         # at present, the error needs to be scaled to be comparable to those of
         # the other elements, hence the factor 1e-4/Ms
-        res[1] = $(1e-4/Ms) * ($(1/(1+c)) * (δM*(Man-q[2])/den * q[3] +
-                                             $(c*Ms/a)*(q[3]+$(α)*q[4])*Ld_q1)
-                               - q[4])
-        J[1,1] = $(1e-4/Ms) * $(1/(1+c)) * (δM*Ld_q1*δ*$(Ms*k)/den^2 * q[3] +
-                                            $(c*Ms/a)*(q[3]+$(α)*q[4])*Ld2_q1)
-        J[1,2] = $(1e-4/Ms) * -$(1/(1+c)) * δM*δ*$(k)/den^2 * q[3]
-        J[1,3] = $(1e-4/Ms) * $(1/(1+c)) * (δM*(Man-q[2])/den + $(c*Ms/a)*Ld_q1)
-        J[1,4] = $(1e-4/Ms) * ($(c/(1+c) * Ms/a * α)*Ld_q1 - 1)
+        res[1] = $(1e-4/Ms) * ($(1-c) * δM*(Man-q[2])/den * q[3]
+                               + $(c*Ms/a)*(q[3]+$(α)*q[4])*Ld_q1 - q[4])
+        J[1,1] = $(1e-4/Ms) * ($((1-c)^2*k*Ms) * δM*Ld_q1*δ/den^2 * q[3]
+                               + $(c*Ms/a)*(q[3]+$(α)*q[4])*Ld2_q1)
+        J[1,2] = $(1e-4/Ms) * -$((1-c)^2*k) * δM*δ/den^2 * q[3]
+        J[1,3] = $(1e-4/Ms) * ($(1-c) * δM*(Man-q[2])/den + $(c*Ms/a)*Ld_q1)
+        J[1,4] = $(1e-4/Ms) * ($(c * Ms/a * α)*Ld_q1 - 1)
     end
     Element(mv=[speye(length(ns)); spzeros(5, length(ns))],
             mi=[spzeros(length(ns), length(ns)); ns.'; spzeros(4, length(ns))],
@@ -129,8 +128,7 @@ function bjt(typ; is=1e-12, η=1, isc=is, ise=is, ηc=η, ηe=η, βf=1000, βr=
 end
 
 opamp() = Element(mv=[0 0; 1 0], mi=[1 0; 0 0],
-                  pins=[symbol("in+"); symbol(:"in-");
-                        symbol(:"out+"); symbol(:"out-")])
+                  pins=["in+", "in-", "out+", "out-"])
 
 function opamp(::Type{Val{:macak}}, gain, vomin, vomax)
     offset = 0.5 * (vomin + vomax)
@@ -146,8 +144,7 @@ function opamp(::Type{Val{:macak}}, gain, vomin, vomax)
     return Element(mv=[0 0; 1 0; 0 1], mi=[1 0; 0 0; 0 0], mq=[0 0; -1 0; 0 -1],
                    u0=[0; 0; offset],
                    nonlinear_eq = nonlinear_eq,
-                   pins=[symbol("in+"); symbol(:"in-");
-                         symbol(:"out+"); symbol(:"out-")])
+                   pins=["in+", "in-", "out+", "out-"])
 end
 
 @Base.deprecate(opamp_ideal, opamp)

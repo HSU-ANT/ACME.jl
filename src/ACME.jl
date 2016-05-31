@@ -50,7 +50,7 @@ type Element
       for i in 1:length(syms)
         branch = div(i+1, 2)
         polarity = 2mod(i, 2) - 1
-        push!(get!(dict, symbol(syms[i]), []), (branch, polarity))
+        push!(get!(dict, @compat(Symbol(syms[i])), []), (branch, polarity))
       end
       dict
     end
@@ -66,23 +66,23 @@ type Element
     elem = new()
     for (key, val) in args
       if haskey(mat_dims, key)
-        val = sparse(hcat(val)) # turn val into a sparse matrix whatever it is
+        val = convert(SparseMatrixCSC{Real}, sparse(hcat(val))) # turn val into a sparse matrix whatever it is
         update_sizes(val, mat_dims[key])
       elseif key == :pins
         val = make_pin_dict(val)
       end
-      elem.(key) = val
+      setfield!(elem, key, val)
     end
     for (m, ns) in mat_dims
       if !isdefined(elem, m)
-        elem.(m) = spzeros(Int, get(sizes, ns[1], 0), get(sizes, ns[2], 0))
+        setfield!(elem, m, spzeros(Real, get(sizes, ns[1], 0), get(sizes, ns[2], 0)))
       end
     end
     if !isdefined(elem, :nonlinear_eq)
       elem.nonlinear_eq = Expr(:block)
     end
     if !isdefined(elem, :pins)
-      elem.pins = make_pin_dict(map(string,1:2nb(elem)))
+      elem.pins = make_pin_dict(1:2nb(elem))
     end
     elem
   end
@@ -99,9 +99,7 @@ nn(e::Element) = nb(e) + nx(e) + nq(e) - nl(e)
 typealias Pin @compat Tuple{Element, Vector{Tuple{Int,Int}}}
 
 # allow elem[:pin] notation to get an elements pin
-getindex(e::Element, p::Symbol) = (e, e.pins[p])
-getindex(e::Element, p::AbstractString) = getindex(e, symbol(p))
-getindex(e::Element, p::Integer) = getindex(e, string(p))
+getindex(e::Element, p) = (e, e.pins[@compat Symbol(p)])
 
 include("elements.jl")
 
@@ -322,10 +320,10 @@ type DiscreteModel{Solver}
 
         mats = model_matrices(circ, t)
         for mat in [:a, :b, :c, :pexp, :dq, :eq, :fq, :dy, :ey, :fy]
-            model.(mat)=full(mats[mat])
+            setfield!(model, mat, convert(Matrix{Float64}, full(mats[mat])))
         end
-        for vec in [:x0, :q0, :y0]
-            model.(vec)=squeeze(full(mats[vec]), tuple((2:ndims(mats[vec]))...))
+        for vect in [:x0, :q0, :y0]
+            setfield!(model, vect, convert(Vector{Float64}, vec(full(mats[vect]))))
         end
 
         @assert nn(circ) == nn(model)
