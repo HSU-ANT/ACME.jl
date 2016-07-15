@@ -319,11 +319,8 @@ type DiscreteModel{Solver}
         model = new()
 
         mats = model_matrices(circ, t)
-        for mat in [:a, :b, :c, :pexp, :dq, :eq, :fq, :dy, :ey, :fy]
-            setfield!(model, mat, convert(Matrix{Float64}, full(mats[mat])))
-        end
-        for vect in [:x0, :q0, :y0]
-            setfield!(model, vect, convert(Vector{Float64}, vec(full(mats[vect]))))
+        for mat in (:a, :b, :c, :pexp, :dq, :eq, :fq, :dy, :ey, :fy, :x0, :q0, :y0)
+            setfield!(model, mat, mats[mat])
         end
 
         @assert nn(circ) == nn(model)
@@ -379,17 +376,18 @@ DiscreteModel(circ::Circuit, t::Float64) =
     DiscreteModel{HomotopySolver{CachingSolver{SimpleSolver}}}(circ, t)
 
 function model_matrices(circ::Circuit, t)
-    x, f = gensolve([mv(circ) mi(circ) 1/t*mxd(circ)+0.5*mx(circ) mq(circ);
-                     blkdiag(topomat(circ)...) spzeros(nb(circ), nx(circ) + nq(circ))],
-                    [u0(circ) mu(circ) 1/t*mxd(circ)-0.5*mx(circ);
-                     spzeros(nb(circ), 1+nu(circ)+nx(circ))])
+    x, f = map(full,
+               gensolve([mv(circ) mi(circ) 1/t*mxd(circ)+0.5*mx(circ) mq(circ);
+                         blkdiag(topomat(circ)...) spzeros(nb(circ), nx(circ) + nq(circ))],
+                        [u0(circ) mu(circ) 1/t*mxd(circ)-0.5*mx(circ);
+                         spzeros(nb(circ), 1+nu(circ)+nx(circ))]))
 
     rowsizes = [nb(circ); nb(circ); nx(circ); nq(circ)]
-    res = Dict{Symbol,AbstractArray}(zip([:fv; :fi; :c; :fq], matsplit(f, rowsizes)))
+    res = Dict{Symbol,Array{Float64}}(zip([:fv; :fi; :c; :fq], matsplit(f, rowsizes)))
 
     indeterminates = zeros(size(f,1), 0)
     if size(res[:fq], 2) > nn(circ)
-        fq = full(res[:fq])
+        fq = res[:fq]
         q, r, piv = qr(fq.', Val{true}, thin=false)
         # fq[piv,:]*q ~ r'
         indeterminates = f * q[:,nn(circ)+1:end]
@@ -406,10 +404,13 @@ function model_matrices(circ::Circuit, t)
     # column-wise orthogonal to the column space of fq (and hence have a column
     # space of minimal dimension)
     fq = res[:fq]
-    x = x - full(f)/(full(fq)'*fq)*fq'*x[end-nq(circ)+1:end,:]
+    x = x - f/(fq'*fq)*fq'*x[end-nq(circ)+1:end,:]
 
     merge!(res, Dict(zip([:v0 :ev :dv; :i0 :ei :di; :x0 :b :a; :q0 :eq_full :dq_full],
                          matsplit(x, rowsizes, [1; nu(circ); nx(circ)]))))
+    for v in (:v0, :i0, :x0, :q0)
+        res[v] = squeeze(res[v], 2)
+    end
 
     dq_full = res[:dq_full]
     eq_full = res[:eq_full]
@@ -443,7 +444,7 @@ function model_matrices(circ::Circuit, t)
     #          p * [dv; di; a;  dq_full] + 0.5*px(circ)-1/t*pxd(circ)
     res[:ey] = p * x[:,2:1+nu(circ)] # p * [ev; ei; b;  eq_full]
     res[:fy] = p * f                 # p * [fv; fi; c;  fq]
-    res[:y0] = p * x[:,1]            # p * [v0; i0; x0; q0]
+    res[:y0] = p * vec(x[:,1])       # p * [v0; i0; x0; q0]
 
     return res
 end
