@@ -316,64 +316,76 @@ type DiscreteModel{Solver}
     x::Vector{Float64}
 
     function DiscreteModel(circ::Circuit, t::Float64)
+        Base.depwarn("DiscreteModel{Solver}(circ, t) is deprecated, use DiscreteModel(circ, t, Solver) instead.",
+                     :DiscreteModel)
+        DiscreteModel(circ, t, Solver)
+    end
+
+    function DiscreteModel(mats::Dict{Symbol,Array{Float64}}, nonlinear_eq::Expr, solver::Solver)
         model = new()
 
-        mats = model_matrices(circ, t)
         for mat in (:a, :b, :c, :pexp, :dq, :eq, :fq, :dy, :ey, :fy, :x0, :q0, :y0)
             setfield!(model, mat, mats[mat])
         end
 
-        @assert nn(circ) == nn(model)
-
+        model.nonlinear_eq = nonlinear_eq
+        model.solver = solver
         model.x = zeros(nx(model))
-
-        model.nonlinear_eq = quote
-            #copy!(q, q0 + pexp * p + fq * z)
-            copy!(q, q0)
-            BLAS.gemv!('N',1.,pexp,p,1.,q)
-            BLAS.gemv!('N',1.,fq,z,1.,q)
-            let J=Jq
-                $(nonlinear_eq(circ))
-            end
-            #copy!(J, Jq*model.fq)
-            BLAS.gemm!('N', 'N', 1., Jq, fq, 0., J)
-            #copy!(Jp, Jq*pexp)
-            BLAS.gemm!('N', 'N', 1., Jq, pexp, 0., Jp)
-        end
-
-        init_z = initial_solution(model.nonlinear_eq, model.q0, model.fq)
-        nonlinear_eq_func = eval(quote
-            if VERSION < v"0.5.0-dev+2396"
-                # wrap up in named function because anonymous functions are slow
-                # in old Julia versions
-                function $(gensym())(res, J, Jp, p, z)
-                    q0=$(model.q0)
-                    pexp=$(model.pexp)
-                    q=$(zeros(nq(model)))
-                    Jq=$(zeros(nn(model), nq(model)))
-                    fq=$(model.fq)
-                    $(model.nonlinear_eq)
-                    return nothing
-                end
-            else
-                (res, J, Jp, p, z) ->
-                    let q0=$(model.q0), pexp=$(model.pexp),
-                        q=$(zeros(nq(model))),
-                        Jq=$(zeros(nn(model), nq(model))), fq=$(model.fq)
-                        $(model.nonlinear_eq)
-                        return nothing
-                    end
-            end
-        end)
-        model.solver =
-            Solver(ParametricNonLinEq(nonlinear_eq_func, nn(model), np(model)),
-                   zeros(np(model)), init_z)
         return model
     end
 end
 
-DiscreteModel(circ::Circuit, t::Float64) =
-    DiscreteModel{HomotopySolver{CachingSolver{SimpleSolver}}}(circ, t)
+function DiscreteModel{Solver}(circ::Circuit, t::Float64, ::Type{Solver}=HomotopySolver{CachingSolver{SimpleSolver}})
+    mats = model_matrices(circ, t)
+
+    model_nonlinear_eq = quote
+        #copy!(q, q0 + pexp * p + fq * z)
+        copy!(q, q0)
+        BLAS.gemv!('N',1.,pexp,p,1.,q)
+        BLAS.gemv!('N',1.,fq,z,1.,q)
+        let J=Jq
+            $(nonlinear_eq(circ))
+        end
+        #copy!(J, Jq*model.fq)
+        BLAS.gemm!('N', 'N', 1., Jq, fq, 0., J)
+        #copy!(Jp, Jq*pexp)
+        BLAS.gemm!('N', 'N', 1., Jq, pexp, 0., Jp)
+    end
+
+    model_nq = length(mats[:q0])
+    model_nn = size(mats[:fq],2)
+    model_np = size(mats[:dq],1)
+
+    @assert nn(circ) == model_nn
+
+    init_z = initial_solution(model_nonlinear_eq, mats[:q0], mats[:fq])
+    nonlinear_eq_func = eval(quote
+        if VERSION < v"0.5.0-dev+2396"
+            # wrap up in named function because anonymous functions are slow
+            # in old Julia versions
+            function $(gensym())(res, J, Jp, p, z)
+                q0=$(mats[:q0])
+                pexp=$(mats[:pexp])
+                q=$(zeros(model_nq))
+                Jq=$(zeros(model_nn, model_nq))
+                fq=$(mats[:fq])
+                $(model_nonlinear_eq)
+                return nothing
+            end
+        else
+            (res, J, Jp, p, z) ->
+                let q0=$(mats[:q0]), pexp=$(mats[:pexp]),
+                    q=$(zeros(model_nq)),
+                    Jq=$(zeros(model_nn, model_nq)), fq=$(mats[:fq])
+                    $(model_nonlinear_eq)
+                    return nothing
+                end
+        end
+    end)
+    solver = Solver(ParametricNonLinEq(nonlinear_eq_func, model_nn, model_np),
+                    zeros(model_np), init_z)
+    return DiscreteModel{typeof(solver)}(mats, model_nonlinear_eq, solver)
+end
 
 function model_matrices(circ::Circuit, t)
     x, f = map(full,

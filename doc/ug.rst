@@ -77,9 +77,9 @@ as::
 
 Here, ``1/44100`` denotes the sampling interval, i.e. the reciprocal of the
 sampling rate at which the model should run. Optionally, one can specify the
-solver to use for solving the model's non-linear equation as a type parameter::
+solver to use for solving the model's non-linear equation::
 
-    model = DiscreteModel{HomotopySolver{SimpleSolver}}(circ, 1/44100)
+    model = DiscreteModel(circ, 1/44100, HomotopySolver{SimpleSolver})
 
 See Solvers_ for more information about the available solvers.
 
