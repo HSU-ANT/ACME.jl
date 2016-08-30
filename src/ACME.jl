@@ -30,10 +30,10 @@ type Element
   pxd :: SparseMatrixCSC{Real,Int}
   pq :: SparseMatrixCSC{Real,Int}
   nonlinear_eq :: Expr
-  pins :: Dict{Symbol, Vector{@compat Tuple{Int, Int}}}
+  pins :: Dict{Symbol, Vector{Tuple{Int, Int}}}
 
   function Element(;args...)
-    sizes = @compat Dict{Symbol,Int}(:n0 => 1)
+    sizes = Dict{Symbol,Int}(:n0 => 1)
 
     function update_sizes(mat, syms)
       for (sym, s) in zip(syms, size(mat))
@@ -46,22 +46,22 @@ type Element
     end
 
     function make_pin_dict(syms)
-      dict = @compat Dict{Symbol,Vector{@compat Tuple{Int, Int}}}()
+      dict = Dict{Symbol,Vector{Tuple{Int, Int}}}()
       for i in 1:length(syms)
         branch = div(i+1, 2)
         polarity = 2mod(i, 2) - 1
-        push!(get!(dict, @compat(Symbol(syms[i])), []), (branch, polarity))
+        push!(get!(dict, Symbol(syms[i]), []), (branch, polarity))
       end
       dict
     end
     make_pin_dict(dict::Dict) = dict
 
     const mat_dims =
-        @compat  Dict( :mv => (:nl,:nb), :mi => (:nl,:nb), :mx => (:nl,:nx),
-                       :mxd => (:nl,:nx), :mq => (:nl,:nq), :mu => (:nl,:nu),
-                       :u0 => (:nl, :n0),
-                       :pv => (:ny,:nb), :pi => (:ny,:nb), :px => (:ny,:nx),
-                       :pxd => (:ny,:nx), :pq => (:ny,:nq) )
+        Dict( :mv => (:nl,:nb), :mi => (:nl,:nb), :mx => (:nl,:nx),
+              :mxd => (:nl,:nx), :mq => (:nl,:nq), :mu => (:nl,:nu),
+              :u0 => (:nl, :n0),
+              :pv => (:ny,:nb), :pi => (:ny,:nb), :px => (:ny,:nx),
+              :pxd => (:ny,:nx), :pq => (:ny,:nq) )
 
     elem = new()
     for (key, val) in args
@@ -88,7 +88,7 @@ type Element
   end
 end
 
-for (n,m) in @compat Dict(:nb => :mv, :nx => :mx, :nq => :mq, :nu => :mu)
+for (n,m) in Dict(:nb => :mv, :nx => :mx, :nq => :mq, :nu => :mu)
   @eval ($n)(e::Element) = size(e.$m, 2)
 end
 nl(e::Element) = size(e.mv, 1)
@@ -96,14 +96,14 @@ ny(e::Element) = size(e.pv, 1)
 nn(e::Element) = nb(e) + nx(e) + nq(e) - nl(e)
 
 # a Pin combines an element with a branch/polarity list
-typealias Pin @compat Tuple{Element, Vector{Tuple{Int,Int}}}
+typealias Pin Tuple{Element, Vector{Tuple{Int,Int}}}
 
 # allow elem[:pin] notation to get an elements pin
-getindex(e::Element, p) = (e, e.pins[@compat Symbol(p)])
+getindex(e::Element, p) = (e, e.pins[Symbol(p)])
 
 include("elements.jl")
 
-typealias Net Vector{@compat Tuple{Int,Int}} # each net is a list of branch/polarity pairs
+typealias Net Vector{Tuple{Int,Int}} # each net is a list of branch/polarity pairs
 
 type Circuit
     elements :: Vector{Element}
@@ -147,9 +147,9 @@ function nonlinear_eq(c::Circuit)
     col_offset = 0
     nl_expr = Expr(:block)
     for elem in c.elements
-        index_offsets = @compat Dict( :q => (col_offset,),
-                                      :J => (row_offset, col_offset),
-                                      :res => (row_offset,) )
+        index_offsets = Dict( :q => (col_offset,),
+                              :J => (row_offset, col_offset),
+                              :res => (row_offset,) )
 
         function offset_indexes(expr::Expr)
             ret = Expr(expr.head)
@@ -223,7 +223,7 @@ function netfor!(c::Circuit, name::Symbol)
     c.net_names[name]
 end
 
-function connect!(c::Circuit, pins::(@compat Union{Pin,Symbol})...)
+function connect!(c::Circuit, pins::Union{Pin,Symbol}...)
     nets = unique([netfor!(c, pin) for pin in pins])
     for net in nets[2:end]
         append!(nets[1], net)
