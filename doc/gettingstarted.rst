@@ -5,7 +5,9 @@
 Installation
 ============
 
-If you have not done so already, `download and install Julia`_. (Any version starting with 0.3 should be fine.)
+If you have not done so already, `download and install Julia`_. (Any version
+starting with 0.4 should be fine; earlier ACME versions also support Julia
+0.3.)
 
 To install ACME, start Julia and run::
 
