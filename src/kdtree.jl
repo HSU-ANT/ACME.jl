@@ -15,10 +15,10 @@ function KDTree(p::AbstractMatrix, Np=size(p,2))
     function calc_cut_idx(min_idx, max_idx)
         N = max_idx - min_idx + 1
         N2 = 2^floor(Int, log2(N-1))
-        if 3*div(N2, 2) ≤ N
+        if 3(N2÷2) ≤ N
             return min_idx+N2-1
         else
-            return min_idx+N-div(N2, 2)-1
+            return min_idx + N - N2÷2 - 1
         end
     end
 
@@ -46,8 +46,8 @@ function KDTree(p::AbstractMatrix, Np=size(p,2))
     cut_val[1] = mean(p[dim, p_idx[cut_idx[1]:cut_idx[1]+1]])
 
     for n in 2:Np-1
-        parent_n = div(n, 2)
-        if mod(n, 2) == 0
+        parent_n = n ÷ 2
+        if n % 2 == 0
             min_idx[n] = min_idx[parent_n]
             max_idx[n] = cut_idx[parent_n]
         else
@@ -64,8 +64,8 @@ function KDTree(p::AbstractMatrix, Np=size(p,2))
 
     p_idx_final = zeros(Int, Np)
     for n in 1:Np
-        parent_n = div(n+Np-1, 2);
-        if mod(n+Np, 2) == 1
+        parent_n = (n+Np-1) ÷ 2;
+        if (n+Np) % 2 == 1
             p_idx_final[n] = p_idx[min_idx[parent_n]]
         else
             p_idx_final[n] = p_idx[max_idx[parent_n]]
@@ -96,11 +96,11 @@ function siftup!(alts::Alts, i)
     if i > length(entries)
         throw(BoundsError())
     end
-    parent = div(i, 2)
+    parent = i ÷ 2
     @inbounds while i > 1 && entries[i] < entries[parent]
         entries[i], entries[parent] = entries[parent], entries[i]
         i = parent
-        parent = div(i, 2)
+        parent = i ÷ 2
     end
 end
 
@@ -155,7 +155,7 @@ function update_best_dist!(alts, dist, p_idx)
                 last_idx = length(alts.entries)
                 deleteat!(alts.entries, last_idx)
                 if last_idx ≠ i
-                    if i==1 || alts.entries[i] > alts.entries[div(i,2)]
+                    if i==1 || alts.entries[i] > alts.entries[i ÷ 2]
                         siftdown!(alts, i)
                     else
                         siftup!(alts, i)

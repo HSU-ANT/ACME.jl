@@ -48,8 +48,8 @@ type Element
     function make_pin_dict(syms)
       dict = Dict{Symbol,Vector{Tuple{Int, Int}}}()
       for i in 1:length(syms)
-        branch = div(i+1, 2)
-        polarity = 2mod(i, 2) - 1
+        branch = (i+1) ÷ 2
+        polarity = 2(i % 2) - 1
         push!(get!(dict, Symbol(syms[i]), []), (branch, polarity))
       end
       dict
