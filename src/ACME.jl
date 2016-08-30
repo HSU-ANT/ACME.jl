@@ -1,7 +1,7 @@
 # Copyright 2015, 2016 Martin Holters
 # See accompanying license file.
 
-VERSION >= v"0.4.0-dev+6521" && __precompile__()
+__precompile__()
 
 module ACME
 
