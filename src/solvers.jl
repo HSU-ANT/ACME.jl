@@ -24,7 +24,16 @@ np(nleq::ParametricNonLinEq) = size(nleq.Jp, 2)
 evaluate!(nleq::ParametricNonLinEq, p, z) =
     nleq.func(nleq.res, nleq.J, nleq.Jp, p, z)
 
+"""
+    SimpleSolver
 
+The `SimpleSolver` is the simplest available solver. It uses Newton iteration
+which features fast local convergence, but makes no guarantees about global
+convergence. The initial solution of the iteration is obtained by extrapolating
+the last solution found (or another solution provided externally) using the
+available Jacobians. Due to the missing global convergence, the `SimpleSolver`
+is rarely useful as such.
+"""
 type SimpleSolver{NLEQ<:ParametricNonLinEq}
     nleq::NLEQ
     z::Vector{Float64}
@@ -110,7 +119,15 @@ function solve(solver::SimpleSolver, p::AbstractVector{Float64}, maxiter=500)
     return solver.z
 end
 
+"""
+    HomotopySolver{BaseSolver}
 
+The `HomotopySolver` extends an existing solver (provided as the type parameter)
+by applying homotopy to (at least theoretically) ensure global convergence. It
+can be combined with the `SimpleSolver` as `HomotopySolver{SimpleSolver}` to
+obtain a useful Newton homtopy solver with generally good convergence
+properties.
+"""
 type HomotopySolver{BaseSolver}
     basesolver::BaseSolver
     start_p::Vector{Float64}
@@ -165,7 +182,17 @@ end
 hasconverged(solver::HomotopySolver) = hasconverged(solver.basesolver)
 needediterations(solver::HomotopySolver) = solver.iters
 
+"""
+    CachingSolver{BaseSolver}
 
+The `CachingSolver` extends an existing solver (provided as the type parameter)
+by storing found solutions in a k-d tree to use as initial solutions in the
+future. Whenever the underlying solver needs more than a preset number of
+iterations (defaults to five), the solution will be stored. Storing new
+solutions is a relatively expensive operation, so until the stored solutions
+suffice to ensure convergence in few iterations throughout, use of a
+`CachingSolver` may actually slow things down.
+"""
 type CachingSolver{BaseSolver}
     basesolver::BaseSolver
     ps_tree::KDTree{Vector{Float64}, Matrix{Float64}}
