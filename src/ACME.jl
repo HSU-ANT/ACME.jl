@@ -240,7 +240,7 @@ end
 # instead of Ints; a better way for cross-julia-version compatibilty would be
 # nice; maybe Compat helps in the future...
 function topomat!{T<:Integer}(incidence::SparseMatrixCSC{T})
-    @assert all(abs(nonzeros(incidence)) .== 1)
+    @assert all(x -> abs(x) == 1, nonzeros(incidence))
     @assert all(sum(incidence, 1) .== 0)
 
     t = falses(size(incidence)[2]);
@@ -578,7 +578,7 @@ function gensolve(a::SparseMatrixCSC, b, x, h, thresh=0.1)
             continue
         end
         inz, jnz, nz_vals = findnz(s)
-        nz_abs_vals = abs(nz_vals)
+        nz_abs_vals = map(abs, nz_vals)
         jat = jnz[nz_abs_vals .≥ thresh*maximum(nz_abs_vals)] # cols above threshold
         j = jat[indmin(sum(spones(h[:,jat])))]
         q = h[:,j:j] # !SV

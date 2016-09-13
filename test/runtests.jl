@@ -98,7 +98,7 @@ end
 include("../examples/sallenkey.jl")
 let model=sallenkey()
     println("Running sallenkey")
-    y = run!(model, sin(2π*1000/44100*(0:44099)'))
+    y = run!(model, map(sin, 2π*1000/44100*(0:44099)'))
     @test size(y) == (1,44100)
     # TODO: further validate y
 
@@ -109,7 +109,7 @@ end
 include("../examples/diodeclipper.jl")
 let model=diodeclipper()
     println("Running diodeclipper")
-    y = run!(model, sin(2π*1000/44100*(0:44099)'))
+    y = run!(model, map(sin, 2π*1000/44100*(0:44099)'))
     @test size(y) == (1,44100)
     # TODO: further validate y
     checksteady!(model)
@@ -120,14 +120,14 @@ let model=birdie(vol=0.8)
     ACME.solve(model.solver, [0.003, -0.0002])
     @assert ACME.hasconverged(model.solver)
     println("Running birdie with fixed vol")
-    y = run!(model, sin(2π*1000/44100*(0:44099)'))
+    y = run!(model, map(sin, 2π*1000/44100*(0:44099)'))
     @test size(y) == (1,44100)
     # TODO: further validate y
     checksteady!(model)
 end
 let model=birdie()
     println("Running birdie with varying vol")
-    y = run!(model, [sin(2π*1000/44100*(0:44099).'); linspace(1,0,44100).'])
+    y = run!(model, [map(sin, 2π*1000/44100*(0:44099).'); linspace(1,0,44100).'])
     @test size(y) == (1,44100)
     # TODO: further validate y
 end
@@ -135,14 +135,14 @@ end
 include("../examples/superover.jl")
 let model=superover(drive=1.0, tone=1.0, level=1.0)
     println("Running superover with fixed potentiometer values")
-    y = run!(model, sin(2π*1000/44100*(0:44099)'))
+    y = run!(model, map(sin, 2π*1000/44100*(0:44099)'))
     @test size(y) == (1,44100)
     # TODO: further validate y
     checksteady!(model)
 end
 let model=superover()
     println("Running superover with varying potentiometer values")
-    y = run!(model, [sin(2π*1000/44100*(0:999)'); linspace(1,0,1000).'; linspace(0,1,1000).'; linspace(1,0,1000).'])
+    y = run!(model, [map(sin, 2π*1000/44100*(0:999)'); linspace(1,0,1000).'; linspace(0,1,1000).'; linspace(1,0,1000).'])
     @test size(y) == (1,1000)
     # TODO: further validate y
 end

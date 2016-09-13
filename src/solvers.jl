@@ -91,7 +91,7 @@ function solve(solver::SimpleSolver, p::AbstractVector{Float64}, maxiter=500)
     for solver.iters=1:maxiter
         evaluate!(solver.nleq, p, solver.z)
         solver.ressumabs2 = sumabs2(solver.nleq.res)
-        if ~isfinite(solver.ressumabs2) || ~all(isfinite(solver.nleq.J))
+        if ~isfinite(solver.ressumabs2) || ~all(isfinite, solver.nleq.J)
             return solver.z
         end
         JLU = lufact!(solver.nleq.J)
