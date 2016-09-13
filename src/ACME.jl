@@ -214,7 +214,6 @@ function netfor!(c::Circuit, p::Pin)
     for (branch, pol) in p[2], net in c.nets
         (branch + b_offset, pol) ∈ net && break
     end
-    @assert isdefined(net)
     net
 end
 
