@@ -519,6 +519,9 @@ function steadystate!(model::DiscreteModel, u=zeros(nu(model)))
 end
 
 function run!(model::DiscreteModel, u::AbstractMatrix{Float64})
+    if size(u, 1) ≠ nu(model)
+        throw(DimensionMismatch("input matrix has $(size(u,1)) rows, but model requires $(nu(model)) inputs"))
+    end
     y = Array(Float64, ny(model), size(u)[2])
     ucur = Array(Float64, nu(model))
     p = Array(Float64, np(model))
@@ -527,6 +530,7 @@ function run!(model::DiscreteModel, u::AbstractMatrix{Float64})
     @showprogress 1 "Running model: " for n = 1:size(u)[2]
         copy!(ucur, u[:,n])
         # copy!(p, model.dq * model.x + model.eq * u[:,n])
+        copy!(ucur, 1, u, (n-1)*nu(model)+1, nu(model))
         BLAS.gemv!('N', 1., model.dq, model.x, 0., p)
         BLAS.gemv!('N', 1., model.eq, ucur, 1., p)
         z = solve(model.solver, p)
@@ -542,7 +546,8 @@ function run!(model::DiscreteModel, u::AbstractMatrix{Float64})
         BLAS.gemv!('N', 1., model.dy, model.x, 1., ycur)
         BLAS.gemv!('N', 1., model.ey, ucur, 1., ycur)
         BLAS.gemv!('N', 1., model.fy, z, 1., ycur)
-        y[:,n] = ycur
+        #y[:,n] = ycur
+        copy!(y, (n-1)*ny(model)+1, ycur, 1, ny(model))
         #model.x = model.a * model.x + model.b * u[:,n] + model.c * z + model.x0
         copy!(xnew, model.x0)
         BLAS.gemv!('N', 1., model.a, model.x, 1., xnew)
