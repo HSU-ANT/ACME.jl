@@ -114,9 +114,10 @@ end
 type HomotopySolver{BaseSolver}
     basesolver::BaseSolver
     start_p::Vector{Float64}
+    pa::Vector{Float64}
     iters::Int
     function HomotopySolver(basesolver::BaseSolver, np::Integer)
-        return new(basesolver, zeros(np), 0)
+        return new(basesolver, zeros(np), zeros(np), 0)
     end
     function HomotopySolver(nleq::ParametricNonLinEq,
                             initial_p::Vector{Float64},
@@ -140,8 +141,11 @@ function solve(solver::HomotopySolver, p)
         best_a = 0.0
         copy!(solver.start_p, get_extrapolation_origin(solver.basesolver)[1])
         while best_a < 1
-            pa = (1-a) * solver.start_p + a * p
-            z = solve(solver.basesolver, pa)
+            # copy!(solver.pa = (1-a) * solver.start_p + a * p)
+            copy!(solver.pa, solver.start_p)
+            LinAlg.scale!(1-a, solver.pa)
+            LinAlg.axpy!(a, p, solver.pa)
+            z = solve(solver.basesolver, solver.pa)
             if hasconverged(solver)
                 best_a = a
                 a = 1.0
