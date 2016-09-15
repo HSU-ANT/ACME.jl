@@ -528,7 +528,6 @@ function run!(model::DiscreteModel, u::AbstractMatrix{Float64})
     ycur = Array(Float64, ny(model))
     xnew = Array(Float64, nx(model))
     @showprogress 1 "Running model: " for n = 1:size(u)[2]
-        copy!(ucur, u[:,n])
         # copy!(p, model.dq * model.x + model.eq * u[:,n])
         copy!(ucur, 1, u, (n-1)*nu(model)+1, nu(model))
         BLAS.gemv!('N', 1., model.dq, model.x, 0., p)
