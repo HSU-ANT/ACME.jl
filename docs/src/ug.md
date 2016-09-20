@@ -126,4 +126,4 @@ HomotopySolver
 CachingSolver
 ```
 
-The default solver used is a ``HomotopySolver{CachingSolver{SimpleSolver}}``.
+The default solver used is a `HomotopySolver{CachingSolver{SimpleSolver}}`.
