@@ -11,3 +11,11 @@ makedocs(
         "elements.md",
     ],
 )
+
+deploydocs(
+    target = "build",
+    repo = "github.com/HSU-ANT/ACME.jl.git",
+    latest = "develop",
+    deps = nothing,
+    make = nothing,
+)
