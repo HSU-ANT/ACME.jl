@@ -1,7 +1,7 @@
 # ACME.jl - Analog Circuit Modeling and Emulation for Julia
 
 [![Join the chat at https://gitter.im/HSU-ANT/ACME.jl](https://badges.gitter.im/HSU-ANT/ACME.jl.svg)](https://gitter.im/HSU-ANT/ACME.jl?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
-[![Documentation Status](https://readthedocs.org/projects/acmejl/badge/?version=latest)](http://acmejl.readthedocs.io/en/latest/?badge=latest)
+[![Documentation](https://img.shields.io/badge/docs-latest-blue.svg)](https://hsu-ant.github.io/ACME.jl/latest)
 
 [![ACME](http://pkg.julialang.org/badges/ACME_0.4.svg)](http://pkg.julialang.org/?pkg=ACME)
 [![ACME](http://pkg.julialang.org/badges/ACME_0.5.svg)](http://pkg.julialang.org/?pkg=ACME)
@@ -130,7 +130,8 @@ fail to run altogether.
 
 ## Moving on
 
-There is some [documentation](http://acmejl.readthedocs.io) available for how
+There is some [documentation](https://hsu-ant.github.io/ACME.jl/latest)
+available for how
 to use ACME. Additionally, you can take a look at the examples that can be found
 in the `examples` directory below `Pkg.dir("ACME")`.
 
