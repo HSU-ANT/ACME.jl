@@ -192,6 +192,10 @@ iterations (defaults to five), the solution will be stored. Storing new
 solutions is a relatively expensive operation, so until the stored solutions
 suffice to ensure convergence in few iterations throughout, use of a
 `CachingSolver` may actually slow things down.
+
+See [M. Holters, U. Zölzer, "A k-d Tree Based Solution Cache for the Non-linear
+Equation of Circuit Simulations"](http://www.eurasip.org/Proceedings/Eusipco/Eusipco2016/papers/1570255150.pdf)
+for a more detailed discussion.
 """
 type CachingSolver{BaseSolver}
     basesolver::BaseSolver

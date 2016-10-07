@@ -96,7 +96,10 @@ A detailed discussion of the parameters can be found in D. C. Jiles and D. L.
 Atherton, “Theory of ferromagnetic hysteresis,” J. Magn. Magn. Mater., vol.
 61, no. 1–2, pp. 48–60, Sep. 1986 and J. H. B. Deane, “Modeling the dynamics
 of nonlinear inductor circuits,” IEEE Trans. Magn., vol. 30, no. 5, pp.
-2795–2801, 1994, where the definition of `c` is taken from the latter.
+2795–2801, 1994, where the definition of `c` is taken from the latter. The ACME
+implementation is discussed in [M. Holters, U. Zölzer, "Circuit Simulation with
+Inductors and Transformers Based on the Jiles-Atherton Model of
+Magnetization"](http://ant-s4.unibw-hamburg.de/paper-archive/2016/dafxpapers/08-DAFx-16_paper_10-PN.pdf).
 
 Pins: `1` and `2` for primary winding, `3` and `4` for secondary winding, and so
 on
@@ -156,7 +159,10 @@ A detailed discussion of the paramters can be found in D. C. Jiles and D. L.
 Atherton, “Theory of ferromagnetic hysteresis,” J. Magn. Magn. Mater., vol.
 61, no. 1–2, pp. 48–60, Sep. 1986 and J. H. B. Deane, “Modeling the dynamics
 of nonlinear inductor circuits,” IEEE Trans. Magn., vol. 30, no. 5, pp.
-2795–2801, 1994, where the definition of `c` is taken from the latter.
+2795–2801, 1994, where the definition of `c` is taken from the latter. The ACME
+implementation is discussed in [M. Holters, U. Zölzer, "Circuit Simulation with
+Inductors and Transformers Based on the Jiles-Atherton Model of
+Magnetization"](http://ant-s4.unibw-hamburg.de/paper-archive/2016/dafxpapers/08-DAFx-16_paper_10-PN.pdf).
 
 Pins: `1`, `2`
 """
