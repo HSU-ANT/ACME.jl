@@ -2,6 +2,7 @@
 # See accompanying license file.
 
 export SimpleSolver, HomotopySolver, CachingSolver
+import Base.copy!
 
 type ParametricNonLinEq{F<:Function}
     func::F
@@ -24,6 +25,60 @@ np(nleq::ParametricNonLinEq) = size(nleq.Jp, 2)
 evaluate!(nleq::ParametricNonLinEq, p, z) =
     nleq.func(nleq.res, nleq.J, nleq.Jp, p, z)
 
+immutable LinearSolver{R<:Ref{Base.LinAlg.BlasInt}}
+    factors::Matrix{Float64}
+    ipiv::Vector{Base.LinAlg.BlasInt}
+    info::R #Ref{Base.LinAlg.BlasInt}
+    function LinearSolver(n::Int, info::R)
+        new(zeros(n, n), zeros(Base.LinAlg.BlasInt, n), info)
+    end
+end
+
+LinearSolver{R<:Ref{Base.LinAlg.BlasInt}}(n::Int, info::R) = LinearSolver{R}(n, info)
+LinearSolver(n::Int) = LinearSolver{}(n, Ref{Base.LinAlg.BlasInt}(0))
+
+function setlhs!(solver::LinearSolver, A::Matrix{Float64})
+    m, n = size(solver.factors)
+    if (m, n) ≠ size(A)
+        throw(DimensionMismatch("matrix has size $(size(A)), but must have size $(size(solver.factors))"))
+    end
+    copy!(solver.factors, A)
+    lda  = max(1, m)
+    ccall((Compat.@blasfunc(dgetrf_), Base.LinAlg.LAPACK.liblapack), Void,
+          (Ptr{Base.LinAlg.BlasInt}, Ptr{Base.LinAlg.BlasInt}, Ptr{Float64},
+           Ptr{Base.LinAlg.BlasInt}, Ptr{Base.LinAlg.BlasInt}, Ptr{Base.LinAlg.BlasInt}),
+          &m, &n, solver.factors, &lda, solver.ipiv, solver.info)
+    return solver.info[] == 0
+end
+
+function solve!(solver::LinearSolver, x::Vector{Float64}, b::Vector{Float64})
+    n = size(solver.factors, 2)
+    if n ≠ length(x)
+        throw(DimensionMismatch("x has length $(length(x)), but needs $n"))
+    end
+    if x !== b
+        if n ≠ length(b)
+            throw(DimensionMismatch("b has length $(length(b)), but needs $n"))
+        end
+        copy!(x, b)
+    end
+    Base.LinAlg.chkstride1(solver.factors, x, solver.ipiv)
+    ccall((Compat.@blasfunc(dgetrs_), Base.LinAlg.LAPACK.liblapack), Void,
+          (Ptr{UInt8}, Ptr{Base.LinAlg.BlasInt}, Ptr{Base.LinAlg.BlasInt}, Ptr{Float64}, Ptr{Base.LinAlg.BlasInt},
+           Ptr{Base.LinAlg.BlasInt}, Ptr{Float64}, Ptr{Base.LinAlg.BlasInt}, Ptr{Base.LinAlg.BlasInt}),
+          &'N', &n, &1, solver.factors, &max(1,stride(solver.factors,2)), solver.ipiv, x, &max(1,stride(x,2)), solver.info)
+    if solver.info[] ≠ 0
+        throw(Base.LinAlg.LAPACKException(solver.info[]))
+    end
+    return nothing
+end
+
+function copy!(dest::LinearSolver, src::LinearSolver)
+    copy!(dest.factors, src.factors)
+    copy!(dest.ipiv, src.ipiv)
+    dest.info[] = src.info[]
+end
+
 """
     SimpleSolver
 
@@ -37,10 +92,11 @@ is rarely useful as such.
 type SimpleSolver{NLEQ<:ParametricNonLinEq}
     nleq::NLEQ
     z::Vector{Float64}
+    linsolver::LinearSolver
     last_z::Vector{Float64}
     last_p::Vector{Float64}
     last_Jp::Matrix{Float64}
-    JLU::Base.LU{Float64,Matrix{Float64}}
+    last_linsolver::LinearSolver
     iters::Int
     ressumabs2::Float64
     tol::Float64
@@ -49,14 +105,15 @@ type SimpleSolver{NLEQ<:ParametricNonLinEq}
     function SimpleSolver(nleq::NLEQ, initial_p::Vector{Float64},
                           initial_z::Vector{Float64})
         z = zeros(nn(nleq))
+        linsolver = LinearSolver(nn(nleq))
         last_z = zeros(nn(nleq))
         last_p = zeros(np(nleq))
         last_Jp = zeros(nn(nleq), np(nleq))
-        JLU = lufact(eye(nn(nleq)))
+        last_linsolver = LinearSolver(nn(nleq))
         tmp_nn = zeros(nn(nleq))
         tmp_np = zeros(np(nleq))
-        solver = new(nleq, z, last_z, last_p, last_Jp, JLU, 0, 0.0, 1e-20,
-                     tmp_nn, tmp_np)
+        solver = new(nleq, z, linsolver, last_z, last_p, last_Jp, last_linsolver,
+                     0, 0.0, 1e-20, tmp_nn, tmp_np)
         set_extrapolation_origin(solver, initial_p, initial_z)
         return solver
     end
@@ -69,14 +126,12 @@ set_resabs2tol!(solver::SimpleSolver, tol) = solver.tol = tol
 
 function set_extrapolation_origin(solver::SimpleSolver, p, z)
     evaluate!(solver.nleq, p, z)
-    JLU = lufact!(solver.nleq.J)
-    set_extrapolation_origin(solver, p, z, solver.nleq.Jp, JLU)
+    setlhs!(solver.linsolver, solver.nleq.J)
+    set_extrapolation_origin(solver, p, z, solver.nleq.Jp, solver.linsolver)
 end
 
-function set_extrapolation_origin(solver::SimpleSolver, p, z, Jp, JLU)
-    copy!(solver.JLU.factors, JLU.factors)
-    solver.JLU = Base.LU{Float64, Matrix{Float64}}(solver.JLU.factors, JLU.ipiv,
-                                                   JLU.info)
+function set_extrapolation_origin(solver::SimpleSolver, p, z, Jp, linsolver)
+    copy!(solver.last_linsolver, linsolver)
     copy!(solver.last_Jp, Jp)
     copy!(solver.last_p, p)
     copy!(solver.last_z, z)
@@ -89,32 +144,30 @@ hasconverged(solver::SimpleSolver) = solver.ressumabs2 < solver.tol
 needediterations(solver::SimpleSolver) = solver.iters
 
 function solve(solver::SimpleSolver, p::AbstractVector{Float64}, maxiter=500)
-    #solver.z = solver.last_z - solver.JLU\(solver.last_Jp * (p-solver.last_p))
+    #solver.z = solver.last_z - solver.last_J\(solver.last_Jp * (p-solver.last_p))
     copy!(solver.tmp_np, p)
     BLAS.axpy!(-1.0, solver.last_p, solver.tmp_np)
     BLAS.gemv!('N', 1.,solver.last_Jp, solver.tmp_np, 0., solver.tmp_nn)
-    A_ldiv_B!(solver.JLU, solver.tmp_nn)
+    solve!(solver.last_linsolver, solver.tmp_nn, solver.tmp_nn)
     copy!(solver.z, solver.last_z)
     BLAS.axpy!(-1.0, solver.tmp_nn, solver.z)
-    local JLU
+
     for solver.iters=1:maxiter
         evaluate!(solver.nleq, p, solver.z)
         solver.ressumabs2 = sumabs2(solver.nleq.res)
         if ~isfinite(solver.ressumabs2) || ~all(isfinite, solver.nleq.J)
             return solver.z
         end
-        JLU = lufact!(solver.nleq.J)
-        if JLU.info > 0 # J was singular
+        if !setlhs!(solver.linsolver, solver.nleq.J) # J was singular
             return solver.z
         end
         hasconverged(solver) && break
-        #solver.z -= JLU\solver.nleq.res
-        copy!(solver.tmp_nn, solver.nleq.res)
-        A_ldiv_B!(JLU, solver.tmp_nn)
+        #solver.z -= solver.nleq.J\solver.nleq.res
+        solve!(solver.linsolver, solver.tmp_nn, solver.nleq.res)
         BLAS.axpy!(-1.0, solver.tmp_nn, solver.z)
     end
     if hasconverged(solver)
-        set_extrapolation_origin(solver, p, solver.z, solver.nleq.Jp, JLU)
+        set_extrapolation_origin(solver, p, solver.z, solver.nleq.Jp, solver.linsolver)
     end
     return solver.z
 end

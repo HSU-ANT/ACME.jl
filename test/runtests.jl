@@ -13,6 +13,25 @@ tv, ti = ACME.topomat(sparse([1 -1 1; -1 1 -1]))
 # two nodes, one branch between them -> voltage arbitrary, current==0
 @test ACME.topomat(sparse([1,2], [1,1], [1,-1])) == (spzeros(0, 1), speye(1))
 
+let solver = ACME.LinearSolver(3)
+    A = [1.0 0.5 0.4; 2.0 4.0 1.7; 4.0 7.0 9.1]
+    @test ACME.setlhs!(solver, A)
+    x = rand(3)
+    y = similar(x)
+    ACME.solve!(solver, y, x)
+    @test_approx_eq A*y x
+    copy!(y, x)
+    ACME.solve!(solver, y, y)
+    @test_approx_eq A*y x
+    @test_throws DimensionMismatch ACME.setlhs!(solver, zeros(2, 3))
+    @test_throws DimensionMismatch ACME.setlhs!(solver, zeros(3, 4))
+    @test_throws DimensionMismatch ACME.setlhs!(solver, zeros(4, 4))
+    @test_throws DimensionMismatch ACME.solve!(solver, zeros(2), zeros(3))
+    @test_throws DimensionMismatch ACME.solve!(solver, zeros(3), zeros(4))
+    @test_throws DimensionMismatch ACME.solve!(solver, zeros(4), zeros(4))
+    @test !ACME.setlhs!(solver, zeros(3,3))
+end
+
 let circ = Circuit()
     model=DiscreteModel(circ, 1.)
     @test run!(model, zeros(0, 20)) == zeros(0, 20)
