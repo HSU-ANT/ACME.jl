@@ -2,7 +2,7 @@ using Documenter, ACME
 
 makedocs(
     modules = [ACME],
-    format = Documenter.Formats.HTML,
+    format = :html,
     sitename = "ACME.jl",
     pages = Any[
         "Home" => "index.md",
