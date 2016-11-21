@@ -72,8 +72,8 @@ let ps = rand(6, 10000)
     @test_approx_eq sumabs2(p - best_p) sumabs2(p - ps[:, idx])
 end
 
-let nleq = ACME.ParametricNonLinEq((res, J, Jp, p, z) ->
-    begin
+let nleq = ACME.ParametricNonLinEq((res, J, scratch, z) ->
+    let p=scratch[1], Jp=scratch[2]
         res[1] = z[1]^2 - 1 + p[1]
         J[1,1] = 2*z[1]
         Jp[1,1] = 1
