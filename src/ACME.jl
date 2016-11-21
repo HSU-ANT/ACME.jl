@@ -338,17 +338,14 @@ function DiscreteModel{Solver}(circ::Circuit, t::Float64, ::Type{Solver}=Homotop
     mats = model_matrices(circ, t)
 
     model_nonlinear_eq = quote
-        #copy!(q, q0 + pexp * p + fq * z)
-        copy!(q, q0)
-        BLAS.gemv!('N',1.,pexp,p,1.,q)
+        #copy!(q, pfull + fq * z)
+        copy!(q, pfull)
         BLAS.gemv!('N',1.,fq,z,1.,q)
         let J=Jq
             $(nonlinear_eq(circ))
         end
         #copy!(J, Jq*model.fq)
         BLAS.gemm!('N', 'N', 1., Jq, fq, 0., J)
-        #copy!(Jp, Jq*pexp)
-        BLAS.gemm!('N', 'N', 1., Jq, pexp, 0., Jp)
     end
 
     model_nq = length(mats[:q0])
@@ -362,26 +359,69 @@ function DiscreteModel{Solver}(circ::Circuit, t::Float64, ::Type{Solver}=Homotop
         if VERSION < v"0.5.0-dev+2396"
             # wrap up in named function because anonymous functions are slow
             # in old Julia versions
-            function $(gensym())(res, J, Jp, p, z)
-                q0=$(mats[:q0])
-                pexp=$(mats[:pexp])
+            function $(gensym())(res, J, scratch, z)
+                pfull=scratch[1]
+                Jq=scratch[2]
                 q=$(zeros(model_nq))
-                Jq=$(zeros(model_nn, model_nq))
                 fq=$(mats[:fq])
                 $(model_nonlinear_eq)
                 return nothing
             end
         else
-            (res, J, Jp, p, z) ->
-                let q0=$(mats[:q0]), pexp=$(mats[:pexp]),
-                    q=$(zeros(model_nq)),
-                    Jq=$(zeros(model_nn, model_nq)), fq=$(mats[:fq])
+            (res, J, scratch, z) ->
+                let pfull=scratch[1], Jq=scratch[2], q=$(zeros(model_nq)),
+                    fq=$(mats[:fq])
                     $(model_nonlinear_eq)
                     return nothing
                 end
         end
     end)
-    solver = Solver(ParametricNonLinEq(nonlinear_eq_func, model_nn, model_np),
+    nonlinear_eq_set_p = eval(quote
+        if VERSION < v"0.5.0-dev+2396"
+            # wrap up in named function because anonymous functions are slow
+            # in old Julia versions
+            function $(gensym())(scratch, p)
+                #copy!(pfull, q0 + pexp * p)
+                pfull = scratch[1]
+                copy!(pfull, $(mats[:q0]))
+                BLAS.gemv!('N', 1., $(mats[:pexp]), p, 1., pfull)
+                return nothing
+            end
+        else
+            (scratch, p) ->
+                begin
+                    pfull = scratch[1]
+                    #copy!(pfull, q0 + pexp * p)
+                    copy!(pfull, $(mats[:q0]))
+                    BLAS.gemv!('N', 1., $(mats[:pexp]), p, 1., pfull)
+                    return nothing
+                end
+        end
+    end)
+    nonlinear_eq_calc_Jp = eval(quote
+        if VERSION < v"0.5.0-dev+2396"
+            # wrap up in named function because anonymous functions are slow
+            # in old Julia versions
+            function $(gensym())(scratch, Jp)
+                Jq = scratch[2]
+                #copy!(Jp, Jq*pexp)
+                BLAS.gemm!('N', 'N', 1., Jq, $(mats[:pexp]), 0., Jp)
+                return nothing
+            end
+        else
+            (scratch, Jp) ->
+                begin
+                    Jq = scratch[2]
+                    #copy!(Jp, Jq*pexp)
+                    BLAS.gemm!('N', 'N', 1., Jq, $(mats[:pexp]), 0., Jp)
+                    return nothing
+                end
+        end
+    end)
+    solver = Solver(ParametricNonLinEq(nonlinear_eq_func, nonlinear_eq_set_p,
+                                       nonlinear_eq_calc_Jp,
+                                       (zeros(model_nq), zeros(model_nn, model_nq)),
+                                       model_nn, model_np),
                     zeros(model_np), init_z)
     return DiscreteModel{typeof(solver)}(mats, model_nonlinear_eq, solver)
 end
@@ -465,8 +505,8 @@ function initial_solution(nleq, q0, fq)
     # between 0 and the true q0 -> q0 takes the role of p
     nq, nn = size(fq)
     init_nl_eq_func = eval(quote
-        (res, J, Jp, p, z) ->
-            let q0=$(zeros(nq)), pexp=$(eye(nq)), q=$(zeros(nq)),
+        (res, J, scratch, z) ->
+            let pfull=scratch[1], Jp=scratch[2], q=$(zeros(nq)),
                 Jq=$(zeros(nn, nq)), fq=$(fq)
                 $(nleq)
                 return nothing
@@ -491,8 +531,8 @@ nn(model::DiscreteModel) = size(model.fq, 2)
 function steadystate(model::DiscreteModel, u=zeros(nu(model)))
     IA_LU = lufact(eye(nx(model))-model.a)
     steady_nl_eq_func = eval(quote
-        (res, J, Jp, p, z) ->
-            let q0=$(zeros(nq(model))), pexp=$(eye(nq(model))),
+        (res, J, scratch, z) ->
+            let pfull=scratch[1], Jp=scratch[2],
                 q=$(zeros(nq(model))), Jq=$(zeros(nn(model), nq(model))),
                 fq=$(model.pexp*model.dq/IA_LU*model.c + model.fq)
                 $(model.nonlinear_eq)

@@ -4,26 +4,40 @@
 export SimpleSolver, HomotopySolver, CachingSolver
 import Base.copy!
 
-type ParametricNonLinEq{F<:Function}
-    func::F
+type ParametricNonLinEq{F_eval<:Function,F_setp<:Function,F_calcjp<:Function,Scratch}
+    func::F_eval
+    set_p::F_setp
+    calc_Jp::F_calcjp
     res::Vector{Float64}
     Jp::Matrix{Float64}
     J::Matrix{Float64}
-    function ParametricNonLinEq(func::F, nn::Integer, np::Integer)
+    scratch::Scratch
+    function ParametricNonLinEq(func::F_eval, set_p::F_setp, calc_Jp::F_calcjp,
+                                scratch::Scratch, nn::Integer, np::Integer)
         res = zeros(nn)
         Jp = zeros(nn, np)
         J = zeros(nn, nn)
-        return new(func, res, Jp, J)
+        return new(func, set_p, calc_Jp, res, Jp, J, scratch)
     end
 end
-ParametricNonLinEq{F<:Function}(func::F, nn::Integer, np::Integer) =
-    ParametricNonLinEq{F}(func, nn, np)
+ParametricNonLinEq{F_eval<:Function,F_setp<:Function,F_calcjp<:Function,
+                   Scratch}(func::F_eval, set_p::F_setp, calc_Jp::F_calcjp,
+                            scratch::Scratch, nn::Integer, np::Integer) =
+    ParametricNonLinEq{F_eval,F_setp,F_calcjp,Scratch}(func, set_p, calc_Jp, scratch, nn, np)
+ParametricNonLinEq(func::Function, nn::Integer, np::Integer) =
+    ParametricNonLinEq(func, default_set_p, default_calc_Jp,
+                       (zeros(np), zeros(nn, np)), nn, np)
+
+default_set_p(scratch, p) = (copy!(scratch[1], p); nothing)
+default_calc_Jp(scratch, Jp) = (copy!(Jp, scratch[2]); nothing)
 
 nn(nleq::ParametricNonLinEq) = length(nleq.res)
 np(nleq::ParametricNonLinEq) = size(nleq.Jp, 2)
 
-evaluate!(nleq::ParametricNonLinEq, p, z) =
-    nleq.func(nleq.res, nleq.J, nleq.Jp, p, z)
+set_p!(nleq::ParametricNonLinEq, p) = nleq.set_p(nleq.scratch, p)
+calc_Jp!(nleq::ParametricNonLinEq) = nleq.calc_Jp(nleq.scratch, nleq.Jp)
+evaluate!(nleq::ParametricNonLinEq, z) =
+    nleq.func(nleq.res, nleq.J, nleq.scratch, z)
 
 immutable LinearSolver{R<:Ref{Base.LinAlg.BlasInt}}
     factors::Matrix{Float64}
@@ -125,8 +139,10 @@ SimpleSolver{NLEQ<:ParametricNonLinEq}(nleq::NLEQ, initial_p::Vector{Float64},
 set_resabs2tol!(solver::SimpleSolver, tol) = solver.tol = tol
 
 function set_extrapolation_origin(solver::SimpleSolver, p, z)
-    evaluate!(solver.nleq, p, z)
+    set_p!(solver.nleq, p)
+    evaluate!(solver.nleq, z)
     setlhs!(solver.linsolver, solver.nleq.J)
+    calc_Jp!(solver.nleq)
     set_extrapolation_origin(solver, p, z, solver.nleq.Jp, solver.linsolver)
 end
 
@@ -144,6 +160,7 @@ hasconverged(solver::SimpleSolver) = solver.ressumabs2 < solver.tol
 needediterations(solver::SimpleSolver) = solver.iters
 
 function solve(solver::SimpleSolver, p::AbstractVector{Float64}, maxiter=500)
+    set_p!(solver.nleq, p)
     #solver.z = solver.last_z - solver.last_J\(solver.last_Jp * (p-solver.last_p))
     copy!(solver.tmp_np, p)
     BLAS.axpy!(-1.0, solver.last_p, solver.tmp_np)
@@ -153,7 +170,7 @@ function solve(solver::SimpleSolver, p::AbstractVector{Float64}, maxiter=500)
     BLAS.axpy!(-1.0, solver.tmp_nn, solver.z)
 
     for solver.iters=1:maxiter
-        evaluate!(solver.nleq, p, solver.z)
+        evaluate!(solver.nleq, solver.z)
         solver.ressumabs2 = sumabs2(solver.nleq.res)
         if ~isfinite(solver.ressumabs2) || ~all(isfinite, solver.nleq.J)
             return solver.z
@@ -167,6 +184,7 @@ function solve(solver::SimpleSolver, p::AbstractVector{Float64}, maxiter=500)
         BLAS.axpy!(-1.0, solver.tmp_nn, solver.z)
     end
     if hasconverged(solver)
+        calc_Jp!(solver.nleq)
         set_extrapolation_origin(solver, p, solver.z, solver.nleq.Jp, solver.linsolver)
     end
     return solver.z
