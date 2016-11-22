@@ -309,7 +309,7 @@ function solve(solver::CachingSolver, p)
     end
 
     idx = indnearest(solver.ps_tree, p,
-                     Alts([AltEntry(1, zeros(p), 0.0)], best_diff, idx))[1]
+                     Alts([AltEntry(1, zeros(p), 0.0)], best_diff, idx, 1))[1]
 
     if idx ≠ 0
         set_extrapolation_origin(solver.basesolver,

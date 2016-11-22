@@ -1,6 +1,7 @@
 # Copyright 2016 Martin Holters
 # See accompanying license file.
 
+import Base.deleteat!
 import Base.isless
 import Base.isempty
 
@@ -75,7 +76,7 @@ function KDTree(p::AbstractMatrix, Np=size(p,2))
     return KDTree{typeof(cut_val),typeof(p)}(cut_dim, cut_val, p_idx_final, p)
 end
 
-immutable AltEntry{T}
+type AltEntry{T}
     idx::Int
     delta::Vector{T}
     delta_norm::T
@@ -87,13 +88,14 @@ type Alts{T}
     entries::Vector{AltEntry{T}}
     best_dist::T
     best_pidx::Int
+    number_valid::Int
 end
 
-Alts{T}(p::Vector{T}) = Alts([AltEntry(1, zeros(p), zero(T))], typemax(T), 0)
+Alts{T}(p::Vector{T}) = Alts([AltEntry(1, zeros(p), zero(T))], typemax(T), 0, 1)
 
 function siftup!(alts::Alts, i)
     entries = alts.entries
-    if i > length(entries)
+    if i > alts.number_valid
         throw(BoundsError())
     end
     parent = i ÷ 2
@@ -109,7 +111,7 @@ function siftdown!(alts::Alts, i)
         throw(BoundsError())
     end
     entries = alts.entries
-    N = length(entries)
+    N = alts.number_valid
     @inbounds while true
         min = i
         if 2i ≤ N && entries[2i] < entries[min]
@@ -126,21 +128,41 @@ function siftdown!(alts::Alts, i)
     end
 end
 
-isempty(alts::Alts) = isempty(alts.entries)
+isempty(alts::Alts) = alts.number_valid == 0
 peek(alts::Alts) = alts.entries[1]
+
+function deleteat!(alts::Alts, i::Integer)
+    alts.entries[i], alts.entries[alts.number_valid] = alts.entries[alts.number_valid], alts.entries[i]
+    alts.number_valid -= 1
+    if i ≤ alts.number_valid
+        if i==1 || alts.entries[i] > alts.entries[i ÷ 2]
+            siftdown!(alts, i)
+        else
+            siftup!(alts, i)
+        end
+    end
+end
 
 function dequeue!(alts::Alts)
     e = alts.entries[1]
-    alts.entries[1] = alts.entries[end]
-    deleteat!(alts.entries, length(alts.entries))
-    siftdown!(alts, 1)
+    deleteat!(alts, 1)
     return e
 end
 
-function enqueue!(alts::Alts, entry::AltEntry)
-    if entry.delta_norm < alts.best_dist
-        push!(alts.entries, entry)
-        siftup!(alts, length(alts.entries))
+function enqueue!{T}(alts::Alts{T}, new_idx::Int, ref_delta::Vector{T}, delta_update_dim::Int, delta_update_val::T, new_delta_norm::T)
+    if alts.number_valid == length(alts.entries)
+        delta = copy(ref_delta)
+        delta[delta_update_dim] = delta_update_val
+        push!(alts.entries, AltEntry(new_idx, delta, new_delta_norm))
+    else
+        alts.entries[alts.number_valid+1].idx = new_idx
+        copy!(alts.entries[alts.number_valid+1].delta, ref_delta)
+        alts.entries[alts.number_valid+1].delta[delta_update_dim] = delta_update_val
+        alts.entries[alts.number_valid+1].delta_norm = new_delta_norm
+    end
+    if alts.entries[alts.number_valid+1].delta_norm < alts.best_dist
+        alts.number_valid += 1
+        siftup!(alts, alts.number_valid)
     end
 end
 
@@ -148,21 +170,10 @@ function update_best_dist!(alts, dist, p_idx)
     if dist < alts.best_dist
         alts.best_dist = dist
         alts.best_pidx = p_idx
-        i = length(alts.entries)
-        @inbounds while i > 0
-            if alts.entries[i].delta_norm .≥ alts.best_dist
-                alts.entries[i] = alts.entries[end]
-                last_idx = length(alts.entries)
-                deleteat!(alts.entries, last_idx)
-                if last_idx ≠ i
-                    if i==1 || alts.entries[i] > alts.entries[i ÷ 2]
-                        siftdown!(alts, i)
-                    else
-                        siftup!(alts, i)
-                    end
-                end
+        for i in alts.number_valid:-1:1
+            if alts.entries[i].delta_norm ≥ alts.best_dist
+                deleteat!(alts, i)
             end
-            i -= 1
         end
     end
 end
@@ -187,10 +198,8 @@ function indnearest(tree::KDTree, p::AbstractVector, max_leaves::Int,
             dim = tree.cut_dim[idx]
             new_alt_delta_norm = delta_norm - delta[dim]^2 + (p[dim] - tree.cut_val[idx])^2
             if new_alt_delta_norm < alt.best_dist
-                new_alt_delta = copy(delta)
-                new_alt_delta[dim] = p[dim] - tree.cut_val[idx]
                 new_alt_idx = p[dim] ≤ tree.cut_val[idx] ? 2idx+1 : 2idx;
-                enqueue!(alt, AltEntry(new_alt_idx, new_alt_delta, new_alt_delta_norm))
+                enqueue!(alt, new_alt_idx, delta, dim, p[dim] - tree.cut_val[idx], new_alt_delta_norm)
             end
             if p[dim] ≤ tree.cut_val[idx]
                 idx *= 2
