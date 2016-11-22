@@ -93,6 +93,15 @@ end
 
 Alts{T}(p::Vector{T}) = Alts([AltEntry(1, zeros(p), zero(T))], typemax(T), 0, 1)
 
+function init!{T}(alts::Alts{T}, best_dist, best_pidx)
+    alts.number_valid = 1
+    alts.entries[1].idx = 1
+    fill!(alts.entries[1].delta, zero(T))
+    alts.entries[1].delta_norm = zero(T)
+    alts.best_dist = best_dist
+    alts.best_pidx = best_pidx
+end
+
 function siftup!(alts::Alts, i)
     entries = alts.entries
     if i > alts.number_valid

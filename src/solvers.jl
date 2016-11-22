@@ -275,11 +275,13 @@ type CachingSolver{BaseSolver}
     num_ps::Int
     new_count::Int
     new_count_limit::Int
+    alts::Alts{Float64}
     function CachingSolver(basesolver::BaseSolver, initial_p::Vector{Float64},
                            initial_z::Vector{Float64}, nn::Integer)
          ps_tree = KDTree(hcat(initial_p))
          zs = reshape(copy(initial_z), nn, 1)
-         return new(basesolver, ps_tree, zs, 1, 0, 2)
+         alts = Alts(initial_p)
+         return new(basesolver, ps_tree, zs, 1, 0, 2, alts)
     end
     function CachingSolver(nleq::ParametricNonLinEq, initial_p::Vector{Float64},
                           initial_z::Vector{Float64})
@@ -308,8 +310,8 @@ function solve(solver::CachingSolver, p)
         end
     end
 
-    idx = indnearest(solver.ps_tree, p,
-                     Alts([AltEntry(1, zeros(p), 0.0)], best_diff, idx, 1))[1]
+    init!(solver.alts, best_diff, idx)
+    idx = indnearest(solver.ps_tree, p, solver.alts)[1]
 
     if idx ≠ 0
         set_extrapolation_origin(solver.basesolver,
