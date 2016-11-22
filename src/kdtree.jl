@@ -231,5 +231,5 @@ function indnearest(tree::KDTree, p::AbstractVector, max_leaves::Int,
         l += 1
     end
 
-    return alt.best_pidx, alt
+    return alt.best_pidx
 end

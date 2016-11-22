@@ -71,7 +71,7 @@ for num = 1:50
     let ps = rand(4, num)
         t = ACME.KDTree(ps)
         for i in 1:size(ps)[2]
-            idx = ACME.indnearest(t, ps[:,i])[1]
+            idx = ACME.indnearest(t, ps[:,i])
             @test ps[:,i] == ps[:,idx]
         end
     end
@@ -81,7 +81,7 @@ let ps = rand(6, 10000)
     t = ACME.KDTree(ps)
     p = rand(6)
     best_p = ps[:,indmin(sumabs2(broadcast(-, ps, p),1))]
-    idx = ACME.indnearest(t, p)[1]
+    idx = ACME.indnearest(t, p)
     @test_approx_eq sumabs2(p - best_p) sumabs2(p - ps[:, idx])
 end
 

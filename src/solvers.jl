@@ -311,7 +311,7 @@ function solve(solver::CachingSolver, p)
     end
 
     init!(solver.alts, best_diff, idx)
-    idx = indnearest(solver.ps_tree, p, solver.alts)[1]
+    idx = indnearest(solver.ps_tree, p, solver.alts)
 
     if idx ≠ 0
         set_extrapolation_origin(solver.basesolver,
