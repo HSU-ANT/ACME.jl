@@ -574,7 +574,7 @@ function run!(model::DiscreteModel, u::AbstractMatrix{Float64})
         BLAS.gemv!('N', 1., model.eq, ucur, 1., p)
         z = solve(model.solver, p)
         if ~hasconverged(model.solver)
-            if all(isfinite(z))
+            if all(isfinite, z)
                 warn("Failed to converge while solving non-linear equation.")
             else
                 error("Failed to converge while solving non-linear equation, got non-finite result.")
