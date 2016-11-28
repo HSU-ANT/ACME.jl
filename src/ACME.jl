@@ -336,6 +336,7 @@ end
 
 function DiscreteModel{Solver}(circ::Circuit, t::Float64, ::Type{Solver}=HomotopySolver{CachingSolver{SimpleSolver}})
     mats = model_matrices(circ, t)
+    reduce_pdims!(mats)
 
     model_nonlinear_eq = quote
         #copy!(q, pfull + fq * z)
@@ -463,30 +464,6 @@ function model_matrices(circ::Circuit, t)
         res[v] = squeeze(res[v], 2)
     end
 
-    dq_full = res[:dq_full]
-    eq_full = res[:eq_full]
-    if size(dq_full)[1] > 0
-        # decompose [dq_full eq_full] into pexp*[dq eq] with [dq eq] having minimum
-        # number of rows based on the QR factorization
-        pexp, r, piv = qr([dq_full eq_full], Val{true})
-        ref_err = vecnorm([dq_full eq_full][:,piv] - pexp*r)
-        local rowcount
-        for rowcount=size(r)[1]:-1:0
-            err = vecnorm([dq_full eq_full][:,piv] - pexp[:,1:rowcount]*r[1:rowcount,:])
-            if err > ref_err
-                rowcount += 1
-                break
-            end
-        end
-        res[:dq], res[:eq] =
-            matsplit(r[1:rowcount,sortperm(piv)], [rowcount], [nx(circ); nu(circ)])
-        res[:pexp] = pexp[:,1:rowcount]
-    else
-        res[:dq] = zeros(0, nx(circ))
-        res[:eq] = zeros(0, nu(circ))
-        res[:pexp] = zeros(0, 0)
-    end
-
     p = [pv(circ) pi(circ) 0.5*px(circ)+1/t*pxd(circ) pq(circ)]
     if sumabs2(p * indeterminates) > 1e-20
         warn("Model output depends on indeterminate quantity")
@@ -498,6 +475,30 @@ function model_matrices(circ::Circuit, t)
     res[:y0] = p * vec(x[:,1])       # p * [v0; i0; x0; q0]
 
     return res
+end
+
+function reduce_pdims!(mats::Dict)
+    dq_full = mats[:dq_full]
+    eq_full = mats[:eq_full]
+    if size(dq_full, 1) > 0
+        # decompose [dq_full eq_full] into pexp*[dq eq] with [dq eq] having minimum
+        # number of rows based on the QR factorization
+        pexp, r, piv = qr([dq_full eq_full], Val{true})
+        ref_err = vecnorm([dq_full eq_full][:,piv] - pexp*r)
+        rowcount = 0
+        while vecnorm([dq_full eq_full][:,piv] - pexp[:,1:rowcount]*r[1:rowcount,:]) > ref_err
+            rowcount += 1
+        end
+
+        mats[:dq], mats[:eq] =
+            matsplit(r[1:rowcount,sortperm(piv)], [rowcount], [size(dq_full, 2); size(eq_full, 2)])
+        mats[:pexp] = pexp[:,1:rowcount]
+    else
+        mats[:dq] = zeros(0, size(dq_full, 2))
+        mats[:eq] = zeros(0, size(eq_full, 2))
+        mats[:pexp] = zeros(0, 0)
+    end
+
 end
 
 function initial_solution(nleq, q0, fq)
