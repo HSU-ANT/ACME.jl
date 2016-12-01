@@ -486,7 +486,7 @@ function reduce_pdims!(mats::Dict)
         pexp, r, piv = qr([dq_full eq_full], Val{true})
         ref_err = vecnorm([dq_full eq_full][:,piv] - pexp*r)
         rowcount = 0
-        while vecnorm([dq_full eq_full][:,piv] - pexp[:,1:rowcount]*r[1:rowcount,:]) > ref_err
+        while vecnorm([dq_full eq_full][:,piv] - pexp[:,1:rowcount]*r[1:rowcount,:]) > 2ref_err
             rowcount += 1
         end
 
