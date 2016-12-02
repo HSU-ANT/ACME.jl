@@ -120,6 +120,7 @@ let a = Rational{BigInt}[1 1 1; 1 1 2; 1 2 1; 1 2 2; 2 1 1; 2 1 2],
     mats = Dict{Symbol,Array}(:dq_full => a * b, :eq_full => zeros(Rational{BigInt},6,0), :fq => fq)
     mats[:dq_fulls]=Matrix[mats[:dq_full]]
     mats[:eq_fulls]=Matrix[mats[:eq_full]]
+    mats[:fqprev_fulls]=Matrix[mats[:eq_full]]
     mats[:fqs]=Matrix[mats[:fq]]
     ACME.reduce_pdims!(mats)
     @test size(mats[:pexps][1], 2) == 3
@@ -127,6 +128,7 @@ let a = Rational{BigInt}[1 1 1; 1 1 2; 1 2 1; 1 2 2; 2 1 1; 2 1 2],
     mats = Dict{Symbol,Array}(:dq_full => a * b + fq * z, :eq_full => zeros(Rational{BigInt},6,0), :fq => fq)
     mats[:dq_fulls]=Matrix[mats[:dq_full]]
     mats[:eq_fulls]=Matrix[mats[:eq_full]]
+    mats[:fqprev_fulls]=Matrix[mats[:eq_full]]
     mats[:fqs]=Matrix[mats[:fq]]
     ACME.reduce_pdims!(mats)
     @test size(mats[:pexps][1], 2) == 3
