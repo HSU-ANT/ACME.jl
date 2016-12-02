@@ -61,6 +61,7 @@ let circ = Circuit(), d = diode(), src=currentsource(), probe=voltageprobe()
     connect!(circ, d[:+], probe[:+])
     connect!(circ, d[:-], probe[:-])
     model = DiscreteModel(circ, 1)
+    @test ACME.nn(model) == 1
     y = run!(model, [1.0 1.0])
     @test size(y) == (1, 2)
     @test y[1,1] == y[1,2]
@@ -117,12 +118,18 @@ let a = Rational{BigInt}[1 1 1; 1 1 2; 1 2 1; 1 2 2; 2 1 1; 2 1 2],
     fq = Rational{BigInt}[1 0 0; 10 0 0; 0 1 0; 0 10 0; 0 0 1; 0 0 10],
     z = Rational{BigInt}[1 2 0 0 2 1; 0 1 2 2 0 1; 0 0 1 0 1 1]
     mats = Dict{Symbol,Array}(:dq_full => a * b, :eq_full => zeros(Rational{BigInt},6,0), :fq => fq)
+    mats[:dq_fulls]=Matrix[mats[:dq_full]]
+    mats[:eq_fulls]=Matrix[mats[:eq_full]]
+    mats[:fqs]=Matrix[mats[:fq]]
     ACME.reduce_pdims!(mats)
-    @test size(mats[:pexp], 2) == 3
-    @test mats[:pexp] * mats[:dq] == mats[:dq_full]
+    @test size(mats[:pexps][1], 2) == 3
+    @test mats[:pexps][1] * mats[:dqs][1] == mats[:dq_fulls][1]
     mats = Dict{Symbol,Array}(:dq_full => a * b + fq * z, :eq_full => zeros(Rational{BigInt},6,0), :fq => fq)
+    mats[:dq_fulls]=Matrix[mats[:dq_full]]
+    mats[:eq_fulls]=Matrix[mats[:eq_full]]
+    mats[:fqs]=Matrix[mats[:fq]]
     ACME.reduce_pdims!(mats)
-    @test size(mats[:pexp], 2) == 3
+    @test size(mats[:pexps][1], 2) == 3
 end
 
 # sources and probes with internal resistance/conductance
@@ -187,7 +194,9 @@ end
 
 function checksteady!(model)
     x_steady = steadystate!(model)
-    ACME.set_resabstol!(model.solver, 1e-13)
+    for s in model.solvers
+        ACME.set_resabstol!(s, 1e-13)
+    end
     run!(model, zeros(1, 1))
     @test model.x ≈ x_steady
 end
@@ -206,7 +215,7 @@ end
 include("../examples/diodeclipper.jl")
 let model=diodeclipper()
     println("Running diodeclipper")
-    @test ACME.np(model) == 1
+    @test ACME.np(model, 1) == 1
     y = run!(model, map(sin, 2π*1000/44100*(0:44099)'); showprogress=false)
     @test size(y) == (1,44100)
     # TODO: further validate y
@@ -226,10 +235,10 @@ end
 
 include("../examples/birdie.jl")
 let model=birdie(vol=0.8)
-    ACME.solve(model.solver, [0.003, -0.0002])
-    @assert ACME.hasconverged(model.solver)
+    ACME.solve(model.solvers[1], [0.003, -0.0002])
+    @assert all(ACME.hasconverged, model.solvers)
     println("Running birdie with fixed vol")
-    @test ACME.np(model) == 2
+    @test ACME.np(model, 1) == 2
     y = run!(model, map(sin, 2π*1000/44100*(0:44099)'); showprogress=false)
     @test size(y) == (1,44100)
     # TODO: further validate y
@@ -237,7 +246,7 @@ let model=birdie(vol=0.8)
 end
 let model=birdie()
     println("Running birdie with varying vol")
-    @test ACME.np(model) == 3
+    @test ACME.np(model, 1) == 3
     y = run!(model, [map(sin, 2π*1000/44100*(0:44099).'); linspace(1,0,44100).']; showprogress=false)
     @test size(y) == (1,44100)
     # TODO: further validate y
@@ -246,7 +255,7 @@ end
 include("../examples/superover.jl")
 let model=superover(drive=1.0, tone=1.0, level=1.0)
     println("Running superover with fixed potentiometer values")
-    @test ACME.np(model) == 5
+    @test ACME.np(model, 1) == 5
     y = run!(model, map(sin, 2π*1000/44100*(0:44099)'); showprogress=false)
     @test size(y) == (1,44100)
     # TODO: further validate y
@@ -254,7 +263,7 @@ let model=superover(drive=1.0, tone=1.0, level=1.0)
 end
 let model=superover()
     println("Running superover with varying potentiometer values")
-    @test ACME.np(model) == 11
+    @test ACME.np(model, 1) == 11
     y = run!(model, [map(sin, 2π*1000/44100*(0:999)'); linspace(1,0,1000).'; linspace(0,1,1000).'; linspace(1,0,1000).']; showprogress=false)
     @test size(y) == (1,1000)
     # TODO: further validate y

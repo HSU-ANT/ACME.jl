@@ -285,24 +285,24 @@ end
 topomat{T<:Integer}(incidence::SparseMatrixCSC{T}) = topomat!(copy(incidence))
 topomat(c::Circuit) = topomat!(incidence(c))
 
-type DiscreteModel{Solver}
+type DiscreteModel{Solvers}
     a::Matrix{Float64}
     b::Matrix{Float64}
     c::Matrix{Float64}
     x0::Vector{Float64}
-    pexp::Matrix{Float64}
-    dq::Matrix{Float64}
-    eq::Matrix{Float64}
-    fq::Matrix{Float64}
-    q0::Vector{Float64}
+    pexps::Vector{Matrix{Float64}}
+    dqs::Vector{Matrix{Float64}}
+    eqs::Vector{Matrix{Float64}}
+    fqs::Vector{Matrix{Float64}}
+    q0s::Vector{Vector{Float64}}
     dy::Matrix{Float64}
     ey::Matrix{Float64}
     fy::Matrix{Float64}
     y0::Vector{Float64}
 
-    nonlinear_eq :: Expr
+    nonlinear_eqs::Vector{Expr}
 
-    solver::Solver
+    solvers::Solvers
     x::Vector{Float64}
 
     @compat function (::Type{DiscreteModel{Solver}}){Solver}(circ::Circuit, t::Float64)
@@ -311,15 +311,15 @@ type DiscreteModel{Solver}
         DiscreteModel(circ, t, Solver)
     end
 
-    @compat function (::Type{DiscreteModel{Solver}}){Solver}(mats::Dict{Symbol}, nonlinear_eq::Expr, solver::Solver)
-        model = new{Solver}()
+    @compat function (::Type{DiscreteModel{Solvers}}){Solvers}(mats::Dict{Symbol}, nonlinear_eqs::Vector{Expr}, solvers::Solvers)
+        model = new{Solvers}()
 
-        for mat in (:a, :b, :c, :pexp, :dq, :eq, :fq, :dy, :ey, :fy, :x0, :q0, :y0)
+        for mat in (:a, :b, :c, :pexps, :dqs, :eqs, :fqs, :dy, :ey, :fy, :x0, :q0s, :y0)
             setfield!(model, mat, convert(fieldtype(typeof(model), mat), mats[mat]))
         end
 
-        model.nonlinear_eq = nonlinear_eq
-        model.solver = solver
+        model.nonlinear_eqs = nonlinear_eqs
+        model.solvers = solvers
         model.x = zeros(nx(model))
         return model
     end
@@ -327,52 +327,60 @@ end
 
 function DiscreteModel{Solver}(circ::Circuit, t::Real, ::Type{Solver}=HomotopySolver{CachingSolver{SimpleSolver}})
     mats = model_matrices(circ, t)
+
+    nl_elems = filter(e -> nn(circ.elements[e]) > 0, collect(eachindex(circ.elements)))
+
+    mats[:dq_fulls]=Matrix[mats[:dq_full]]
+    mats[:eq_fulls]=Matrix[mats[:eq_full]]
+    mats[:fqs]=Matrix[mats[:fq]]
+    mats[:q0s]=Vector[mats[:q0]]
+
     reduce_pdims!(mats)
 
-    model_nonlinear_eq = quote
+    model_nonlinear_eqs = [quote
         #copy!(q, pfull + fq * z)
         copy!(q, pfull)
         BLAS.gemv!('N',1.,fq,z,1.,q)
         let J=Jq
-            $(nonlinear_eq(circ))
+            $(nonlinear_eq(circ, nl_elems))
         end
         #copy!(J, Jq*model.fq)
         BLAS.gemm!('N', 'N', 1., Jq, fq, 0., J)
-    end
+    end]
 
-    model_nq = length(mats[:q0])
-    model_nn = size(mats[:fq],2)
-    model_np = size(mats[:dq],1)
+    model_nqs = map(length, mats[:q0s])
+    model_nns = map(fq -> size(fq, 2), mats[:fqs])
+    model_nps = map(dq -> size(dq, 1), mats[:dqs])
 
-    @assert nn(circ) == model_nn
+    @assert nn(circ) == sum(model_nns)
 
-    q0 = convert(Vector{Float64}, mats[:q0])
-    pexp = convert(Matrix{Float64}, mats[:pexp])
-    fq = convert(Matrix{Float64}, mats[:fq])
+    q0s = map(m -> convert(Array{Float64}, m), mats[:q0s])
+    fqs = map(m -> convert(Array{Float64}, m), mats[:fqs])
+    pexps = map(m -> convert(Array{Float64}, m), mats[:pexps])
 
-    init_z = initial_solution(model_nonlinear_eq, q0, fq)
-    nonlinear_eq_func = eval(quote
+    # TODO: needs proper implementation once multiple nonlinear eqs are possible
+    init_zs = Vector{Float64}[initial_solution(model_nonlinear_eqs[1], q0s[1], fqs[1])]
+    nonlinear_eq_funcs = [eval(quote
         if VERSION < v"0.5.0-dev+2396"
             # wrap up in named function because anonymous functions are slow
             # in old Julia versions
             function $(gensym())(res, J, scratch, z)
                 pfull=scratch[1]
                 Jq=scratch[2]
-                q=$(zeros(model_nq))
+                q=$(zeros(nq))
                 fq=$fq
-                $(model_nonlinear_eq)
+                $(nonlinear_eq)
                 return nothing
             end
         else
             (res, J, scratch, z) ->
-                let pfull=scratch[1], Jq=scratch[2], q=$(zeros(model_nq)),
-                    fq=$fq
-                    $(model_nonlinear_eq)
+                let pfull=scratch[1], Jq=scratch[2], q=$(zeros(nq)), fq=$fq
+                    $(nonlinear_eq)
                     return nothing
                 end
         end
-    end)
-    nonlinear_eq_set_p = eval(quote
+    end) for (nonlinear_eq, fq, nq) in zip(model_nonlinear_eqs, fqs, model_nqs)]
+    nonlinear_eq_set_ps = [eval(quote
         if VERSION < v"0.5.0-dev+2396"
             # wrap up in named function because anonymous functions are slow
             # in old Julia versions
@@ -393,8 +401,8 @@ function DiscreteModel{Solver}(circ::Circuit, t::Real, ::Type{Solver}=HomotopySo
                     return nothing
                 end
         end
-    end)
-    nonlinear_eq_calc_Jp = eval(quote
+    end) for (pexp, q0) in zip(pexps, q0s)]
+    nonlinear_eq_calc_Jps = [eval(quote
         if VERSION < v"0.5.0-dev+2396"
             # wrap up in named function because anonymous functions are slow
             # in old Julia versions
@@ -413,13 +421,15 @@ function DiscreteModel{Solver}(circ::Circuit, t::Real, ::Type{Solver}=HomotopySo
                     return nothing
                 end
         end
-    end)
-    solver = eval(:($Solver(ParametricNonLinEq($nonlinear_eq_func, $nonlinear_eq_set_p,
-                                       $nonlinear_eq_calc_Jp,
-                                       (zeros($model_nq), zeros($model_nn, $model_nq)),
-                                       $model_nn, $model_np),
-                    zeros($model_np), $init_z)))
-    return DiscreteModel{typeof(solver)}(mats, model_nonlinear_eq, solver)
+    end) for pexp in pexps]
+    solvers = ([eval(:($Solver(ParametricNonLinEq($nonlinear_eq_funcs[$idx],
+                                          $nonlinear_eq_set_ps[$idx],
+                                          $nonlinear_eq_calc_Jps[$idx],
+                                          (zeros($model_nqs[$idx]), zeros($model_nns[$idx], $model_nqs[$idx])),
+                                          $model_nns[$idx], $model_nps[$idx]),
+                       zeros($model_nps[$idx]), $init_zs[$idx])))
+                for idx in eachindex(model_nonlinear_eqs)]...)
+    return DiscreteModel{typeof(solvers)}(mats, model_nonlinear_eqs, solvers)
 end
 
 function model_matrices(circ::Circuit, t::Rational{BigInt})
@@ -471,22 +481,29 @@ end
 model_matrices(circ::Circuit, t) = model_matrices(circ, Rational{BigInt}(t))
 
 function reduce_pdims!(mats::Dict)
-    # decompose [dq_full eq_full] into pexp*[dq eq] with [dq eq] having minimum
-    # number of rows
-    pexp, dqeq = rank_factorize(sparse([mats[:dq_full] mats[:eq_full]]))
-    mats[:pexp] = pexp
-    colsizes = [size(mats[m], 2) for m in [:dq_full, :eq_full]]
-    mats[:dq], mats[:eq] = matsplit(dqeq, [size(dqeq, 1)], colsizes)
+    subcount = length(mats[:dq_fulls])
+    mats[:dqs] = Vector{Matrix}(subcount)
+    mats[:eqs] = Vector{Matrix}(subcount)
+    mats[:pexps] = Vector{Matrix}(subcount)
+    for idx in 1:subcount
+        # decompose [dq_full eq_full] into pexp*[dq eq] with [dq eq] having minimum
+        # number of rows
+        pexp, dqeq = rank_factorize(sparse([mats[:dq_fulls][idx] mats[:eq_fulls][idx]]))
+        mats[:pexps][idx] = pexp
+        colsizes = [size(mats[m][idx], 2) for m in [:dq_fulls, :eq_fulls]]
+        mats[:dqs][idx], mats[:eqs][idx] = matsplit(dqeq, [size(dqeq, 1)], colsizes)
 
-    # project pexp onto the orthogonal complement of the column space of Fq
-    fq_pinv = gensolve(sparse(mats[:fq]'*mats[:fq]), mats[:fq]')[1]
-    pexp = pexp - mats[:fq]*fq_pinv*pexp
-    # if the new pexp has lower rank, update
-    pexp, f = rank_factorize(sparse(pexp))
-    if size(pexp, 2) < size(mats[:pexp], 2)
-        mats[:pexp] = pexp
-        mats[:dq] = f * mats[:dq]
-        mats[:eq] = f * mats[:eq]
+        # project pexp onto the orthogonal complement of the column space of Fq
+        fq = mats[:fqs][idx]
+        fq_pinv = gensolve(sparse(fq'*fq), fq')[1]
+        pexp = pexp - fq*fq_pinv*pexp
+        # if the new pexp has lower rank, update
+        pexp, f = rank_factorize(sparse(pexp))
+        if size(pexp, 2) < size(mats[:pexps][idx], 2)
+            mats[:pexps][idx] = pexp
+            mats[:dqs][idx] = f * mats[:dqs][idx]
+            mats[:eqs][idx] = f * mats[:eqs][idx]
+        end
     end
 end
 
@@ -512,27 +529,29 @@ function initial_solution(nleq, q0, fq)
 end
 
 nx(model::DiscreteModel) = length(model.x0)
-nq(model::DiscreteModel) = length(model.q0)
-np(model::DiscreteModel) = size(model.dq, 1)
-nu(model::DiscreteModel) = size(model.eq, 2)
+nq(model::DiscreteModel, subidx) = length(model.q0s[subidx])
+np(model::DiscreteModel, subidx) = size(model.dqs[subidx], 1)
+nu(model::DiscreteModel) = size(model.b, 2)
 ny(model::DiscreteModel) = length(model.y0)
-nn(model::DiscreteModel) = size(model.fq, 2)
+nn(model::DiscreteModel, subidx) = size(model.fqs[subidx], 2)
+nn(model::DiscreteModel) = sum([size(fq, 2) for fq in model.fqs])
 
 function steadystate(model::DiscreteModel, u=zeros(nu(model)))
+    # TODO: needs proper implementation once multiple nonlinear eqs are possible
     IA_LU = lufact(eye(nx(model))-model.a)
-    steady_q0 = model.q0 + model.pexp*(model.dq/IA_LU*model.b + model.eq)*u +
-    model.pexp*model.dq/IA_LU*model.x0
+    steady_q0 = model.q0s[1] + model.pexps[1]*(model.dqs[1]/IA_LU*model.b + model.eqs[1])*u +
+        model.pexps[1]*model.dqs[1]/IA_LU*model.x0
     steady_z = eval(quote
         steady_nl_eq_func = (res, J, scratch, z) ->
             let pfull=scratch[1], Jp=scratch[2],
-                q=$(zeros(nq(model))), Jq=$(zeros(nn(model), nq(model))),
-                fq=$(model.pexp*model.dq/IA_LU*model.c + model.fq)
-                $(model.nonlinear_eq)
+                q=$(zeros(nq(model,1))), Jq=$(zeros(nn(model,1), nq(model,1))),
+                fq=$(model.pexps[1]*model.dqs[1]/IA_LU*model.c + model.fqs[1])
+                $(model.nonlinear_eqs[1])
                 return nothing
             end
-        steady_nleq = ParametricNonLinEq(steady_nl_eq_func, nn($model), nq($model))
-        steady_solver = HomotopySolver{SimpleSolver}(steady_nleq, zeros(nq($model)),
-                                                     zeros(nn($model)))
+        steady_nleq = ParametricNonLinEq(steady_nl_eq_func, nn($model, 1), nq($model, 1))
+        steady_solver = HomotopySolver{SimpleSolver}(steady_nleq, zeros(nq($model, 1)),
+                                                     zeros(nn($model, 1)))
         set_resabstol!(steady_solver, 1e-15)
         steady_z = solve(steady_solver, $steady_q0)
         if !hasconverged(steady_solver)
@@ -575,7 +594,7 @@ immutable ModelRunner{Model<:DiscreteModel,ShowProgress}
     xnew::Vector{Float64}
     @compat function (::Type{ModelRunner{Model,ShowProgress}}){Model<:DiscreteModel,ShowProgress}(model::Model)
         ucur = Array{Float64,1}(nu(model))
-        p = Array{Float64,1}(np(model))
+        p = Array{Float64,1}(np(model, 1))
         ycur = Array{Float64,1}(ny(model))
         xnew = Array{Float64,1}(nx(model))
         return new{Model,ShowProgress}(model, ucur, p, ycur, xnew)
@@ -671,14 +690,14 @@ function step!(runner::ModelRunner, y::AbstractMatrix{Float64}, u::AbstractMatri
     xnew = runner.xnew
     # copy!(p, model.dq * model.x + model.eq * u[:,n])
     copy!(ucur, 1, u, (n-1)*nu(model)+1, nu(model))
-    if size(model.dq, 2) == 0
+    if size(model.dqs[1], 2) == 0
         fill!(p, 0.0)
     else
-        BLAS.gemv!('N', 1., model.dq, model.x, 0., p)
+        BLAS.gemv!('N', 1., model.dqs[1], model.x, 0., p)
     end
-    BLAS.gemv!('N', 1., model.eq, ucur, 1., p)
-    z = solve(model.solver, p)
-    if !hasconverged(model.solver)
+    BLAS.gemv!('N', 1., model.eqs[1], ucur, 1., p)
+    z = solve(model.solvers[1], p)
+    if !hasconverged(model.solvers[1])
         if all(isfinite, z)
             warn("Failed to converge while solving non-linear equation.")
         else
