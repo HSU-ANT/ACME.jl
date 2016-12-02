@@ -237,10 +237,11 @@ end
 
 include("../examples/birdie.jl")
 let model=birdie(vol=0.8)
-    ACME.solve(model.solvers[1], [0.003, -0.0002])
+    ACME.solve(model.solvers[2], [0.003, -0.0002])
     @assert all(ACME.hasconverged, model.solvers)
     println("Running birdie with fixed vol")
-    @test ACME.np(model, 1) == 2
+    @test ACME.np(model, 1) == 0
+    @test ACME.np(model, 2) == 2
     y = run!(model, map(sin, 2π*1000/44100*(0:44099)'); showprogress=false)
     @test size(y) == (1,44100)
     # TODO: further validate y
@@ -248,7 +249,8 @@ let model=birdie(vol=0.8)
 end
 let model=birdie()
     println("Running birdie with varying vol")
-    @test ACME.np(model, 1) == 3
+    @test ACME.np(model, 1) == 0
+    @test ACME.np(model, 2) == 3
     y = run!(model, [map(sin, 2π*1000/44100*(0:44099).'); linspace(1,0,44100).']; showprogress=false)
     @test size(y) == (1,44100)
     # TODO: further validate y
@@ -257,6 +259,29 @@ end
 include("../examples/superover.jl")
 let model=superover(drive=1.0, tone=1.0, level=1.0)
     println("Running superover with fixed potentiometer values")
+    @test ACME.np(model, 1) == 0
+    @test ACME.np(model, 2) == 5
+    y = run!(model, map(sin, 2π*1000/44100*(0:44099)'); showprogress=false)
+    @test size(y) == (1,44100)
+    # TODO: further validate y
+    checksteady!(model)
+end
+let circ=superover(Circuit, drive=1.0, tone=1.0, level=1.0)
+    println("Running simplified superover with fixed potentiometer values")
+    vbsrc = voltagesource(4.5)
+    connect!(circ, vbsrc[:+], :vb)
+    connect!(circ, vbsrc[:-], :gnd)
+    model = DiscreteModel(circ, 1/44100)
+    @test ACME.np(model, 1) == 0
+    @test ACME.np(model, 2) == 2
+    @test ACME.np(model, 3) == 1
+    @test ACME.np(model, 4) == 2
+    y = run!(model, map(sin, 2π*1000/44100*(0:44099)'); showprogress=false)
+    @test size(y) == (1,44100)
+    # TODO: further validate y
+    checksteady!(model)
+    println("Running simplified, non-decomposed superover with fixed potentiometer values")
+    model = DiscreteModel(circ, 1/44100, decompose_nonlinearity=false)
     @test ACME.np(model, 1) == 5
     y = run!(model, map(sin, 2π*1000/44100*(0:44099)'); showprogress=false)
     @test size(y) == (1,44100)
@@ -265,7 +290,23 @@ let model=superover(drive=1.0, tone=1.0, level=1.0)
 end
 let model=superover()
     println("Running superover with varying potentiometer values")
-    @test ACME.np(model, 1) == 11
+    @test ACME.np(model, 1) == 0
+    @test ACME.np(model, 2) == 11
+    y = run!(model, [map(sin, 2π*1000/44100*(0:999)'); linspace(1,0,1000).'; linspace(0,1,1000).'; linspace(1,0,1000).']; showprogress=false)
+    @test size(y) == (1,1000)
+    # TODO: further validate y
+end
+let circ=superover(Circuit)
+    println("Running simplified superover with varying potentiometer values")
+    vbsrc = voltagesource(4.5)
+    connect!(circ, vbsrc[:+], :vb)
+    connect!(circ, vbsrc[:-], :gnd)
+    model = DiscreteModel(circ, 1/44100)
+    @test ACME.np(model, 1) == 0
+    @test ACME.np(model, 2) == 2
+    @test ACME.np(model, 3) == 2
+    @test ACME.np(model, 4) == 2
+    @test ACME.np(model, 5) == 4
     y = run!(model, [map(sin, 2π*1000/44100*(0:999)'); linspace(1,0,1000).'; linspace(0,1,1000).'; linspace(1,0,1000).']; showprogress=false)
     @test size(y) == (1,1000)
     # TODO: further validate y

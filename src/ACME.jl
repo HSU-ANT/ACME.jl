@@ -10,6 +10,7 @@ export Circuit, add!, connect!, DiscreteModel, run!, steadystate, steadystate!,
 
 using ProgressMeter
 using Compat
+using Iterators
 
 import Base.getindex
 
@@ -326,13 +327,20 @@ type DiscreteModel{Solvers}
     end
 end
 
-function DiscreteModel{Solver}(circ::Circuit, t::Real, ::Type{Solver}=HomotopySolver{CachingSolver{SimpleSolver}})
+function DiscreteModel{Solver}(circ::Circuit, t::Real, ::Type{Solver}=HomotopySolver{CachingSolver{SimpleSolver}};
+                               decompose_nonlinearity=true)
     mats = model_matrices(circ, t)
 
-    nl_elems = Vector{Int}[filter(e -> nn(circ.elements[e]) > 0, collect(eachindex(circ.elements)))]
+    nns = Int[nn(e) for e in circ.elements]
+    nqs = Int[nq(e) for e in circ.elements]
+    if decompose_nonlinearity
+        nl_elems = nldecompose!(mats, nns, nqs)
+    else
+        nl_elems = Vector{Int}[filter(e -> nn(circ.elements[e]) > 0, eachindex(circ.elements))]
+    end
 
-    model_nns = Int[mapreduce(nn, +, 0, circ.elements[nles]) for nles in nl_elems]
-    model_nqs = Int[mapreduce(nq, +, 0, circ.elements[nles]) for nles in nl_elems]
+    model_nns = Int[sum(nns[nles]) for nles in nl_elems]
+    model_nqs = Int[sum(nqs[nles]) for nles in nl_elems]
     split_nl_model_matrices!(mats, model_nqs, model_nns)
 
     reduce_pdims!(mats)
@@ -481,6 +489,67 @@ function model_matrices(circ::Circuit, t::Rational{BigInt})
 end
 
 model_matrices(circ::Circuit, t) = model_matrices(circ, Rational{BigInt}(t))
+
+function tryextract(fq, numcols)
+    a = eye(eltype(fq), size(fq,2))
+    if numcols ≥ size(fq,2)
+        return Nullable(a)
+    end
+    for colcnt in 1:numcols
+        # determine element with maximum absolute value in unprocessed columns
+        # to use as pivot
+        i, j = ind2sub(size(fq), indmax(map(abs, fq[:,colcnt:end])))
+        j += colcnt-1
+
+        # swap pivot to first (unprocessed) column
+        fq[:,[colcnt, j]] = fq[:,[j, colcnt]]
+        a[:,[colcnt, j]] = a[:,[j, colcnt]]
+
+        # elimnate remaining columns in i-th row and perform equivalent
+        # transformation to a
+        jj = colcnt+1:size(fq,2)
+        a[:,jj] -= a[:,colcnt] * (fq[[i],jj] / fq[i,colcnt])
+        fq[:,jj] -= fq[:,colcnt] * (fq[[i],jj] / fq[i,colcnt])
+        # ignore i-th row in following processing steps
+        fq = fq[[1:i-1; i+1:end],:]
+
+        if countnz(fq[:,colcnt+1:end]) == 0
+            return Nullable(a)
+        end
+    end
+    return Nullable{typeof(a)}()
+end
+
+function nldecompose!(mats, nns, nqs)
+    fq = mats[:fq]
+    a = eye(eltype(fq), size(fq,2))
+    sub_ranges = consecranges(nqs)
+    extracted_subs = Vector{Int}[]
+    rem_cols = 1:size(fq, 2)
+    rem_nles = IntSet(filter!(e -> nqs[e] > 0, collect(eachindex(nqs))))
+
+    while !isempty(rem_nles)
+        for sz in 1:length(rem_nles), sub in subsets(collect(rem_nles), sz)
+            nn_sub = sum(nns[sub])
+            maybe_a = tryextract(fq[[sub_ranges[sub]...;],rem_cols], nn_sub)
+            if !isnull(maybe_a)
+                fq[:,rem_cols] = fq[:,rem_cols] * get(maybe_a)
+                a[:,rem_cols] = a[:,rem_cols] * get(maybe_a)
+                rem_cols = first(rem_cols)+nn_sub:size(fq, 2)
+                push!(extracted_subs, sub)
+                for nle in sub
+                    delete!(rem_nles, nle)
+                end
+                break
+            end
+        end
+    end
+
+    mats[:c] = mats[:c] * a
+    # mats[:fq] is updated as part of the loop
+    mats[:fy] = mats[:fy] * a
+    return extracted_subs
+end
 
 function split_nl_model_matrices!(mats, model_nqs, model_nns)
     mats[:dq_fulls] = Matrix[matsplit(mats[:dq_full], model_nqs)...]
@@ -799,7 +868,7 @@ function rank_factorize(a::SparseMatrixCSC)
     return c, f
 end
 
-consecranges(lengths) = map(range, cumsum([1; lengths[1:end-1]]), lengths)
+consecranges(lengths) = isempty(lengths) ? [] : map(range, cumsum([1; lengths[1:end-1]]), lengths)
 
 matsplit(v::AbstractVector, rowsizes) = [v[rs] for rs in consecranges(rowsizes)]
 matsplit(m::AbstractMatrix, rowsizes, colsizes=[size(m,2)]) =
