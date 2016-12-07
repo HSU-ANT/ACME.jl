@@ -297,7 +297,11 @@ hasconverged(solver::CachingSolver) = hasconverged(solver.basesolver)
 needediterations(solver::CachingSolver) = needediterations(solver.basesolver)
 
 function solve(solver::CachingSolver, p)
-    best_diff = sumabs2(p - get_extrapolation_origin(solver.basesolver)[1])
+    origin_p = get_extrapolation_origin(solver.basesolver)[1]
+    best_diff = 0.0
+    for i in eachindex(origin_p)
+        best_diff += abs2(p[i] - origin_p[i])
+    end
     idx = 0
     for i in (solver.num_ps-solver.new_count+1):solver.num_ps
         diff = 0.
