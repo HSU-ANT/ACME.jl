@@ -141,6 +141,7 @@ end
 include("../examples/diodeclipper.jl")
 let model=diodeclipper()
     println("Running diodeclipper")
+    @test ACME.np(model) == 1
     y = run!(model, map(sin, 2π*1000/44100*(0:44099)'))
     @test size(y) == (1,44100)
     # TODO: further validate y
@@ -152,6 +153,7 @@ let model=birdie(vol=0.8)
     ACME.solve(model.solver, [0.003, -0.0002])
     @assert ACME.hasconverged(model.solver)
     println("Running birdie with fixed vol")
+    @test ACME.np(model) == 2
     y = run!(model, map(sin, 2π*1000/44100*(0:44099)'))
     @test size(y) == (1,44100)
     # TODO: further validate y
@@ -159,6 +161,7 @@ let model=birdie(vol=0.8)
 end
 let model=birdie()
     println("Running birdie with varying vol")
+    @test ACME.np(model) == 3
     y = run!(model, [map(sin, 2π*1000/44100*(0:44099).'); linspace(1,0,44100).'])
     @test size(y) == (1,44100)
     # TODO: further validate y
@@ -167,6 +170,7 @@ end
 include("../examples/superover.jl")
 let model=superover(drive=1.0, tone=1.0, level=1.0)
     println("Running superover with fixed potentiometer values")
+    @test ACME.np(model) ∈ 5:6 # should be 5, but numerical errors lead to 6 with Julia 0.4
     y = run!(model, map(sin, 2π*1000/44100*(0:44099)'))
     @test size(y) == (1,44100)
     # TODO: further validate y
@@ -174,6 +178,7 @@ let model=superover(drive=1.0, tone=1.0, level=1.0)
 end
 let model=superover()
     println("Running superover with varying potentiometer values")
+    @test ACME.np(model) == 11
     y = run!(model, [map(sin, 2π*1000/44100*(0:999)'); linspace(1,0,1000).'; linspace(0,1,1000).'; linspace(1,0,1000).'])
     @test size(y) == (1,1000)
     # TODO: further validate y
