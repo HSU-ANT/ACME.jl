@@ -621,15 +621,17 @@ end
 function gensolve(a::SparseMatrixCSC, b, x, h, thresh=0.1)
     m = size(a)[1]
     t = sortperm(vec(sum(spones(a),2))) # row indexes in ascending order of nnz
+    tol = 3 * max(eps(float(eltype(a))), eps(float(eltype(h)))) * size(a, 2)
     for i in 1:m
         ait = a[t[i:i],:] # ait is a row of the a matrix # !SV
         s = ait * h;
-        if nnz(s) == 0
-            continue
-        end
         inz, jnz, nz_vals = findnz(s)
         nz_abs_vals = map(abs, nz_vals)
-        jat = jnz[nz_abs_vals .≥ thresh*maximum(nz_abs_vals)] # cols above threshold
+        max_abs_val = reduce(max, zero(eltype(s)), nz_abs_vals)
+        if max_abs_val ≤ tol # cosidered numerical zero
+            continue
+        end
+        jat = jnz[nz_abs_vals .≥ thresh*max_abs_val] # cols above threshold
         j = jat[indmin(sum(spones(h[:,jat])))]
         q = h[:,j:j] # !SV
         # ait*q only has a single element!
