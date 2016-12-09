@@ -437,18 +437,18 @@ function model_matrices(circ::Circuit, t)
     rowsizes = [nb(circ); nb(circ); nx(circ); nq(circ)]
     res = Dict{Symbol,Array{Float64}}(zip([:fv; :fi; :c; :fq], matsplit(f, rowsizes)))
 
-    indeterminates = zeros(size(f,1), 0)
-    if size(res[:fq], 2) > nn(circ)
-        fq = res[:fq]
-        q, r, piv = qr(fq.', Val{true}, thin=false)
-        # fq[piv,:]*q ~ r'
-        indeterminates = f * q[:,nn(circ)+1:end]
-        if normsquared(res[:c] * q[:,nn(circ)+1:end]) > 1e-20
-            warn("State update depends on indeterminate quantity")
-        end
-        f *= q[:,1:nn(circ)]
+    nullspace = gensolve(sparse(res[:fq]), spzeros(size(res[:fq],1), 0))[2]
+    indeterminates = f * nullspace
+
+    if normsquared(res[:c] * nullspace) > 1e-20
+        warn("State update depends on indeterminate quantity")
+    end
+    while size(nullspace, 2) > 0
+        i, j = ind2sub(size(nullspace), indmax(map(abs, nullspace)))
+        nullspace = nullspace[[1:i-1; i+1:end], [1:j-1; j+1:end]]
+        f = f[:, [1:j-1; j+1:end]]
         for k in [:fv; :fi; :c; :fq]
-            res[k] *= q[:,1:nn(circ)]
+            res[k] = res[k][:, [1:j-1; j+1:end]]
         end
     end
 
