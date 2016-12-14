@@ -452,11 +452,14 @@ function model_matrices(circ::Circuit, t)
         end
     end
 
-    # choose particular solution such that the rows corresponding to q are
-    # column-wise orthogonal to the column space of fq (and hence have a column
-    # space of minimal dimension)
-    fq = res[:fq]
-    x = x - f/(fq'*fq)*fq'*x[end-nq(circ)+1:end,:]
+    # This would choose a particular solution such that the rows corresponding
+    # to q are column-wise orthogonal to the column space of fq (and hence have
+    # a column space of minimal dimension). However, this destroys all sparsity
+    # in x and leads to numerical difficulties in actually finding a rank
+    # factorization of [dq eq], while no case has been found so far where it
+    # actually reduces the rank. Hence, it is disabled for now, but a warning is
+    # produced if it could be helpful (see reduce_pdims! below).
+    #x = x - f*pinv(res[:fq])*x[end-nq(circ)+1:end,:]
 
     merge!(res, Dict(zip([:v0 :ev :dv; :i0 :ei :di; :x0 :b :a; :q0 :eq_full :dq_full],
                          matsplit(x, rowsizes, [1; nu(circ); nx(circ)]))))
@@ -493,6 +496,9 @@ function reduce_pdims!(mats::Dict)
         mats[:dq], mats[:eq] =
             matsplit(r[1:rowcount,sortperm(piv)], [rowcount], [size(dq_full, 2); size(eq_full, 2)])
         mats[:pexp] = pexp[:,1:rowcount]
+        if rank([dq_full eq_full]-mats[:fq]*pinv(mats[:fq])*[dq_full eq_full]) < rowcount
+            warn("Dimension of p could be further reduced by projecting onto the orthogonal complement of the column space of Fq. However, this has not been implemented due to numerical difficulties.")
+        end
     else
         mats[:dq] = zeros(0, size(dq_full, 2))
         mats[:eq] = zeros(0, size(eq_full, 2))
