@@ -443,7 +443,7 @@ function model_matrices(circ::Circuit, t)
         q, r, piv = qr(fq.', Val{true}, thin=false)
         # fq[piv,:]*q ~ r'
         indeterminates = f * q[:,nn(circ)+1:end]
-        if sumabs2(res[:c] * q[:,nn(circ)+1:end]) > 1e-20
+        if normsquared(res[:c] * q[:,nn(circ)+1:end]) > 1e-20
             warn("State update depends on indeterminate quantity")
         end
         f *= q[:,1:nn(circ)]
@@ -465,7 +465,7 @@ function model_matrices(circ::Circuit, t)
     end
 
     p = [pv(circ) pi(circ) 0.5*px(circ)+1/t*pxd(circ) pq(circ)]
-    if sumabs2(p * indeterminates) > 1e-20
+    if normsquared(p * indeterminates) > 1e-20
         warn("Model output depends on indeterminate quantity")
     end
     res[:dy] = p * x[:,2+nu(circ):end] + 0.5*px(circ)-1/t*pxd(circ)
@@ -644,6 +644,14 @@ consecranges(lengths) = map(range, cumsum([1; lengths[1:end-1]]), lengths)
 
 matsplit(m, rowsizes, colsizes=[size(m)[2]]) =
     [m[rs, cs] for rs in consecranges(rowsizes), cs in consecranges(colsizes)]
+
+    if VERSION < v"0.5.0"
+        # this is deprecated starting in Julia 0.6
+        normsquared(x) = sumabs2(x)
+    else
+        # prior to Julia 0.5, this fails for empty x and is slow
+        normsquared(x) = sum(abs2, x)
+    end
 
 if VERSION >= v"0.6.0-dev.1553"
     # workaround for JuliaLang/julia#19595

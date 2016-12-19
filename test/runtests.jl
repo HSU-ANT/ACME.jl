@@ -80,9 +80,9 @@ end
 let ps = rand(6, 10000)
     t = ACME.KDTree(ps)
     p = rand(6)
-    best_p = ps[:,indmin(sumabs2(broadcast(-, ps, p),1))]
+    best_p = ps[:,indmin(sum(abs2, broadcast(-, ps, p),1))]
     idx = ACME.indnearest(t, p)
-    @test_approx_eq sumabs2(p - best_p) sumabs2(p - ps[:, idx])
+    @test_approx_eq sum(abs2, p - best_p) sum(abs2, p - ps[:, idx])
 end
 
 let nleq = ACME.ParametricNonLinEq((res, J, scratch, z) ->
