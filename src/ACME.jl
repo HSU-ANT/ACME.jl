@@ -645,4 +645,11 @@ consecranges(lengths) = map(range, cumsum([1; lengths[1:end-1]]), lengths)
 matsplit(m, rowsizes, colsizes=[size(m)[2]]) =
     [m[rs, cs] for rs in consecranges(rowsizes), cs in consecranges(colsizes)]
 
+if VERSION >= v"0.6.0-dev.1553"
+    # workaround for JuliaLang/julia#19595
+    import Base: +, -
+    +(x1::SparseMatrixCSC{Real}, x2::SparseMatrixCSC{Real}) = broadcast!(+, similar(x1), x1, x2)
+    -(x1::SparseMatrixCSC{Real}, x2::SparseMatrixCSC{Real}) = broadcast!(-, similar(x1), x1, x2)
+end
+
 end # module
