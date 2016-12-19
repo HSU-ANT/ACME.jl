@@ -253,7 +253,7 @@ function topomat!{T<:Integer}(incidence::SparseMatrixCSC{T})
         t[col] = true;
 
         if rows[1] ≠ row
-            swaprows!(incidence, rows[1], row)
+            incidence[[rows[1], row], :] = incidence[[row, rows[1]], :]
         end
         if length(rows) == 2
             @assert incidence[row, col] + incidence[rows[2], col] == 0
@@ -601,17 +601,6 @@ function run!(model::DiscreteModel, u::AbstractMatrix{Float64})
         copy!(model.x, xnew)
     end
     return y
-end
-
-function swaprows!(a::SparseMatrixCSC, row1, row2)
-    # This sometimes gives a wrong result with julia 0.3.2:
-    #    a[[row1, row2],:] = a[[row2, row1],:]
-    i, j, v = findnz(a)
-    row1idx = i.==row1
-    row2idx = i.==row2
-    i[row1idx] = row2
-    i[row2idx] = row1
-    a[:,:] = sparse(i, j, v, size(a)...)
 end
 
 # lines marked with !SV avoid creation of SparseVector by indexing with Ranges
