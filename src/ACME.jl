@@ -481,30 +481,29 @@ function model_matrices(circ::Circuit, t)
 end
 
 function reduce_pdims!(mats::Dict)
-    dq_full = mats[:dq_full]
-    eq_full = mats[:eq_full]
-    if size(dq_full, 1) > 0
-        # decompose [dq_full eq_full] into pexp*[dq eq] with [dq eq] having minimum
-        # number of rows based on the QR factorization
-        pexp, r, piv = qr([dq_full eq_full], Val{true})
-        ref_err = vecnorm([dq_full eq_full][:,piv] - pexp*r)
-        rowcount = 0
-        while vecnorm([dq_full eq_full][:,piv] - pexp[:,1:rowcount]*r[1:rowcount,:]) > 2ref_err
-            rowcount += 1
-        end
+    dqeq_full = [mats[:dq_full] mats[:eq_full]]
+    # decompose [dq_full eq_full] into pexp*[dq eq] with [dq eq] having minimum
+    # number of rows
+    nullspace = gensolve(sparse(dqeq_full'), spzeros(size(dqeq_full, 2), 0))[2]
+    mats[:dq] = copy(mats[:dq_full])
+    mats[:eq] = copy(mats[:eq_full])
+    pexp = eye(size(dqeq_full, 1))
+    while size(nullspace, 2) > 0
+        i, j = ind2sub(size(nullspace), indmax(map(abs, nullspace)))
+        pexp -= pexp[:, i] * nullspace[:, j]' / nullspace[i, j]
+        pexp = pexp[:, [1:i-1; i+1:end]]
 
-        mats[:dq], mats[:eq] =
-            matsplit(r[1:rowcount,sortperm(piv)], [rowcount], [size(dq_full, 2); size(eq_full, 2)])
-        mats[:pexp] = pexp[:,1:rowcount]
-        if rank([dq_full eq_full]-mats[:fq]*pinv(mats[:fq])*[dq_full eq_full]) < rowcount
-            warn("Dimension of p could be further reduced by projecting onto the orthogonal complement of the column space of Fq. However, this has not been implemented due to numerical difficulties.")
-        end
-    else
-        mats[:dq] = zeros(0, size(dq_full, 2))
-        mats[:eq] = zeros(0, size(eq_full, 2))
-        mats[:pexp] = zeros(0, 0)
+        nullspace -= nullspace[:, j] * nullspace[i:i, :]
+        nullspace = nullspace[[1:i-1; i+1:end], [1:j-1; j+1:end]]
+
+        mats[:dq] = mats[:dq][[1:i-1; i+1:end], :]
+        mats[:eq] = mats[:eq][[1:i-1; i+1:end], :]
     end
+    mats[:pexp] = pexp
 
+    if rank(dqeq_full - mats[:fq]*pinv(mats[:fq])*dqeq_full) < size(pexp, 2)
+        warn("Dimension of p could be further reduced by projecting onto the orthogonal complement of the column space of Fq. However, this has not been implemented due to numerical difficulties.")
+    end
 end
 
 function initial_solution(nleq, q0, fq)
