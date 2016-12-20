@@ -363,13 +363,44 @@ function DiscreteModel{Solver}(circ::Circuit, t::Real, ::Type{Solver}=HomotopySo
     q0s = map(m -> convert(Array{Float64}, m), mats[:q0s])
     fqs = map(m -> convert(Array{Float64}, m), mats[:fqs])
     fqprev_fulls = map(m -> convert(Array{Float64}, m), mats[:fqprev_fulls])
-    pexps = map(m -> convert(Array{Float64}, m), mats[:pexps])
 
     init_zs = [zeros(nn) for nn in model_nns]
     for idx in eachindex(model_nonlinear_eqs)
         q = q0s[idx] + fqprev_fulls[idx] * vcat(init_zs...)
         init_zs[idx] = initial_solution(model_nonlinear_eqs[idx], q, fqs[idx])
     end
+
+    while any(np -> np == 0, model_nps)
+        const_idxs = find(np -> np == 0, model_nps)
+        const_zidxs = vcat(consecranges(model_nns)[const_idxs]...)
+        varying_zidxs = filter(idx -> !(idx in const_zidxs), 1:sum(model_nns))
+        for idx in eachindex(mats[:q0s])
+            mats[:q0s][idx] += mats[:fqprev_fulls][idx][:,const_zidxs] * vcat(init_zs[const_idxs]...)
+            mats[:fqprev_fulls][idx] = mats[:fqprev_fulls][idx][:,varying_zidxs]
+        end
+        mats[:x0] += mats[:c][:,const_zidxs] * vcat(init_zs[const_idxs]...)
+        mats[:y0] += mats[:fy][:,const_zidxs] * vcat(init_zs[const_idxs]...)
+        deleteat!(mats[:q0s], const_idxs)
+        deleteat!(mats[:dq_fulls], const_idxs)
+        deleteat!(mats[:eq_fulls], const_idxs)
+        deleteat!(mats[:fqs], const_idxs)
+        deleteat!(mats[:fqprev_fulls], const_idxs)
+        deleteat!(init_zs, const_idxs)
+        deleteat!(model_nns, const_idxs)
+        deleteat!(model_nqs, const_idxs)
+        deleteat!(model_nonlinear_eqs, const_idxs)
+        deleteat!(nl_elems, const_idxs)
+        mats[:fy] = mats[:fy][:,varying_zidxs]
+        mats[:c] = mats[:c][:,varying_zidxs]
+        reduce_pdims!(mats)
+        model_nps = map(dq -> size(dq, 1), mats[:dqs])
+    end
+
+    q0s = map(m -> convert(Array{Float64}, m), mats[:q0s])
+    fqs = map(m -> convert(Array{Float64}, m), mats[:fqs])
+    fqprev_fulls = map(m -> convert(Array{Float64}, m), mats[:fqprev_fulls])
+    pexps = map(m -> convert(Array{Float64}, m), mats[:pexps])
+
     nonlinear_eq_funcs = [eval(quote
         if VERSION < v"0.5.0-dev+2396"
             # wrap up in named function because anonymous functions are slow
