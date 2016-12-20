@@ -459,15 +459,6 @@ function model_matrices(circ::Circuit, t::Rational{BigInt})
         end
     end
 
-    # This would choose a particular solution such that the rows corresponding
-    # to q are column-wise orthogonal to the column space of fq (and hence have
-    # a column space of minimal dimension). However, this destroys all sparsity
-    # in x and leads to numerical difficulties in actually finding a rank
-    # factorization of [dq eq], while no case has been found so far where it
-    # actually reduces the rank. Hence, it is disabled for now, but a warning is
-    # produced if it could be helpful (see reduce_pdims! below).
-    #x = x - f*pinv(res[:fq])*x[end-nq(circ)+1:end,:]
-
     merge!(res, Dict(zip([:v0 :ev :dv; :i0 :ei :di; :x0 :b :a; :q0 :eq_full :dq_full],
                          matsplit(x, rowsizes, [1; nu(circ); nx(circ)]))))
     for v in (:v0, :i0, :x0, :q0)
@@ -497,9 +488,15 @@ function reduce_pdims!(mats::Dict)
     colsizes = [size(mats[m], 2) for m in [:dq_full, :eq_full]]
     mats[:dq], mats[:eq] = matsplit(dqeq, [size(dqeq, 1)], colsizes)
 
-    dqeq_full = [mats[:dq_full] mats[:eq_full]]
-    if rank(convert(Array{Float64}, dqeq_full - mats[:fq]*pinv(convert(Array{Float64}, mats[:fq]))*dqeq_full)) < size(pexp, 2)
-        warn("Dimension of p could be further reduced by projecting onto the orthogonal complement of the column space of Fq. However, this has not been implemented due to numerical difficulties.")
+    # project pexp onto the orthogonal complement of the column space of Fq
+    fq_pinv = gensolve(sparse(mats[:fq]'*mats[:fq]), mats[:fq]')[1]
+    pexp = pexp - mats[:fq]*fq_pinv*pexp
+    # if the new pexp has lower rank, update
+    pexp, f = rank_factorize(sparse(pexp))
+    if size(pexp, 2) < size(mats[:pexp], 2)
+        mats[:pexp] = pexp
+        mats[:dq] = f * mats[:dq]
+        mats[:eq] = f * mats[:eq]
     end
 end
 

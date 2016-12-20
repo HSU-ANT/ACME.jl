@@ -106,6 +106,19 @@ let a = Rational{BigInt}[1 1 1; 1 1 2; 1 2 1; 1 2 2; 2 1 1; 2 1 2],
     @test c*f == a*b
 end
 
+let a = Rational{BigInt}[1 1 1; 1 1 2; 1 2 1; 1 2 2; 2 1 1; 2 1 2],
+    b = Rational{BigInt}[1 2 3 4 5 6; 6 5 4 3 2 1; 1 0 1 0 1 0],
+    fq = Rational{BigInt}[1 0 0; 10 0 0; 0 1 0; 0 10 0; 0 0 1; 0 0 10],
+    z = Rational{BigInt}[1 2 0 0 2 1; 0 1 2 2 0 1; 0 0 1 0 1 1]
+    mats = Dict{Symbol,Array}(:dq_full => a * b, :eq_full => zeros(Rational{BigInt},6,0), :fq => fq)
+    ACME.reduce_pdims!(mats)
+    @test size(mats[:pexp], 2) == 3
+    @test mats[:pexp] * mats[:dq] == mats[:dq_full]
+    mats = Dict{Symbol,Array}(:dq_full => a * b + fq * z, :eq_full => zeros(Rational{BigInt},6,0), :fq => fq)
+    ACME.reduce_pdims!(mats)
+    @test size(mats[:pexp], 2) == 3
+end
+
 # simple circuit: resistor and diode in series, driven by constant voltage,
 # chosen such that a prescribe current flows
 let i = 1e-3, r=10e3, is=1e-12
