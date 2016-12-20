@@ -197,7 +197,7 @@ function indnearest(tree::KDTree, p::AbstractVector, max_leaves::Int,
     end
     l = 0
     p_idx = 0
-    while l < max_leaves && ~isempty(alt)
+    while l < max_leaves && !isempty(alt)
         best_alt = dequeue!(alt)
         idx = best_alt.idx
         delta = best_alt.delta

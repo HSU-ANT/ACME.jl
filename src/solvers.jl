@@ -172,7 +172,7 @@ function solve(solver::SimpleSolver, p::AbstractVector{Float64}, maxiter=500)
     for solver.iters=1:maxiter
         evaluate!(solver.nleq, solver.z)
         solver.ressumabs2 = normsquared(solver.nleq.res)
-        if ~isfinite(solver.ressumabs2) || ~all(isfinite, solver.nleq.J)
+        if !isfinite(solver.ressumabs2) || !all(isfinite, solver.nleq.J)
             return solver.z
         end
         if !setlhs!(solver.linsolver, solver.nleq.J) # J was singular
@@ -224,7 +224,7 @@ set_extrapolation_origin(solver::HomotopySolver, p, z) =
 function solve(solver::HomotopySolver, p)
     z = solve(solver.basesolver, p)
     solver.iters = needediterations(solver.basesolver)
-    if ~hasconverged(solver)
+    if !hasconverged(solver)
         a = 0.5
         best_a = 0.0
         copy!(solver.start_p, get_extrapolation_origin(solver.basesolver)[1])

@@ -280,12 +280,12 @@ function topomat!{T<:Integer}(incidence::SparseMatrixCSC{T})
         dl = spzeros(T, row-1, 0)
         tv = spzeros(T, 0, size(incidence)[2])
     else
-        dl = ti[:, ~t]
+        dl = ti[:, !t]
         tv = spzeros(T, size(dl)[2], size(incidence)[2])
-        if ~all(~t)
+        if !all(!t)
             tv[:,find(t)] = -dl' # with julia 0.3.2, sparse([1 -1]).' -> [1, 0], hence use of ' (conjugate transpose)
         end
-        tv[:,find(~t)] = speye(T,size(dl)[2])
+        tv[:,find(!t)] = speye(T,size(dl)[2])
     end
 
     tv, ti
@@ -567,7 +567,7 @@ function run!(model::DiscreteModel, u::AbstractMatrix{Float64})
         BLAS.gemv!('N', 1., model.dq, model.x, 0., p)
         BLAS.gemv!('N', 1., model.eq, ucur, 1., p)
         z = solve(model.solver, p)
-        if ~hasconverged(model.solver)
+        if !hasconverged(model.solver)
             if all(isfinite, z)
                 warn("Failed to converge while solving non-linear equation.")
             else
