@@ -119,8 +119,9 @@ end
 for mat in [:mv; :mi; :mx; :mxd; :mq; :mu; :pv; :pi; :px; :pxd; :pq]
     # blkdiag() does not work, so include an empty matrix of desired type in
     # case c.elements is empty
-    @eval ($mat)(c::Circuit) = blkdiag(spzeros(Real, 0, 0),
-                                       [elem.$mat for elem in c.elements]...)
+    @eval ($mat)(c::Circuit) =
+         blkdiag(spzeros(Rational{BigInt}, 0, 0),
+                 [convert(SparseMatrixCSC{Rational{BigInt}}, elem.$mat) for elem in c.elements]...)
 end
 
 u0(c::Circuit) = vcat([elem.u0 for elem in c.elements]...)
@@ -320,11 +321,11 @@ type DiscreteModel{Solver}
         DiscreteModel(circ, t, Solver)
     end
 
-    function DiscreteModel(mats::Dict{Symbol,Array{Float64}}, nonlinear_eq::Expr, solver::Solver)
+    function DiscreteModel(mats::Dict{Symbol}, nonlinear_eq::Expr, solver::Solver)
         model = new()
 
         for mat in (:a, :b, :c, :pexp, :dq, :eq, :fq, :dy, :ey, :fy, :x0, :q0, :y0)
-            setfield!(model, mat, mats[mat])
+            setfield!(model, mat, convert(fieldtype(typeof(model), mat), mats[mat]))
         end
 
         model.nonlinear_eq = nonlinear_eq
@@ -334,7 +335,7 @@ type DiscreteModel{Solver}
     end
 end
 
-function DiscreteModel{Solver}(circ::Circuit, t::Float64, ::Type{Solver}=HomotopySolver{CachingSolver{SimpleSolver}})
+function DiscreteModel{Solver}(circ::Circuit, t::Real, ::Type{Solver}=HomotopySolver{CachingSolver{SimpleSolver}})
     mats = model_matrices(circ, t)
     reduce_pdims!(mats)
 
@@ -355,7 +356,11 @@ function DiscreteModel{Solver}(circ::Circuit, t::Float64, ::Type{Solver}=Homotop
 
     @assert nn(circ) == model_nn
 
-    init_z = initial_solution(model_nonlinear_eq, mats[:q0], mats[:fq])
+    q0 = convert(Vector{Float64}, mats[:q0])
+    pexp = convert(Matrix{Float64}, mats[:pexp])
+    fq = convert(Matrix{Float64}, mats[:fq])
+
+    init_z = initial_solution(model_nonlinear_eq, q0, fq)
     nonlinear_eq_func = eval(quote
         if VERSION < v"0.5.0-dev+2396"
             # wrap up in named function because anonymous functions are slow
@@ -364,14 +369,14 @@ function DiscreteModel{Solver}(circ::Circuit, t::Float64, ::Type{Solver}=Homotop
                 pfull=scratch[1]
                 Jq=scratch[2]
                 q=$(zeros(model_nq))
-                fq=$(mats[:fq])
+                fq=$fq
                 $(model_nonlinear_eq)
                 return nothing
             end
         else
             (res, J, scratch, z) ->
                 let pfull=scratch[1], Jq=scratch[2], q=$(zeros(model_nq)),
-                    fq=$(mats[:fq])
+                    fq=$fq
                     $(model_nonlinear_eq)
                     return nothing
                 end
@@ -384,8 +389,8 @@ function DiscreteModel{Solver}(circ::Circuit, t::Float64, ::Type{Solver}=Homotop
             function $(gensym())(scratch, p)
                 #copy!(pfull, q0 + pexp * p)
                 pfull = scratch[1]
-                copy!(pfull, $(mats[:q0]))
-                BLAS.gemv!('N', 1., $(mats[:pexp]), p, 1., pfull)
+                copy!(pfull, $q0)
+                BLAS.gemv!('N', 1., $pexp, p, 1., pfull)
                 return nothing
             end
         else
@@ -393,8 +398,8 @@ function DiscreteModel{Solver}(circ::Circuit, t::Float64, ::Type{Solver}=Homotop
                 begin
                     pfull = scratch[1]
                     #copy!(pfull, q0 + pexp * p)
-                    copy!(pfull, $(mats[:q0]))
-                    BLAS.gemv!('N', 1., $(mats[:pexp]), p, 1., pfull)
+                    copy!(pfull, $q0)
+                    BLAS.gemv!('N', 1., $pexp, p, 1., pfull)
                     return nothing
                 end
         end
@@ -406,7 +411,7 @@ function DiscreteModel{Solver}(circ::Circuit, t::Float64, ::Type{Solver}=Homotop
             function $(gensym())(scratch, Jp)
                 Jq = scratch[2]
                 #copy!(Jp, Jq*pexp)
-                BLAS.gemm!('N', 'N', 1., Jq, $(mats[:pexp]), 0., Jp)
+                BLAS.gemm!('N', 'N', 1., Jq, $pexp, 0., Jp)
                 return nothing
             end
         else
@@ -414,7 +419,7 @@ function DiscreteModel{Solver}(circ::Circuit, t::Float64, ::Type{Solver}=Homotop
                 begin
                     Jq = scratch[2]
                     #copy!(Jp, Jq*pexp)
-                    BLAS.gemm!('N', 'N', 1., Jq, $(mats[:pexp]), 0., Jp)
+                    BLAS.gemm!('N', 'N', 1., Jq, $pexp, 0., Jp)
                     return nothing
                 end
         end
@@ -427,15 +432,17 @@ function DiscreteModel{Solver}(circ::Circuit, t::Float64, ::Type{Solver}=Homotop
     return DiscreteModel{typeof(solver)}(mats, model_nonlinear_eq, solver)
 end
 
-function model_matrices(circ::Circuit, t)
-    x, f = map(full,
-               gensolve([mv(circ) mi(circ) 1/t*mxd(circ)+0.5*mx(circ) mq(circ);
-                         blkdiag(topomat(circ)...) spzeros(nb(circ), nx(circ) + nq(circ))],
-                        [u0(circ) mu(circ) 1/t*mxd(circ)-0.5*mx(circ);
-                         spzeros(nb(circ), 1+nu(circ)+nx(circ))]))
+function model_matrices(circ::Circuit, t::Rational{BigInt})
+    lhs = convert(SparseMatrixCSC{Rational{BigInt}},
+                  sparse([mv(circ) mi(circ) mxd(circ)//t+mx(circ)//2 mq(circ);
+                   blkdiag(topomat(circ)...) spzeros(nb(circ), nx(circ) + nq(circ))]))
+    rhs = convert(SparseMatrixCSC{Rational{BigInt}},
+                  sparse([u0(circ) mu(circ) mxd(circ)//t-mx(circ)//2;
+                          spzeros(nb(circ), 1+nu(circ)+nx(circ))]))
+    x, f = map(full, gensolve(lhs, rhs))
 
     rowsizes = [nb(circ); nb(circ); nx(circ); nq(circ)]
-    res = Dict{Symbol,Array{Float64}}(zip([:fv; :fi; :c; :fq], matsplit(f, rowsizes)))
+    res = Dict{Symbol,Array}(zip([:fv; :fi; :c; :fq], matsplit(f, rowsizes)))
 
     nullspace = gensolve(sparse(res[:fq]), spzeros(size(res[:fq],1), 0))[2]
     indeterminates = f * nullspace
@@ -467,18 +474,20 @@ function model_matrices(circ::Circuit, t)
         res[v] = squeeze(res[v], 2)
     end
 
-    p = [pv(circ) pi(circ) 0.5*px(circ)+1/t*pxd(circ) pq(circ)]
+    p = [pv(circ) pi(circ) px(circ)//2+pxd(circ)//t pq(circ)]
     if normsquared(p * indeterminates) > 1e-20
         warn("Model output depends on indeterminate quantity")
     end
-    res[:dy] = p * x[:,2+nu(circ):end] + 0.5*px(circ)-1/t*pxd(circ)
-    #          p * [dv; di; a;  dq_full] + 0.5*px(circ)-1/t*pxd(circ)
+    res[:dy] = p * x[:,2+nu(circ):end] + px(circ)//2-pxd(circ)//t
+    #          p * [dv; di; a;  dq_full] + px(circ)//2-pxd(circ)//t
     res[:ey] = p * x[:,2:1+nu(circ)] # p * [ev; ei; b;  eq_full]
     res[:fy] = p * f                 # p * [fv; fi; c;  fq]
     res[:y0] = p * vec(x[:,1])       # p * [v0; i0; x0; q0]
 
     return res
 end
+
+model_matrices(circ::Circuit, t) = model_matrices(circ, Rational{BigInt}(t))
 
 function reduce_pdims!(mats::Dict)
     # decompose [dq_full eq_full] into pexp*[dq eq] with [dq eq] having minimum
@@ -489,7 +498,7 @@ function reduce_pdims!(mats::Dict)
     mats[:dq], mats[:eq] = matsplit(dqeq, [size(dqeq, 1)], colsizes)
 
     dqeq_full = [mats[:dq_full] mats[:eq_full]]
-    if rank(dqeq_full - mats[:fq]*pinv(mats[:fq])*dqeq_full) < size(pexp, 2)
+    if rank(convert(Array{Float64}, dqeq_full - mats[:fq]*pinv(convert(Array{Float64}, mats[:fq]))*dqeq_full)) < size(pexp, 2)
         warn("Dimension of p could be further reduced by projecting onto the orthogonal complement of the column space of Fq. However, this has not been implemented due to numerical difficulties.")
     end
 end
@@ -622,7 +631,7 @@ function gensolve(a::SparseMatrixCSC, b, x, h, thresh=0.1)
 end
 
 gensolve(a, b, thresh=0.1) =
-    gensolve(a, b, spzeros(size(a)[2], size(b)[2]), speye(size(a)[2]), thresh)
+    gensolve(a, b, spzeros(promote_type(eltype(a), eltype(b)), size(a)[2], size(b)[2]), speye(eltype(a), size(a)[2]), thresh)
 
 function rank_factorize(a::SparseMatrixCSC)
     f = a
@@ -651,12 +660,5 @@ matsplit(m, rowsizes, colsizes=[size(m)[2]]) =
         # prior to Julia 0.5, this fails for empty x and is slow
         normsquared(x) = sum(abs2, x)
     end
-
-if VERSION >= v"0.6.0-dev.1553"
-    # workaround for JuliaLang/julia#19595
-    import Base: +, -
-    +(x1::SparseMatrixCSC{Real}, x2::SparseMatrixCSC{Real}) = broadcast!(+, similar(x1), x1, x2)
-    -(x1::SparseMatrixCSC{Real}, x2::SparseMatrixCSC{Real}) = broadcast!(-, similar(x1), x1, x2)
-end
 
 end # module

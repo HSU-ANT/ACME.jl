@@ -33,13 +33,13 @@ let solver = ACME.LinearSolver(3)
 end
 
 let circ = Circuit()
-    model=DiscreteModel(circ, 1.)
+    model=DiscreteModel(circ, 1)
     @test run!(model, zeros(0, 20)) == zeros(0, 20)
 end
 
 let circ = Circuit(), r = resistor(0)
     connect!(circ, r[1], r[2])
-    model = DiscreteModel(circ, 1.)
+    model = DiscreteModel(circ, 1)
     @test run!(model, zeros(0, 20)) == zeros(0, 20)
 end
 
@@ -48,7 +48,7 @@ let circ = Circuit(), r = resistor(0), probe = currentprobe()
     connect!(circ, r[2], probe[:-])
     orig_stderr = STDERR
     rd, wr = redirect_stderr()
-    model = DiscreteModel(circ, 1.)
+    model = DiscreteModel(circ, 1)
     # should warn because output is indeterminate
     @test !isempty(search(convert(ASCIIString, readavailable(rd)), "WARNING"))
     redirect_stderr(orig_stderr)
@@ -57,7 +57,7 @@ end
 let circ = Circuit(), d = diode(), src=currentsource()
     connect!(circ, d[:+], src[:+])
     connect!(circ, d[:-], src[:-])
-    model = DiscreteModel(circ, 1.)
+    model = DiscreteModel(circ, 1)
     @test_throws ErrorException run!(model, hcat([Inf]))
     orig_stderr = STDERR
     rd, wr = redirect_stderr()
@@ -98,12 +98,12 @@ let nleq = ACME.ParametricNonLinEq((res, J, scratch, z) ->
     @test !ACME.hasconverged(solver)
 end
 
-let a = [1 1 1; 1 1 2; 1 2 1; 1 2 2; 2 1 1; 2 1 2],
-    b = [1 2 3 4 5 6; 6 5 4 3 2 1; 1 0 1 0 1 0]
+let a = Rational{BigInt}[1 1 1; 1 1 2; 1 2 1; 1 2 2; 2 1 1; 2 1 2],
+    b = Rational{BigInt}[1 2 3 4 5 6; 6 5 4 3 2 1; 1 0 1 0 1 0]
     nullspace = ACME.gensolve(sparse(a'), spzeros(size(a, 2), 0))[2]
     @test nullspace'*a == spzeros(3, 3)
     c, f = ACME.rank_factorize(sparse(a * b))
-    @test c*f ≈ a*b
+    @test c*f == a*b
 end
 
 # simple circuit: resistor and diode in series, driven by constant voltage,
@@ -123,7 +123,7 @@ let i = 1e-3, r=10e3, is=1e-12
     connect!(circ, r1[1], :vcc)
     connect!(circ, d[:-], vprobe[:-], :gnd)
     connect!(circ, r1[2], d[:+], vprobe[:+])
-    model = DiscreteModel(circ, 1.)
+    model = DiscreteModel(circ, 1)
     y = run!(model, zeros(0, 1))
     @test_approx_eq_eps y[1] v_d 1e-6
 end
@@ -178,7 +178,7 @@ end
 include("../examples/superover.jl")
 let model=superover(drive=1.0, tone=1.0, level=1.0)
     println("Running superover with fixed potentiometer values")
-    @test ACME.np(model) ∈ 5:6 # should be 5, but numerical errors lead to 6 with Julia 0.4
+    @test ACME.np(model) == 5
     y = run!(model, map(sin, 2π*1000/44100*(0:44099)'))
     @test size(y) == (1,44100)
     # TODO: further validate y

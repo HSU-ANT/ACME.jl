@@ -53,4 +53,4 @@ function birdie(::Type{Circuit}; vol=nothing)
 end
 
 birdie{T<:DiscreteModel}(::Type{T}=DiscreteModel; vol=nothing, fs=44100) =
-    T(birdie(Circuit, vol=vol), 1/fs)
+    T(birdie(Circuit, vol=vol), 1//fs)
