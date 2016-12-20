@@ -98,6 +98,14 @@ let nleq = ACME.ParametricNonLinEq((res, J, scratch, z) ->
     @test !ACME.hasconverged(solver)
 end
 
+let a = [1 1 1; 1 1 2; 1 2 1; 1 2 2; 2 1 1; 2 1 2],
+    b = [1 2 3 4 5 6; 6 5 4 3 2 1; 1 0 1 0 1 0]
+    nullspace = ACME.gensolve(sparse(a'), spzeros(size(a, 2), 0))[2]
+    @test nullspace'*a == spzeros(3, 3)
+    c, f = ACME.rank_factorize(sparse(a * b))
+    @test c*f ≈ a*b
+end
+
 # simple circuit: resistor and diode in series, driven by constant voltage,
 # chosen such that a prescribe current flows
 let i = 1e-3, r=10e3, is=1e-12

@@ -481,26 +481,14 @@ function model_matrices(circ::Circuit, t)
 end
 
 function reduce_pdims!(mats::Dict)
-    dqeq_full = [mats[:dq_full] mats[:eq_full]]
     # decompose [dq_full eq_full] into pexp*[dq eq] with [dq eq] having minimum
     # number of rows
-    nullspace = gensolve(sparse(dqeq_full'), spzeros(size(dqeq_full, 2), 0))[2]
-    mats[:dq] = copy(mats[:dq_full])
-    mats[:eq] = copy(mats[:eq_full])
-    pexp = eye(size(dqeq_full, 1))
-    while size(nullspace, 2) > 0
-        i, j = ind2sub(size(nullspace), indmax(map(abs, nullspace)))
-        pexp -= pexp[:, i] * nullspace[:, j]' / nullspace[i, j]
-        pexp = pexp[:, [1:i-1; i+1:end]]
-
-        nullspace -= nullspace[:, j] * nullspace[i:i, :] / nullspace[i, j]
-        nullspace = nullspace[[1:i-1; i+1:end], [1:j-1; j+1:end]]
-
-        mats[:dq] = mats[:dq][[1:i-1; i+1:end], :]
-        mats[:eq] = mats[:eq][[1:i-1; i+1:end], :]
-    end
+    pexp, dqeq = rank_factorize(sparse([mats[:dq_full] mats[:eq_full]]))
     mats[:pexp] = pexp
+    colsizes = [size(mats[m], 2) for m in [:dq_full, :eq_full]]
+    mats[:dq], mats[:eq] = matsplit(dqeq, [size(dqeq, 1)], colsizes)
 
+    dqeq_full = [mats[:dq_full] mats[:eq_full]]
     if rank(dqeq_full - mats[:fq]*pinv(mats[:fq])*dqeq_full) < size(pexp, 2)
         warn("Dimension of p could be further reduced by projecting onto the orthogonal complement of the column space of Fq. However, this has not been implemented due to numerical difficulties.")
     end
@@ -635,6 +623,21 @@ end
 
 gensolve(a, b, thresh=0.1) =
     gensolve(a, b, spzeros(size(a)[2], size(b)[2]), speye(size(a)[2]), thresh)
+
+function rank_factorize(a::SparseMatrixCSC)
+    f = a
+    nullspace = gensolve(a', spzeros(size(a, 2), 0))[2]
+    c = eye(eltype(a), size(a, 1))
+    while size(nullspace, 2) > 0
+        i, j = ind2sub(size(nullspace), indmax(map(abs, nullspace)))
+        c -= c[:, i] * nullspace[:, j]' / nullspace[i, j]
+        c = c[:, [1:i-1; i+1:end]]
+        nullspace -= nullspace[:, j] * nullspace[i:i, :] / nullspace[i, j]
+        nullspace = nullspace[[1:i-1; i+1:end], [1:j-1; j+1:end]]
+        f = f[[1:i-1; i+1:end], :]
+    end
+    return c, f
+end
 
 consecranges(lengths) = map(range, cumsum([1; lengths[1:end-1]]), lengths)
 
