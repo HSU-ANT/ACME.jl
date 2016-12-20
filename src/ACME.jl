@@ -493,7 +493,7 @@ function reduce_pdims!(mats::Dict)
         pexp -= pexp[:, i] * nullspace[:, j]' / nullspace[i, j]
         pexp = pexp[:, [1:i-1; i+1:end]]
 
-        nullspace -= nullspace[:, j] * nullspace[i:i, :]
+        nullspace -= nullspace[:, j] * nullspace[i:i, :] / nullspace[i, j]
         nullspace = nullspace[[1:i-1; i+1:end], [1:j-1; j+1:end]]
 
         mats[:dq] = mats[:dq][[1:i-1; i+1:end], :]
