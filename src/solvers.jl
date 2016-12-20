@@ -234,6 +234,7 @@ function solve(solver::HomotopySolver, p)
             LinAlg.scale!(1-a, solver.pa)
             LinAlg.axpy!(a, p, solver.pa)
             z = solve(solver.basesolver, solver.pa)
+            solver.iters += needediterations(solver.basesolver)
             if hasconverged(solver)
                 best_a = a
                 a = 1.0
