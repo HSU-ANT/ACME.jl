@@ -92,6 +92,24 @@ function setlhs!(solver::LinearSolver{1}, A::Matrix{Float64})
     return true
 end
 
+function setlhs!(solver::LinearSolver{2}, A::Matrix{Float64})
+    _check_lhs_dims(solver, A)
+    if abs(A[1,1]) > abs(A[2,1])
+        solver.factors[1,1] = 1.0 / A[1,1]
+        solver.factors[1,2] = A[1,2]
+        solver.factors[2,1] = -A[2,1]*solver.factors[1,1]
+        solver.factors[2,2] = 1.0 / (A[2,2]+solver.factors[1,2]*solver.factors[2,1])
+        solver.ipiv[1] = 1
+    else
+        solver.factors[2,2] = 1.0 / A[2,2]
+        solver.factors[2,1] = A[2,1]
+        solver.factors[1,2] = -A[1,2]*solver.factors[2,2]
+        solver.factors[1,1] = 1.0 / (A[1,1]+solver.factors[2,1]*solver.factors[1,2])
+        solver.ipiv[1] = 2
+    end
+    return isfinite(solver.factors[1,1]) && isfinite(solver.factors[2,2])
+end
+
 function setlhs!{N}(solver::LinearSolver{N}, A::Matrix{Float64})
     _check_lhs_dims(solver, A)
     copy!(solver.factors, A)
@@ -150,6 +168,17 @@ function solve!(solver::LinearSolver{1}, x::Vector{Float64}, b::Vector{Float64})
     @inbounds x[1] = solver.factors[1,1] * b[1]
 
     return nothing
+end
+
+function solve!(solver::LinearSolver{2}, x::Vector{Float64}, b::Vector{Float64})
+    _check_solve_dims(solver, x, b)
+    if solver.ipiv[1] == 1
+        x[2] = (b[2] + solver.factors[2,1]*b[1]) * solver.factors[2,2]
+        x[1] = (b[1] - solver.factors[1,2]*x[2]) * solver.factors[1,1]
+    else
+        x[1] = (b[1] + solver.factors[1,2]*b[2]) * solver.factors[1,1]
+        x[2] = (b[2] - solver.factors[2,1]*x[1]) * solver.factors[2,2]
+    end
 end
 
 function solve!{N}(solver::LinearSolver{N}, x::Vector{Float64}, b::Vector{Float64})
