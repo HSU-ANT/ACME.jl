@@ -44,33 +44,33 @@ calc_Jp!(nleq::ParametricNonLinEq) = nleq.calc_Jp(nleq.scratch, nleq.Jp)
 evaluate!(nleq::ParametricNonLinEq, z) =
     nleq.func(nleq.res, nleq.J, nleq.scratch, z)
 
-#struct LinearSolver
-eval(Expr(:type, false, :LinearSolver, quote
+#struct LinearSolver{N}
+eval(Expr(:type, false, :(LinearSolver{N}), quote
     factors::Matrix{Float64}
     ipiv::Vector{Base.LinAlg.BlasInt}
     info::typeof(Ref{Base.LinAlg.BlasInt}(0))
-    function LinearSolver(n::Int)
-        new(zeros(n, n), zeros(Base.LinAlg.BlasInt, n), Ref{Base.LinAlg.BlasInt}(0))
+    @compat function (::Type{LinearSolver{N}}){N}()
+        new{N}(zeros(N, N), zeros(Base.LinAlg.BlasInt, N), Ref{Base.LinAlg.BlasInt}(0))
     end
 end))
 
-function setlhs!(solver::LinearSolver, A::Matrix{Float64})
-    m, n = size(solver.factors)
-    if (m, n) ≠ size(A)
-        throw(DimensionMismatch("matrix has size $(size(A)), but must have size $(size(solver.factors))"))
+LinearSolver(n::Int) = LinearSolver{n}()
+
+function setlhs!{N}(solver::LinearSolver{N}, A::Matrix{Float64})
+    if (N, N) ≠ size(A)
+        throw(DimensionMismatch("matrix has size $(size(A)), but must have size $((N, N))"))
     end
     copy!(solver.factors, A)
 
     # taken from Julia's generic_lufact!; faster than calling out to dgetrf for
     # sizes up to about 60×60
-    minmn = min(m,n)
     info = 0
     @inbounds begin
-        for k = 1:minmn
+        for k = 1:N
             # find index max
             kp = k
             amax = 0.0
-            for i = k:m
+            for i = k:N
                 absi = abs(solver.factors[i,k])
                 if absi > amax
                     kp = i
@@ -81,7 +81,7 @@ function setlhs!(solver::LinearSolver, A::Matrix{Float64})
             if !iszero(solver.factors[kp,k])
                 if k != kp
                     # Interchange
-                    for i = 1:n
+                    for i = 1:N
                         tmp = solver.factors[k,i]
                         solver.factors[k,i] = solver.factors[kp,i]
                         solver.factors[kp,i] = tmp
@@ -89,15 +89,15 @@ function setlhs!(solver::LinearSolver, A::Matrix{Float64})
                 end
                 # Scale first column
                 fkkinv = inv(solver.factors[k,k])
-                for i = k+1:m
+                for i = k+1:N
                     solver.factors[i,k] *= fkkinv
                 end
             elseif info == 0
                 info = k
             end
             # Update the rest
-            for j = k+1:n
-                for i = k+1:m
+            for j = k+1:N
+                for i = k+1:N
                     solver.factors[i,j] -= solver.factors[i,k]*solver.factors[k,j]
                 end
             end
@@ -106,14 +106,13 @@ function setlhs!(solver::LinearSolver, A::Matrix{Float64})
     return info == 0
 end
 
-function solve!(solver::LinearSolver, x::Vector{Float64}, b::Vector{Float64})
-    n = size(solver.factors, 2)
-    if n ≠ length(x)
-        throw(DimensionMismatch("x has length $(length(x)), but needs $n"))
+function solve!{N}(solver::LinearSolver{N}, x::Vector{Float64}, b::Vector{Float64})
+    if N ≠ length(x)
+        throw(DimensionMismatch("x has length $(length(x)), but needs $N"))
     end
     if x !== b
-        if n ≠ length(b)
-            throw(DimensionMismatch("b has length $(length(b)), but needs $n"))
+        if N ≠ length(b)
+            throw(DimensionMismatch("b has length $(length(b)), but needs $N"))
         end
         copy!(x, b)
     end
@@ -121,7 +120,7 @@ function solve!(solver::LinearSolver, x::Vector{Float64}, b::Vector{Float64})
     ccall((Compat.@blasfunc(dgetrs_), Base.LinAlg.LAPACK.liblapack), Void,
           (Ptr{UInt8}, Ptr{Base.LinAlg.BlasInt}, Ptr{Base.LinAlg.BlasInt}, Ptr{Float64}, Ptr{Base.LinAlg.BlasInt},
            Ptr{Base.LinAlg.BlasInt}, Ptr{Float64}, Ptr{Base.LinAlg.BlasInt}, Ptr{Base.LinAlg.BlasInt}),
-          &'N', &n, &1, solver.factors, &max(1,stride(solver.factors,2)), solver.ipiv, x, &max(1,stride(x,2)), solver.info)
+          &'N', &N, &1, solver.factors, &max(1,stride(solver.factors,2)), solver.ipiv, x, &max(1,stride(x,2)), solver.info)
     if solver.info[] ≠ 0
         throw(Base.LinAlg.LAPACKException(solver.info[]))
     end
@@ -134,21 +133,21 @@ function copy!(dest::LinearSolver, src::LinearSolver)
     dest.info[] = src.info[]
 end
 
-#mutable struct SimpleSolver{NLEQ<:ParametricNonLinEq}
-eval(Expr(:type, true, :(SimpleSolver{NLEQ<:ParametricNonLinEq}), quote
+#mutable struct SimpleSolver{NLEQ<:ParametricNonLinEq,NN}
+eval(Expr(:type, true, :(SimpleSolver{NLEQ<:ParametricNonLinEq,NN}), quote
     nleq::NLEQ
     z::Vector{Float64}
-    linsolver::LinearSolver
+    linsolver::LinearSolver{NN}
     last_z::Vector{Float64}
     last_p::Vector{Float64}
     last_Jp::Matrix{Float64}
-    last_linsolver::LinearSolver
+    last_linsolver::LinearSolver{NN}
     iters::Int
     resmaxabs::Float64
     tol::Float64
     tmp_nn::Vector{Float64}
     tmp_np::Vector{Float64}
-    @compat function (::Type{SimpleSolver{NLEQ}}){NLEQ<:ParametricNonLinEq}(
+    @compat function (::Type{SimpleSolver{NLEQ,NN}}){NLEQ<:ParametricNonLinEq,NN}(
             nleq::NLEQ, initial_p::Vector{Float64}, initial_z::Vector{Float64})
         z = zeros(nn(nleq))
         linsolver = LinearSolver(nn(nleq))
@@ -158,7 +157,7 @@ eval(Expr(:type, true, :(SimpleSolver{NLEQ<:ParametricNonLinEq}), quote
         last_linsolver = LinearSolver(nn(nleq))
         tmp_nn = zeros(nn(nleq))
         tmp_np = zeros(np(nleq))
-        solver = new{NLEQ}(nleq, z, linsolver, last_z, last_p, last_Jp,
+        solver = new{NLEQ,NN}(nleq, z, linsolver, last_z, last_p, last_Jp,
             last_linsolver, 0, 0.0, 1e-10, tmp_nn, tmp_np)
         set_extrapolation_origin(solver, initial_p, initial_z)
         return solver
@@ -177,7 +176,7 @@ is rarely useful as such.
 
 SimpleSolver{NLEQ<:ParametricNonLinEq}(nleq::NLEQ, initial_p::Vector{Float64},
                                        initial_z::Vector{Float64}) =
-    SimpleSolver{NLEQ}(nleq, initial_p, initial_z)
+    SimpleSolver{NLEQ,nn(nleq)}(nleq, initial_p, initial_z)
 
 set_resabstol!(solver::SimpleSolver, tol) = solver.tol = tol
 
