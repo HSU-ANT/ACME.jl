@@ -44,32 +44,32 @@ calc_Jp!(nleq::ParametricNonLinEq) = nleq.calc_Jp(nleq.scratch, nleq.Jp)
 evaluate!(nleq::ParametricNonLinEq, z) =
     nleq.func(nleq.res, nleq.J, nleq.scratch, z)
 
-#struct LinearSolver
-eval(Expr(:type, false, :LinearSolver, quote
+#struct LinearSolver{N}
+eval(Expr(:type, false, :(LinearSolver{N}), quote
     factors::Matrix{Float64}
     ipiv::Vector{Int}
-    function LinearSolver(n::Int)
-        new(zeros(n, n), zeros(Int, n))
+    @compat function (::Type{LinearSolver{N}}){N}()
+        new{N}(zeros(N, N), zeros(Int, N))
     end
 end))
 
-function setlhs!(solver::LinearSolver, A::Matrix{Float64})
-    m, n = size(solver.factors)
-    if (m, n) ≠ size(A)
-        throw(DimensionMismatch("matrix has size $(size(A)), but must have size $(size(solver.factors))"))
+LinearSolver(n::Int) = LinearSolver{n}()
+
+function setlhs!{N}(solver::LinearSolver{N}, A::Matrix{Float64})
+    if (N, N) ≠ size(A)
+        throw(DimensionMismatch("matrix has size $(size(A)), but must have size $((N, N))"))
     end
     copy!(solver.factors, A)
 
     # based on Julia's generic_lufact!, but storing inverses on the diagonal;
     # faster than calling out to dgetrf for sizes up to about 60×60
     factors = solver.factors
-    minmn = min(m,n)
     @inbounds begin
-        for k = 1:minmn
+        for k = 1:N
             # find index max
             kp = k
             amax = 0.0
-            for i = k:m
+            for i = k:N
                 absi = abs(factors[i,k])
                 if absi > amax
                     kp = i
@@ -80,7 +80,7 @@ function setlhs!(solver::LinearSolver, A::Matrix{Float64})
             if factors[kp,k] != 0.0
                 if k != kp
                     # Interchange
-                    for i = 1:n
+                    for i = 1:N
                         tmp = factors[k,i]
                         factors[k,i] = factors[kp,i]
                         factors[kp,i] = tmp
@@ -88,15 +88,15 @@ function setlhs!(solver::LinearSolver, A::Matrix{Float64})
                 end
                 # Scale first column
                 fkkinv = factors[k,k] = inv(factors[k,k])
-                for i = k+1:m
+                for i = k+1:N
                     factors[i,k] *= fkkinv
                 end
             else
                 return false
             end
             # Update the rest
-            for j = k+1:n
-                for i = k+1:m
+            for j = k+1:N
+                for i = k+1:N
                     factors[i,j] -= factors[i,k]*factors[k,j]
                 end
             end
@@ -105,33 +105,32 @@ function setlhs!(solver::LinearSolver, A::Matrix{Float64})
     return true
 end
 
-function solve!(solver::LinearSolver, x::Vector{Float64}, b::Vector{Float64})
-    n = size(solver.factors, 2)
-    if n ≠ length(x)
-        throw(DimensionMismatch("x has length $(length(x)), but needs $n"))
+function solve!{N}(solver::LinearSolver{N}, x::Vector{Float64}, b::Vector{Float64})
+    if N ≠ length(x)
+        throw(DimensionMismatch("x has length $(length(x)), but needs $N"))
     end
     if x !== b
-        if n ≠ length(b)
-            throw(DimensionMismatch("b has length $(length(b)), but needs $n"))
+        if N ≠ length(b)
+            throw(DimensionMismatch("b has length $(length(b)), but needs $N"))
         end
         copy!(x, b)
     end
 
     # native Julia implementation seems to be faster than dgetrs up to about
     # n=45 (and not slower up to about n=70)
-    @inbounds for i in 1:n
+    @inbounds for i in 1:N
         x[i], x[solver.ipiv[i]] = x[solver.ipiv[i]], x[i]
     end
     # taken from Julia's naivesub!(::UnitLowerTriangular, ...)
-    @inbounds for j in 1:n
+    @inbounds for j in 1:N
         xj = x[j]
-        for i in j+1:n
+        for i in j+1:N
             x[i] -= solver.factors[i,j] * xj
         end
     end
     # based on Julia's naivesub!(::UpperTriangular, ...), but with factors[j,j]
     # holding inverses
-    @inbounds for j in n:-1:1
+    @inbounds for j in N:-1:1
         xj = x[j] = solver.factors[j,j] * x[j]
         for i in 1:j-1
             x[i] -= solver.factors[i,j] * xj
@@ -146,21 +145,21 @@ function copy!(dest::LinearSolver, src::LinearSolver)
     copy!(dest.ipiv, src.ipiv)
 end
 
-#mutable struct SimpleSolver{NLEQ<:ParametricNonLinEq}
-eval(Expr(:type, true, :(SimpleSolver{NLEQ<:ParametricNonLinEq}), quote
+#mutable struct SimpleSolver{NLEQ<:ParametricNonLinEq,NN}
+eval(Expr(:type, true, :(SimpleSolver{NLEQ<:ParametricNonLinEq,NN}), quote
     nleq::NLEQ
     z::Vector{Float64}
-    linsolver::LinearSolver
+    linsolver::LinearSolver{NN}
     last_z::Vector{Float64}
     last_p::Vector{Float64}
     last_Jp::Matrix{Float64}
-    last_linsolver::LinearSolver
+    last_linsolver::LinearSolver{NN}
     iters::Int
     resmaxabs::Float64
     tol::Float64
     tmp_nn::Vector{Float64}
     tmp_np::Vector{Float64}
-    @compat function (::Type{SimpleSolver{NLEQ}}){NLEQ<:ParametricNonLinEq}(
+    @compat function (::Type{SimpleSolver{NLEQ,NN}}){NLEQ<:ParametricNonLinEq,NN}(
             nleq::NLEQ, initial_p::Vector{Float64}, initial_z::Vector{Float64})
         z = zeros(nn(nleq))
         linsolver = LinearSolver(nn(nleq))
@@ -170,7 +169,7 @@ eval(Expr(:type, true, :(SimpleSolver{NLEQ<:ParametricNonLinEq}), quote
         last_linsolver = LinearSolver(nn(nleq))
         tmp_nn = zeros(nn(nleq))
         tmp_np = zeros(np(nleq))
-        solver = new{NLEQ}(nleq, z, linsolver, last_z, last_p, last_Jp,
+        solver = new{NLEQ,NN}(nleq, z, linsolver, last_z, last_p, last_Jp,
             last_linsolver, 0, 0.0, 1e-10, tmp_nn, tmp_np)
         set_extrapolation_origin(solver, initial_p, initial_z)
         return solver
@@ -189,7 +188,7 @@ is rarely useful as such.
 
 SimpleSolver{NLEQ<:ParametricNonLinEq}(nleq::NLEQ, initial_p::Vector{Float64},
                                        initial_z::Vector{Float64}) =
-    SimpleSolver{NLEQ}(nleq, initial_p, initial_z)
+    SimpleSolver{NLEQ,nn(nleq)}(nleq, initial_p, initial_z)
 
 set_resabstol!(solver::SimpleSolver, tol) = solver.tol = tol
 
