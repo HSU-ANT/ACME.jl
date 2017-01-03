@@ -424,11 +424,11 @@ function DiscreteModel{Solver}(circ::Circuit, t::Real, ::Type{Solver}=HomotopySo
                 end
         end
     end)
-    solver = Solver(ParametricNonLinEq(nonlinear_eq_func, nonlinear_eq_set_p,
-                                       nonlinear_eq_calc_Jp,
-                                       (zeros(model_nq), zeros(model_nn, model_nq)),
-                                       model_nn, model_np),
-                    zeros(model_np), init_z)
+    solver = eval(:($Solver(ParametricNonLinEq($nonlinear_eq_func, $nonlinear_eq_set_p,
+                                       $nonlinear_eq_calc_Jp,
+                                       (zeros($model_nq), zeros($model_nn, $model_nq)),
+                                       $model_nn, $model_np),
+                    zeros($model_np), $init_z)))
     return DiscreteModel{typeof(solver)}(mats, model_nonlinear_eq, solver)
 end
 
@@ -504,21 +504,21 @@ function initial_solution(nleq, q0, fq)
     # determine an initial solution with a homotopy solver that may vary q0
     # between 0 and the true q0 -> q0 takes the role of p
     nq, nn = size(fq)
-    init_nl_eq_func = eval(quote
-        (res, J, scratch, z) ->
+    return eval(quote
+        init_nl_eq_func = (res, J, scratch, z) ->
             let pfull=scratch[1], Jp=scratch[2], q=$(zeros(nq)),
                 Jq=$(zeros(nn, nq)), fq=$(fq)
                 $(nleq)
                 return nothing
             end
+        init_nleq = ParametricNonLinEq(init_nl_eq_func, $nn, $nq)
+        init_solver = HomotopySolver{SimpleSolver}(init_nleq, zeros($nq), zeros($nn))
+        init_z = solve(init_solver, $q0)
+        if !hasconverged(init_solver)
+            error("Failed to find initial solution")
+        end
+        return init_z
     end)
-    init_nleq = ParametricNonLinEq(init_nl_eq_func, nn, nq)
-    init_solver = HomotopySolver{SimpleSolver}(init_nleq, zeros(nq), zeros(nn))
-    init_z = solve(init_solver, q0)
-    if !hasconverged(init_solver)
-        error("Failed to find initial solution")
-    end
-    return init_z
 end
 
 nx(model::DiscreteModel) = length(model.x0)
@@ -530,25 +530,26 @@ nn(model::DiscreteModel) = size(model.fq, 2)
 
 function steadystate(model::DiscreteModel, u=zeros(nu(model)))
     IA_LU = lufact(eye(nx(model))-model.a)
-    steady_nl_eq_func = eval(quote
-        (res, J, scratch, z) ->
+    steady_q0 = model.q0 + model.pexp*(model.dq/IA_LU*model.b + model.eq)*u +
+    model.pexp*model.dq/IA_LU*model.x0
+    steady_z = eval(quote
+        steady_nl_eq_func = (res, J, scratch, z) ->
             let pfull=scratch[1], Jp=scratch[2],
                 q=$(zeros(nq(model))), Jq=$(zeros(nn(model), nq(model))),
                 fq=$(model.pexp*model.dq/IA_LU*model.c + model.fq)
                 $(model.nonlinear_eq)
                 return nothing
             end
+        steady_nleq = ParametricNonLinEq(steady_nl_eq_func, nn($model), nq($model))
+        steady_solver = HomotopySolver{SimpleSolver}(steady_nleq, zeros(nq($model)),
+                                                     zeros(nn($model)))
+        set_resabs2tol!(steady_solver, 1e-30)
+        steady_z = solve(steady_solver, $steady_q0)
+        if !hasconverged(steady_solver)
+            error("Failed to find steady state solution")
+        end
+        return steady_z
     end)
-    steady_nleq = ParametricNonLinEq(steady_nl_eq_func, nn(model), nq(model))
-    steady_solver = HomotopySolver{SimpleSolver}(steady_nleq, zeros(nq(model)),
-                                                 zeros(nn(model)))
-    set_resabs2tol!(steady_solver, 1e-30)
-    steady_q0 = model.q0 + model.pexp*(model.dq/IA_LU*model.b + model.eq)*u +
-                model.pexp*model.dq/IA_LU*model.x0
-    steady_z = solve(steady_solver, steady_q0)
-    if !hasconverged(steady_solver)
-        error("Failed to find steady state solution")
-    end
     return IA_LU\(model.b*u + model.c*steady_z + model.x0)
 end
 
