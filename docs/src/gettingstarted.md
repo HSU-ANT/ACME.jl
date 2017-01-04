@@ -1,26 +1,10 @@
-# ACME.jl - Analog Circuit Modeling and Emulation for Julia
-
-[![Join the chat at https://gitter.im/HSU-ANT/ACME.jl](https://badges.gitter.im/HSU-ANT/ACME.jl.svg)](https://gitter.im/HSU-ANT/ACME.jl?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
-[![Documentation](https://img.shields.io/badge/docs-v0.2.0-blue.svg)](https://hsu-ant.github.io/ACME.jl/v0.2.0)
-
-ACME is a [Julia](http://julialang.org/) package for the simulation of
-electrical circuits, focusing on audio effect circuits. It allows to
-programmatically describe a circuit in terms of elements and connections
-between them and then automatically derive a model for the circuit. The model
-can then be run on varying input data.
-
-ACME is based on the method described in
-[M. Holters, U. Zölzer, "A Generalized Method for the Derivation of Non-Linear
-State-Space Models from Circuit
-Schematics"](http://www.eurasip.org/Proceedings/Eusipco/Eusipco2015/papers/1570103545.pdf).
+# Getting Started
 
 ## Installation
 
 If you have not done so already, [download and install
 Julia](http://julialang.org/downloads/). (Any version starting with 0.4 should
-be fine; [earlier ACME
-versions](https://github.com/HSU-ANT/ACME.jl/tree/v0.1.1) also support Julia
-0.3.)
+be fine; earlier ACME versions also support Julia 0.3.)
 
 To install ACME, start Julia and run:
 
@@ -30,7 +14,7 @@ Pkg.add("ACME")
 
 This will download ACME and all of its dependencies.
 
-## First steps
+## First Steps
 
 We will demonstrate ACME by modeling a simple diode clipper. The first step is
 to load ACME:
@@ -69,7 +53,7 @@ circ = Circuit()
 Connections can be specified by naming element pins that are connected:
 
 ```Julia
-connect!(circ, j_in[:+], r1[1])
+connect!(circ, j_in["+"], r1[1])
 ```
 
 This connects the positive output of the input voltage source with pin 1 of the
@@ -79,14 +63,14 @@ like supply voltages. Here, we use it for the ground net where we connect the
 negative side of the input voltage:
 
 ```Julia
-connect!(circ, j_in[:-], :gnd)
+connect!(circ, j_in["-"], :gnd)
 ```
 
 One can also connect multiple pins at once:
 
 ```Julia
-connect!(circ, r1[2], c1[1], d1[:+], d2[:-], j_out[:+])
-connect!(circ, :gnd, c1[2], d1[:-], d2[:+], j_out[:-])
+connect!(circ, r1[2], c1[1], d1["+"], d2["-"], j_out["+"])
+connect!(circ, :gnd, c1[2], d1["-"], d2["+"], j_out["-"])
 ```
 
 Now that all connections have been set up, we need to turn the circuit
@@ -101,7 +85,7 @@ sampling rate, here assumed to be the typical 44100 Hz.
 
 Now we can process some input data. It has to be provided as a matrix with one
 row per input (just one in the example) and one column per sample. So for a
-sinusoid at 1 kHz lasting one second, we do
+sinusoid at 1 kHz lasting one second, we do::
 
 ```Julia
 y = run!(model, sin(2π*1000/44100*(0:44099).'))
@@ -109,6 +93,9 @@ y = run!(model, sin(2π*1000/44100*(0:44099).'))
 
 The output `y` now likewise is a matrix with one row for the one probe we have
 added to the circuit and one column per sample.
+
+More interesting circuits can be found in the examples located at
+`Pkg.dir("ACME/examples")`.
 
 In the likely event that you would like to process real audio data, take a look
 at the [WAV](https://github.com/dancasimiro/WAV.jl) package for reading writing
@@ -120,15 +107,3 @@ will therefore become faster after an initial learning phase.  Nevertheless,
 ACME is at present more geared towards computing all the model matrices than to
 actually running the model. More complex circuits may run intolerably slow or
 fail to run altogether.
-
-## Moving on
-
-There is some [documentation](https://hsu-ant.github.io/ACME.jl/v0.2.0)
-available for how
-to use ACME. Additionally, you can take a look at the examples that can be found
-in the `examples` directory below `Pkg.dir("ACME")`.
-
-If you would like to extend and improve ACME, that's great! But unfortunately,
-there is no developer documentation as of now, so you will to delve into the
-source code to figure out how things work, or try to ask on
-[gitter](https://gitter.im/HSU-ANT/ACME.jl).

@@ -139,4 +139,4 @@ function superover(::Type{Circuit}; drive=nothing, tone=nothing, level=nothing, 
 end
 
 superover{T<:DiscreteModel}(::Type{T}=DiscreteModel; drive=nothing, tone=nothing, level=nothing, sym::Bool=false, fs=44100) =
-    T(superover(Circuit, drive=drive, tone=tone, level=level, sym=sym), 1/fs)
+    T(superover(Circuit, drive=drive, tone=tone, level=level, sym=sym), 1//fs)

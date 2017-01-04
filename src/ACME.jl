@@ -1,7 +1,7 @@
 # Copyright 2015, 2016 Martin Holters
 # See accompanying license file.
 
-VERSION >= v"0.4.0-dev+6521" && __precompile__()
+__precompile__()
 
 module ACME
 
@@ -30,10 +30,10 @@ type Element
   pxd :: SparseMatrixCSC{Real,Int}
   pq :: SparseMatrixCSC{Real,Int}
   nonlinear_eq :: Expr
-  pins :: Dict{Symbol, Vector{@compat Tuple{Int, Int}}}
+  pins :: Dict{Symbol, Vector{Tuple{Int, Int}}}
 
   function Element(;args...)
-    sizes = @compat Dict{Symbol,Int}(:n0 => 1)
+    sizes = Dict{Symbol,Int}(:n0 => 1)
 
     function update_sizes(mat, syms)
       for (sym, s) in zip(syms, size(mat))
@@ -46,22 +46,22 @@ type Element
     end
 
     function make_pin_dict(syms)
-      dict = @compat Dict{Symbol,Vector{@compat Tuple{Int, Int}}}()
+      dict = Dict{Symbol,Vector{Tuple{Int, Int}}}()
       for i in 1:length(syms)
-        branch = div(i+1, 2)
-        polarity = 2mod(i, 2) - 1
-        push!(get!(dict, @compat(Symbol(syms[i])), []), (branch, polarity))
+        branch = (i+1) ÷ 2
+        polarity = 2(i % 2) - 1
+        push!(get!(dict, Symbol(syms[i]), []), (branch, polarity))
       end
       dict
     end
     make_pin_dict(dict::Dict) = dict
 
     const mat_dims =
-        @compat  Dict( :mv => (:nl,:nb), :mi => (:nl,:nb), :mx => (:nl,:nx),
-                       :mxd => (:nl,:nx), :mq => (:nl,:nq), :mu => (:nl,:nu),
-                       :u0 => (:nl, :n0),
-                       :pv => (:ny,:nb), :pi => (:ny,:nb), :px => (:ny,:nx),
-                       :pxd => (:ny,:nx), :pq => (:ny,:nq) )
+        Dict( :mv => (:nl,:nb), :mi => (:nl,:nb), :mx => (:nl,:nx),
+              :mxd => (:nl,:nx), :mq => (:nl,:nq), :mu => (:nl,:nu),
+              :u0 => (:nl, :n0),
+              :pv => (:ny,:nb), :pi => (:ny,:nb), :px => (:ny,:nx),
+              :pxd => (:ny,:nx), :pq => (:ny,:nq) )
 
     elem = new()
     for (key, val) in args
@@ -88,7 +88,7 @@ type Element
   end
 end
 
-for (n,m) in @compat Dict(:nb => :mv, :nx => :mx, :nq => :mq, :nu => :mu)
+for (n,m) in Dict(:nb => :mv, :nx => :mx, :nq => :mq, :nu => :mu)
   @eval ($n)(e::Element) = size(e.$m, 2)
 end
 nl(e::Element) = size(e.mv, 1)
@@ -96,14 +96,14 @@ ny(e::Element) = size(e.pv, 1)
 nn(e::Element) = nb(e) + nx(e) + nq(e) - nl(e)
 
 # a Pin combines an element with a branch/polarity list
-typealias Pin @compat Tuple{Element, Vector{Tuple{Int,Int}}}
+typealias Pin Tuple{Element, Vector{Tuple{Int,Int}}}
 
 # allow elem[:pin] notation to get an elements pin
-getindex(e::Element, p) = (e, e.pins[@compat Symbol(p)])
+getindex(e::Element, p) = (e, e.pins[Symbol(p)])
 
 include("elements.jl")
 
-typealias Net Vector{@compat Tuple{Int,Int}} # each net is a list of branch/polarity pairs
+typealias Net Vector{Tuple{Int,Int}} # each net is a list of branch/polarity pairs
 
 type Circuit
     elements :: Vector{Element}
@@ -119,8 +119,9 @@ end
 for mat in [:mv; :mi; :mx; :mxd; :mq; :mu; :pv; :pi; :px; :pxd; :pq]
     # blkdiag() does not work, so include an empty matrix of desired type in
     # case c.elements is empty
-    @eval ($mat)(c::Circuit) = blkdiag(spzeros(Real, 0, 0),
-                                       [elem.$mat for elem in c.elements]...)
+    @eval ($mat)(c::Circuit) =
+         blkdiag(spzeros(Rational{BigInt}, 0, 0),
+                 [convert(SparseMatrixCSC{Rational{BigInt}}, elem.$mat) for elem in c.elements]...)
 end
 
 u0(c::Circuit) = vcat([elem.u0 for elem in c.elements]...)
@@ -147,9 +148,9 @@ function nonlinear_eq(c::Circuit)
     col_offset = 0
     nl_expr = Expr(:block)
     for elem in c.elements
-        index_offsets = @compat Dict( :q => (col_offset,),
-                                      :J => (row_offset, col_offset),
-                                      :res => (row_offset,) )
+        index_offsets = Dict( :q => (col_offset,),
+                              :J => (row_offset, col_offset),
+                              :res => (row_offset,) )
 
         function offset_indexes(expr::Expr)
             ret = Expr(expr.head)
@@ -214,7 +215,6 @@ function netfor!(c::Circuit, p::Pin)
     for (branch, pol) in p[2], net in c.nets
         (branch + b_offset, pol) ∈ net && break
     end
-    @assert isdefined(net)
     net
 end
 
@@ -223,7 +223,7 @@ function netfor!(c::Circuit, name::Symbol)
     c.net_names[name]
 end
 
-function connect!(c::Circuit, pins::(@compat Union{Pin,Symbol})...)
+function connect!(c::Circuit, pins::Union{Pin,Symbol}...)
     nets = unique([netfor!(c, pin) for pin in pins])
     for net in nets[2:end]
         append!(nets[1], net)
@@ -240,7 +240,7 @@ end
 # instead of Ints; a better way for cross-julia-version compatibilty would be
 # nice; maybe Compat helps in the future...
 function topomat!{T<:Integer}(incidence::SparseMatrixCSC{T})
-    @assert all(abs(nonzeros(incidence)) .== 1)
+    @assert all(x -> abs(x) == 1, nonzeros(incidence))
     @assert all(sum(incidence, 1) .== 0)
 
     t = falses(size(incidence)[2]);
@@ -254,7 +254,7 @@ function topomat!{T<:Integer}(incidence::SparseMatrixCSC{T})
         t[col] = true;
 
         if rows[1] ≠ row
-            swaprows!(incidence, rows[1], row)
+            incidence[[rows[1], row], :] = incidence[[row, rows[1]], :]
         end
         if length(rows) == 2
             @assert incidence[row, col] + incidence[rows[2], col] == 0
@@ -281,12 +281,12 @@ function topomat!{T<:Integer}(incidence::SparseMatrixCSC{T})
         dl = spzeros(T, row-1, 0)
         tv = spzeros(T, 0, size(incidence)[2])
     else
-        dl = ti[:, ~t]
+        dl = ti[:, !t]
         tv = spzeros(T, size(dl)[2], size(incidence)[2])
-        if ~all(~t)
+        if !all(!t)
             tv[:,find(t)] = -dl' # with julia 0.3.2, sparse([1 -1]).' -> [1, 0], hence use of ' (conjugate transpose)
         end
-        tv[:,find(~t)] = speye(T,size(dl)[2])
+        tv[:,find(!t)] = speye(T,size(dl)[2])
     end
 
     tv, ti
@@ -316,157 +316,209 @@ type DiscreteModel{Solver}
     x::Vector{Float64}
 
     function DiscreteModel(circ::Circuit, t::Float64)
+        Base.depwarn("DiscreteModel{Solver}(circ, t) is deprecated, use DiscreteModel(circ, t, Solver) instead.",
+                     :DiscreteModel)
+        DiscreteModel(circ, t, Solver)
+    end
+
+    function DiscreteModel(mats::Dict{Symbol}, nonlinear_eq::Expr, solver::Solver)
         model = new()
 
-        mats = model_matrices(circ, t)
-        for mat in [:a, :b, :c, :pexp, :dq, :eq, :fq, :dy, :ey, :fy]
-            setfield!(model, mat, convert(Matrix{Float64}, full(mats[mat])))
-        end
-        for vect in [:x0, :q0, :y0]
-            setfield!(model, vect, convert(Vector{Float64}, vec(full(mats[vect]))))
+        for mat in (:a, :b, :c, :pexp, :dq, :eq, :fq, :dy, :ey, :fy, :x0, :q0, :y0)
+            setfield!(model, mat, convert(fieldtype(typeof(model), mat), mats[mat]))
         end
 
-        @assert nn(circ) == nn(model)
-
+        model.nonlinear_eq = nonlinear_eq
+        model.solver = solver
         model.x = zeros(nx(model))
-
-        model.nonlinear_eq = quote
-            #copy!(q, q0 + pexp * p + fq * z)
-            copy!(q, q0)
-            BLAS.gemv!('N',1.,pexp,p,1.,q)
-            BLAS.gemv!('N',1.,fq,z,1.,q)
-            let J=Jq
-                $(nonlinear_eq(circ))
-            end
-            #copy!(J, Jq*model.fq)
-            BLAS.gemm!('N', 'N', 1., Jq, fq, 0., J)
-            #copy!(Jp, Jq*pexp)
-            BLAS.gemm!('N', 'N', 1., Jq, pexp, 0., Jp)
-        end
-
-        init_z = initial_solution(model.nonlinear_eq, model.q0, model.fq)
-        nonlinear_eq_func = eval(quote
-            if VERSION < v"0.5.0-dev+2396"
-                # wrap up in named function because anonymous functions are slow
-                # in old Julia versions
-                function $(gensym())(res, J, Jp, p, z)
-                    q0=$(model.q0)
-                    pexp=$(model.pexp)
-                    q=$(zeros(nq(model)))
-                    Jq=$(zeros(nn(model), nq(model)))
-                    fq=$(model.fq)
-                    $(model.nonlinear_eq)
-                    return nothing
-                end
-            else
-                (res, J, Jp, p, z) ->
-                    let q0=$(model.q0), pexp=$(model.pexp),
-                        q=$(zeros(nq(model))),
-                        Jq=$(zeros(nn(model), nq(model))), fq=$(model.fq)
-                        $(model.nonlinear_eq)
-                        return nothing
-                    end
-            end
-        end)
-        model.solver =
-            Solver(ParametricNonLinEq(nonlinear_eq_func, nn(model), np(model)),
-                   zeros(np(model)), init_z)
         return model
     end
 end
 
-DiscreteModel(circ::Circuit, t::Float64) =
-    DiscreteModel{HomotopySolver{CachingSolver{SimpleSolver}}}(circ, t)
+function DiscreteModel{Solver}(circ::Circuit, t::Real, ::Type{Solver}=HomotopySolver{CachingSolver{SimpleSolver}})
+    mats = model_matrices(circ, t)
+    reduce_pdims!(mats)
 
-function model_matrices(circ::Circuit, t)
-    x, f = gensolve([mv(circ) mi(circ) 1/t*mxd(circ)+0.5*mx(circ) mq(circ);
-                     blkdiag(topomat(circ)...) spzeros(nb(circ), nx(circ) + nq(circ))],
-                    [u0(circ) mu(circ) 1/t*mxd(circ)-0.5*mx(circ);
-                     spzeros(nb(circ), 1+nu(circ)+nx(circ))])
-
-    rowsizes = [nb(circ); nb(circ); nx(circ); nq(circ)]
-    res = Dict{Symbol,AbstractArray}(zip([:fv; :fi; :c; :fq], matsplit(f, rowsizes)))
-
-    indeterminates = zeros(size(f,1), 0)
-    if size(res[:fq], 2) > nn(circ)
-        fq = full(res[:fq])
-        q, r, piv = qr(fq.', Val{true}, thin=false)
-        # fq[piv,:]*q ~ r'
-        indeterminates = f * q[:,nn(circ)+1:end]
-        if sumabs2(res[:c] * q[:,nn(circ)+1:end]) > 1e-20
-            warn("State update depends on indeterminate quantity")
+    model_nonlinear_eq = quote
+        #copy!(q, pfull + fq * z)
+        copy!(q, pfull)
+        BLAS.gemv!('N',1.,fq,z,1.,q)
+        let J=Jq
+            $(nonlinear_eq(circ))
         end
-        f *= q[:,1:nn(circ)]
-        for k in [:fv; :fi; :c; :fq]
-            res[k] *= q[:,1:nn(circ)]
-        end
+        #copy!(J, Jq*model.fq)
+        BLAS.gemm!('N', 'N', 1., Jq, fq, 0., J)
     end
 
-    # choose particular solution such that the rows corresponding to q are
-    # column-wise orthogonal to the column space of fq (and hence have a column
-    # space of minimal dimension)
-    fq = res[:fq]
-    x = x - full(f)/(full(fq)'*fq)*fq'*x[end-nq(circ)+1:end,:]
+    model_nq = length(mats[:q0])
+    model_nn = size(mats[:fq],2)
+    model_np = size(mats[:dq],1)
+
+    @assert nn(circ) == model_nn
+
+    q0 = convert(Vector{Float64}, mats[:q0])
+    pexp = convert(Matrix{Float64}, mats[:pexp])
+    fq = convert(Matrix{Float64}, mats[:fq])
+
+    init_z = initial_solution(model_nonlinear_eq, q0, fq)
+    nonlinear_eq_func = eval(quote
+        if VERSION < v"0.5.0-dev+2396"
+            # wrap up in named function because anonymous functions are slow
+            # in old Julia versions
+            function $(gensym())(res, J, scratch, z)
+                pfull=scratch[1]
+                Jq=scratch[2]
+                q=$(zeros(model_nq))
+                fq=$fq
+                $(model_nonlinear_eq)
+                return nothing
+            end
+        else
+            (res, J, scratch, z) ->
+                let pfull=scratch[1], Jq=scratch[2], q=$(zeros(model_nq)),
+                    fq=$fq
+                    $(model_nonlinear_eq)
+                    return nothing
+                end
+        end
+    end)
+    nonlinear_eq_set_p = eval(quote
+        if VERSION < v"0.5.0-dev+2396"
+            # wrap up in named function because anonymous functions are slow
+            # in old Julia versions
+            function $(gensym())(scratch, p)
+                #copy!(pfull, q0 + pexp * p)
+                pfull = scratch[1]
+                copy!(pfull, $q0)
+                BLAS.gemv!('N', 1., $pexp, p, 1., pfull)
+                return nothing
+            end
+        else
+            (scratch, p) ->
+                begin
+                    pfull = scratch[1]
+                    #copy!(pfull, q0 + pexp * p)
+                    copy!(pfull, $q0)
+                    BLAS.gemv!('N', 1., $pexp, p, 1., pfull)
+                    return nothing
+                end
+        end
+    end)
+    nonlinear_eq_calc_Jp = eval(quote
+        if VERSION < v"0.5.0-dev+2396"
+            # wrap up in named function because anonymous functions are slow
+            # in old Julia versions
+            function $(gensym())(scratch, Jp)
+                Jq = scratch[2]
+                #copy!(Jp, Jq*pexp)
+                BLAS.gemm!('N', 'N', 1., Jq, $pexp, 0., Jp)
+                return nothing
+            end
+        else
+            (scratch, Jp) ->
+                begin
+                    Jq = scratch[2]
+                    #copy!(Jp, Jq*pexp)
+                    BLAS.gemm!('N', 'N', 1., Jq, $pexp, 0., Jp)
+                    return nothing
+                end
+        end
+    end)
+    solver = eval(:($Solver(ParametricNonLinEq($nonlinear_eq_func, $nonlinear_eq_set_p,
+                                       $nonlinear_eq_calc_Jp,
+                                       (zeros($model_nq), zeros($model_nn, $model_nq)),
+                                       $model_nn, $model_np),
+                    zeros($model_np), $init_z)))
+    return DiscreteModel{typeof(solver)}(mats, model_nonlinear_eq, solver)
+end
+
+function model_matrices(circ::Circuit, t::Rational{BigInt})
+    lhs = convert(SparseMatrixCSC{Rational{BigInt}},
+                  sparse([mv(circ) mi(circ) mxd(circ)//t+mx(circ)//2 mq(circ);
+                   blkdiag(topomat(circ)...) spzeros(nb(circ), nx(circ) + nq(circ))]))
+    rhs = convert(SparseMatrixCSC{Rational{BigInt}},
+                  sparse([u0(circ) mu(circ) mxd(circ)//t-mx(circ)//2;
+                          spzeros(nb(circ), 1+nu(circ)+nx(circ))]))
+    x, f = map(full, gensolve(lhs, rhs))
+
+    rowsizes = [nb(circ); nb(circ); nx(circ); nq(circ)]
+    res = Dict{Symbol,Array}(zip([:fv; :fi; :c; :fq], matsplit(f, rowsizes)))
+
+    nullspace = gensolve(sparse(res[:fq]), spzeros(size(res[:fq],1), 0))[2]
+    indeterminates = f * nullspace
+
+    if normsquared(res[:c] * nullspace) > 1e-20
+        warn("State update depends on indeterminate quantity")
+    end
+    while size(nullspace, 2) > 0
+        i, j = ind2sub(size(nullspace), indmax(map(abs, nullspace)))
+        nullspace = nullspace[[1:i-1; i+1:end], [1:j-1; j+1:end]]
+        f = f[:, [1:j-1; j+1:end]]
+        for k in [:fv; :fi; :c; :fq]
+            res[k] = res[k][:, [1:j-1; j+1:end]]
+        end
+    end
 
     merge!(res, Dict(zip([:v0 :ev :dv; :i0 :ei :di; :x0 :b :a; :q0 :eq_full :dq_full],
                          matsplit(x, rowsizes, [1; nu(circ); nx(circ)]))))
-
-    dq_full = res[:dq_full]
-    eq_full = res[:eq_full]
-    if size(dq_full)[1] > 0
-        # decompose [dq_full eq_full] into pexp*[dq eq] with [dq eq] having minimum
-        # number of rows based on the QR factorization
-        pexp, r, piv = qr([dq_full eq_full], Val{true})
-        ref_err = vecnorm([dq_full eq_full][:,piv] - pexp*r)
-        local rowcount
-        for rowcount=size(r)[1]:-1:0
-            err = vecnorm([dq_full eq_full][:,piv] - pexp[:,1:rowcount]*r[1:rowcount,:])
-            if err > ref_err
-                rowcount += 1
-                break
-            end
-        end
-        res[:dq], res[:eq] =
-            matsplit(r[1:rowcount,sortperm(piv)], [rowcount], [nx(circ); nu(circ)])
-        res[:pexp] = pexp[:,1:rowcount]
-    else
-        res[:dq] = zeros(0, nx(circ))
-        res[:eq] = zeros(0, nu(circ))
-        res[:pexp] = zeros(0, 0)
+    for v in (:v0, :i0, :x0, :q0)
+        res[v] = squeeze(res[v], 2)
     end
 
-    p = [pv(circ) pi(circ) 0.5*px(circ)+1/t*pxd(circ) pq(circ)]
-    if sumabs2(p * indeterminates) > 1e-20
+    p = [pv(circ) pi(circ) px(circ)//2+pxd(circ)//t pq(circ)]
+    if normsquared(p * indeterminates) > 1e-20
         warn("Model output depends on indeterminate quantity")
     end
-    res[:dy] = p * x[:,2+nu(circ):end] + 0.5*px(circ)-1/t*pxd(circ)
-    #          p * [dv; di; a;  dq_full] + 0.5*px(circ)-1/t*pxd(circ)
+    res[:dy] = p * x[:,2+nu(circ):end] + px(circ)//2-pxd(circ)//t
+    #          p * [dv; di; a;  dq_full] + px(circ)//2-pxd(circ)//t
     res[:ey] = p * x[:,2:1+nu(circ)] # p * [ev; ei; b;  eq_full]
     res[:fy] = p * f                 # p * [fv; fi; c;  fq]
-    res[:y0] = p * x[:,1]            # p * [v0; i0; x0; q0]
+    res[:y0] = p * vec(x[:,1])       # p * [v0; i0; x0; q0]
 
     return res
+end
+
+model_matrices(circ::Circuit, t) = model_matrices(circ, Rational{BigInt}(t))
+
+function reduce_pdims!(mats::Dict)
+    # decompose [dq_full eq_full] into pexp*[dq eq] with [dq eq] having minimum
+    # number of rows
+    pexp, dqeq = rank_factorize(sparse([mats[:dq_full] mats[:eq_full]]))
+    mats[:pexp] = pexp
+    colsizes = [size(mats[m], 2) for m in [:dq_full, :eq_full]]
+    mats[:dq], mats[:eq] = matsplit(dqeq, [size(dqeq, 1)], colsizes)
+
+    # project pexp onto the orthogonal complement of the column space of Fq
+    fq_pinv = gensolve(sparse(mats[:fq]'*mats[:fq]), mats[:fq]')[1]
+    pexp = pexp - mats[:fq]*fq_pinv*pexp
+    # if the new pexp has lower rank, update
+    pexp, f = rank_factorize(sparse(pexp))
+    if size(pexp, 2) < size(mats[:pexp], 2)
+        mats[:pexp] = pexp
+        mats[:dq] = f * mats[:dq]
+        mats[:eq] = f * mats[:eq]
+    end
 end
 
 function initial_solution(nleq, q0, fq)
     # determine an initial solution with a homotopy solver that may vary q0
     # between 0 and the true q0 -> q0 takes the role of p
     nq, nn = size(fq)
-    init_nl_eq_func = eval(quote
-        (res, J, Jp, p, z) ->
-            let q0=$(zeros(nq)), pexp=$(eye(nq)), q=$(zeros(nq)),
+    return eval(quote
+        init_nl_eq_func = (res, J, scratch, z) ->
+            let pfull=scratch[1], Jp=scratch[2], q=$(zeros(nq)),
                 Jq=$(zeros(nn, nq)), fq=$(fq)
                 $(nleq)
                 return nothing
             end
+        init_nleq = ParametricNonLinEq(init_nl_eq_func, $nn, $nq)
+        init_solver = HomotopySolver{SimpleSolver}(init_nleq, zeros($nq), zeros($nn))
+        init_z = solve(init_solver, $q0)
+        if !hasconverged(init_solver)
+            error("Failed to find initial solution")
+        end
+        return init_z
     end)
-    init_nleq = ParametricNonLinEq(init_nl_eq_func, nn, nq)
-    init_solver = HomotopySolver{SimpleSolver}(init_nleq, zeros(nq), zeros(nn))
-    init_z = solve(init_solver, q0)
-    if !hasconverged(init_solver)
-        error("Failed to find initial solution")
-    end
-    return init_z
 end
 
 nx(model::DiscreteModel) = length(model.x0)
@@ -478,25 +530,26 @@ nn(model::DiscreteModel) = size(model.fq, 2)
 
 function steadystate(model::DiscreteModel, u=zeros(nu(model)))
     IA_LU = lufact(eye(nx(model))-model.a)
-    steady_nl_eq_func = eval(quote
-        (res, J, Jp, p, z) ->
-            let q0=$(zeros(nq(model))), pexp=$(eye(nq(model))),
+    steady_q0 = model.q0 + model.pexp*(model.dq/IA_LU*model.b + model.eq)*u +
+    model.pexp*model.dq/IA_LU*model.x0
+    steady_z = eval(quote
+        steady_nl_eq_func = (res, J, scratch, z) ->
+            let pfull=scratch[1], Jp=scratch[2],
                 q=$(zeros(nq(model))), Jq=$(zeros(nn(model), nq(model))),
                 fq=$(model.pexp*model.dq/IA_LU*model.c + model.fq)
                 $(model.nonlinear_eq)
                 return nothing
             end
+        steady_nleq = ParametricNonLinEq(steady_nl_eq_func, nn($model), nq($model))
+        steady_solver = HomotopySolver{SimpleSolver}(steady_nleq, zeros(nq($model)),
+                                                     zeros(nn($model)))
+        set_resabs2tol!(steady_solver, 1e-30)
+        steady_z = solve(steady_solver, $steady_q0)
+        if !hasconverged(steady_solver)
+            error("Failed to find steady state solution")
+        end
+        return steady_z
     end)
-    steady_nleq = ParametricNonLinEq(steady_nl_eq_func, nn(model), nq(model))
-    steady_solver = HomotopySolver{SimpleSolver}(steady_nleq, zeros(nq(model)),
-                                                 zeros(nn(model)))
-    set_resabs2tol!(steady_solver, 1e-30)
-    steady_q0 = model.q0 + model.pexp*(model.dq/IA_LU*model.b + model.eq)*u +
-                model.pexp*model.dq/IA_LU*model.x0
-    steady_z = solve(steady_solver, steady_q0)
-    if !hasconverged(steady_solver)
-        error("Failed to find steady state solution")
-    end
     return IA_LU\(model.b*u + model.c*steady_z + model.x0)
 end
 
@@ -507,19 +560,22 @@ function steadystate!(model::DiscreteModel, u=zeros(nu(model)))
 end
 
 function run!(model::DiscreteModel, u::AbstractMatrix{Float64})
+    if size(u, 1) ≠ nu(model)
+        throw(DimensionMismatch("input matrix has $(size(u,1)) rows, but model requires $(nu(model)) inputs"))
+    end
     y = Array(Float64, ny(model), size(u)[2])
     ucur = Array(Float64, nu(model))
     p = Array(Float64, np(model))
     ycur = Array(Float64, ny(model))
     xnew = Array(Float64, nx(model))
     @showprogress 1 "Running model: " for n = 1:size(u)[2]
-        copy!(ucur, u[:,n])
         # copy!(p, model.dq * model.x + model.eq * u[:,n])
+        copy!(ucur, 1, u, (n-1)*nu(model)+1, nu(model))
         BLAS.gemv!('N', 1., model.dq, model.x, 0., p)
         BLAS.gemv!('N', 1., model.eq, ucur, 1., p)
         z = solve(model.solver, p)
-        if ~hasconverged(model.solver)
-            if all(isfinite(z))
+        if !hasconverged(model.solver)
+            if all(isfinite, z)
                 warn("Failed to converge while solving non-linear equation.")
             else
                 error("Failed to converge while solving non-linear equation, got non-finite result.")
@@ -530,7 +586,8 @@ function run!(model::DiscreteModel, u::AbstractMatrix{Float64})
         BLAS.gemv!('N', 1., model.dy, model.x, 1., ycur)
         BLAS.gemv!('N', 1., model.ey, ucur, 1., ycur)
         BLAS.gemv!('N', 1., model.fy, z, 1., ycur)
-        y[:,n] = ycur
+        #y[:,n] = ycur
+        copy!(y, (n-1)*ny(model)+1, ycur, 1, ny(model))
         #model.x = model.a * model.x + model.b * u[:,n] + model.c * z + model.x0
         copy!(xnew, model.x0)
         BLAS.gemv!('N', 1., model.a, model.x, 1., xnew)
@@ -541,32 +598,23 @@ function run!(model::DiscreteModel, u::AbstractMatrix{Float64})
     return y
 end
 
-function swaprows!(a::SparseMatrixCSC, row1, row2)
-    # This sometimes gives a wrong result with julia 0.3.2:
-    #    a[[row1, row2],:] = a[[row2, row1],:]
-    i, j, v = findnz(a)
-    row1idx = i.==row1
-    row2idx = i.==row2
-    i[row1idx] = row2
-    i[row2idx] = row1
-    a[:,:] = sparse(i, j, v, size(a)...)
-end
-
 # lines marked with !SV avoid creation of SparseVector by indexing with Ranges
 # instead of Ints; a better way for cross-julia-version compatibilty would be
 # nice; maybe Compat helps in the future...
 function gensolve(a::SparseMatrixCSC, b, x, h, thresh=0.1)
     m = size(a)[1]
     t = sortperm(vec(sum(spones(a),2))) # row indexes in ascending order of nnz
+    tol = 3 * max(eps(float(eltype(a))), eps(float(eltype(h)))) * size(a, 2)
     for i in 1:m
         ait = a[t[i:i],:] # ait is a row of the a matrix # !SV
         s = ait * h;
-        if nnz(s) == 0
+        inz, jnz, nz_vals = findnz(s)
+        nz_abs_vals = map(abs, nz_vals)
+        max_abs_val = reduce(max, zero(eltype(s)), nz_abs_vals)
+        if max_abs_val ≤ tol # cosidered numerical zero
             continue
         end
-        inz, jnz, nz_vals = findnz(s)
-        nz_abs_vals = abs(nz_vals)
-        jat = jnz[nz_abs_vals .≥ thresh*maximum(nz_abs_vals)] # cols above threshold
+        jat = jnz[nz_abs_vals .≥ thresh*max_abs_val] # cols above threshold
         j = jat[indmin(sum(spones(h[:,jat])))]
         q = h[:,j:j] # !SV
         # ait*q only has a single element!
@@ -581,21 +629,34 @@ function gensolve(a::SparseMatrixCSC, b, x, h, thresh=0.1)
 end
 
 gensolve(a, b, thresh=0.1) =
-    gensolve(a, b, spzeros(size(a)[2], size(b)[2]), speye(size(a)[2]), thresh)
+    gensolve(a, b, spzeros(promote_type(eltype(a), eltype(b)), size(a)[2], size(b)[2]), speye(eltype(a), size(a)[2]), thresh)
+
+function rank_factorize(a::SparseMatrixCSC)
+    f = a
+    nullspace = gensolve(a', spzeros(size(a, 2), 0))[2]
+    c = eye(eltype(a), size(a, 1))
+    while size(nullspace, 2) > 0
+        i, j = ind2sub(size(nullspace), indmax(map(abs, nullspace)))
+        c -= c[:, i] * nullspace[:, j]' / nullspace[i, j]
+        c = c[:, [1:i-1; i+1:end]]
+        nullspace -= nullspace[:, j] * nullspace[i:i, :] / nullspace[i, j]
+        nullspace = nullspace[[1:i-1; i+1:end], [1:j-1; j+1:end]]
+        f = f[[1:i-1; i+1:end], :]
+    end
+    return c, f
+end
 
 consecranges(lengths) = map(range, cumsum([1; lengths[1:end-1]]), lengths)
 
-if VERSION < v"0.4.0-dev+2833"
-    # work around a bug when indexing with empty ranges
-    function matsplit(m, rowsizes, colsizes=[size(m)[2]])
-        fixed_getindex(A, rs, cs) = isempty(rs) || isempty(cs) ?
-            similar(A, length(rs), length(cs)) : return A[rs, cs]
-        return [fixed_getindex(m, rs, cs) for rs in consecranges(rowsizes),
-                                              cs in consecranges(colsizes)]
+matsplit(m, rowsizes, colsizes=[size(m)[2]]) =
+    [m[rs, cs] for rs in consecranges(rowsizes), cs in consecranges(colsizes)]
+
+    if VERSION < v"0.5.0"
+        # this is deprecated starting in Julia 0.6
+        normsquared(x) = sumabs2(x)
+    else
+        # prior to Julia 0.5, this fails for empty x and is slow
+        normsquared(x) = sum(abs2, x)
     end
-else
-    matsplit(m, rowsizes, colsizes=[size(m)[2]]) =
-        [m[rs, cs] for rs in consecranges(rowsizes), cs in consecranges(colsizes)]
-end
 
 end # module
