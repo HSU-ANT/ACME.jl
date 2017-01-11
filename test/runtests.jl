@@ -173,6 +173,17 @@ let model=diodeclipper()
     # TODO: further validate y
     checksteady!(model)
 end
+let circ = diodeclipper(Circuit)
+    model = DiscreteModel(circ, 44100, ACME.HomotopySolver{ACME.SimpleSolver})
+    runner = ModelRunner(model, false)
+    u = map(sin, 2π*1000/44100*(0:44099)')
+    y = run!(runner, u)
+    run!(runner, y, u)
+    alloc = @allocated run!(runner, y, u)
+    if alloc > 0
+        warn("Allocated $alloc in run! of HomotopySolver{SimpleSolver} base ModelRunner")
+    end
+end
 
 include("../examples/birdie.jl")
 let model=birdie(vol=0.8)
