@@ -515,7 +515,11 @@ function run!(model::DiscreteModel, u::AbstractMatrix{Float64})
     @showprogress 1 "Running model: " for n = 1:size(u)[2]
         copy!(ucur, u[:,n])
         # copy!(p, model.dq * model.x + model.eq * u[:,n])
-        BLAS.gemv!('N', 1., model.dq, model.x, 0., p)
+        if size(model.dq, 2) == 0
+            fill!(p, 0.0)
+        else
+            BLAS.gemv!('N', 1., model.dq, model.x, 0., p)
+        end
         BLAS.gemv!('N', 1., model.eq, ucur, 1., p)
         z = solve(model.solver, p)
         if ~hasconverged(model.solver)
