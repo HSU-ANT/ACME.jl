@@ -54,14 +54,19 @@ let circ = Circuit(), r = resistor(0), probe = currentprobe()
     redirect_stderr(orig_stderr)
 end
 
-let circ = Circuit(), d = diode(), src=currentsource()
+let circ = Circuit(), d = diode(), src=currentsource(), probe=voltageprobe()
     connect!(circ, d[:+], src[:+])
     connect!(circ, d[:-], src[:-])
+    connect!(circ, d[:+], probe[:+])
+    connect!(circ, d[:-], probe[:-])
     model = DiscreteModel(circ, 1)
+    y = run!(model, [1.0 1.0])
+    @test size(y) == (1, 2)
+    @test y[1,1] == y[1,2]
     @test_throws ErrorException run!(model, hcat([Inf]))
     orig_stderr = STDERR
     rd, wr = redirect_stderr()
-    @test run!(model, hcat([-1.0])) == zeros(0, 1)
+    @test size(run!(model, hcat([-1.0]))) == (1, 1)
     # should warn because solution exists as diode cannot reach reverse current of 1A
     @test !isempty(search(convert(ASCIIString, readavailable(rd)), "WARNING"))
     redirect_stderr(orig_stderr)
