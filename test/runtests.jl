@@ -156,7 +156,7 @@ end
 include("../examples/sallenkey.jl")
 let model=sallenkey()
     println("Running sallenkey")
-    y = run!(model, map(sin, 2π*1000/44100*(0:44099)'))
+    y = run!(model, map(sin, 2π*1000/44100*(0:44099)'); showprogress=false)
     @test size(y) == (1,44100)
     # TODO: further validate y
 
@@ -168,7 +168,7 @@ include("../examples/diodeclipper.jl")
 let model=diodeclipper()
     println("Running diodeclipper")
     @test ACME.np(model) == 1
-    y = run!(model, map(sin, 2π*1000/44100*(0:44099)'))
+    y = run!(model, map(sin, 2π*1000/44100*(0:44099)'); showprogress=false)
     @test size(y) == (1,44100)
     # TODO: further validate y
     checksteady!(model)
@@ -191,7 +191,7 @@ let model=birdie(vol=0.8)
     @assert ACME.hasconverged(model.solver)
     println("Running birdie with fixed vol")
     @test ACME.np(model) == 2
-    y = run!(model, map(sin, 2π*1000/44100*(0:44099)'))
+    y = run!(model, map(sin, 2π*1000/44100*(0:44099)'); showprogress=false)
     @test size(y) == (1,44100)
     # TODO: further validate y
     checksteady!(model)
@@ -199,7 +199,7 @@ end
 let model=birdie()
     println("Running birdie with varying vol")
     @test ACME.np(model) == 3
-    y = run!(model, [map(sin, 2π*1000/44100*(0:44099).'); linspace(1,0,44100).'])
+    y = run!(model, [map(sin, 2π*1000/44100*(0:44099).'); linspace(1,0,44100).']; showprogress=false)
     @test size(y) == (1,44100)
     # TODO: further validate y
 end
@@ -208,7 +208,7 @@ include("../examples/superover.jl")
 let model=superover(drive=1.0, tone=1.0, level=1.0)
     println("Running superover with fixed potentiometer values")
     @test ACME.np(model) == 5
-    y = run!(model, map(sin, 2π*1000/44100*(0:44099)'))
+    y = run!(model, map(sin, 2π*1000/44100*(0:44099)'); showprogress=false)
     @test size(y) == (1,44100)
     # TODO: further validate y
     checksteady!(model)
@@ -216,7 +216,7 @@ end
 let model=superover()
     println("Running superover with varying potentiometer values")
     @test ACME.np(model) == 11
-    y = run!(model, [map(sin, 2π*1000/44100*(0:999)'); linspace(1,0,1000).'; linspace(0,1,1000).'; linspace(1,0,1000).'])
+    y = run!(model, [map(sin, 2π*1000/44100*(0:999)'); linspace(1,0,1000).'; linspace(0,1,1000).'; linspace(1,0,1000).']; showprogress=false)
     @test size(y) == (1,1000)
     # TODO: further validate y
 end
