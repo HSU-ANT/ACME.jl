@@ -1,4 +1,4 @@
-# Copyright 2015, 2016 Martin Holters
+# Copyright 2015, 2016, 2017 Martin Holters
 # See accompanying license file.
 
 __precompile__()
