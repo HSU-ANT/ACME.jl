@@ -1,4 +1,4 @@
-# Copyright 2015, 2016 Martin Holters
+# Copyright 2015, 2016, 2017 Martin Holters
 # See accompanying license file.
 
 __precompile__()
@@ -563,11 +563,11 @@ function run!(model::DiscreteModel, u::AbstractMatrix{Float64})
     if size(u, 1) ≠ nu(model)
         throw(DimensionMismatch("input matrix has $(size(u,1)) rows, but model requires $(nu(model)) inputs"))
     end
-    y = Array(Float64, ny(model), size(u)[2])
-    ucur = Array(Float64, nu(model))
-    p = Array(Float64, np(model))
-    ycur = Array(Float64, ny(model))
-    xnew = Array(Float64, nx(model))
+    y = Array{Float64,2}(ny(model), size(u)[2])
+    ucur = Array{Float64,1}(nu(model))
+    p = Array{Float64,1}(np(model))
+    ycur = Array{Float64,1}(ny(model))
+    xnew = Array{Float64,1}(nx(model))
     @showprogress 1 "Running model: " for n = 1:size(u)[2]
         # copy!(p, model.dq * model.x + model.eq * u[:,n])
         copy!(ucur, 1, u, (n-1)*nu(model)+1, nu(model))
@@ -643,7 +643,7 @@ function rank_factorize(a::SparseMatrixCSC)
         i, j = ind2sub(size(nullspace), indmax(map(abs, nullspace)))
         c -= c[:, i] * nullspace[:, j]' / nullspace[i, j]
         c = c[:, [1:i-1; i+1:end]]
-        nullspace -= nullspace[:, j] * nullspace[i:i, :] / nullspace[i, j]
+        nullspace -= nullspace[:, j] * vec(nullspace[i, :])' / nullspace[i, j]
         nullspace = nullspace[[1:i-1; i+1:end], [1:j-1; j+1:end]]
         f = f[[1:i-1; i+1:end], :]
     end
