@@ -1,4 +1,4 @@
-# Copyright 2015, 2016 Martin Holters
+# Copyright 2015, 2016, 2017 Martin Holters
 # See accompanying license file.
 
 using ACME
@@ -19,10 +19,10 @@ let solver = ACME.LinearSolver(3)
     x = rand(3)
     y = similar(x)
     ACME.solve!(solver, y, x)
-    @test_approx_eq A*y x
+    @test A*y ≈ x
     copy!(y, x)
     ACME.solve!(solver, y, y)
-    @test_approx_eq A*y x
+    @test A*y ≈ x
     @test_throws DimensionMismatch ACME.setlhs!(solver, zeros(2, 3))
     @test_throws DimensionMismatch ACME.setlhs!(solver, zeros(3, 4))
     @test_throws DimensionMismatch ACME.setlhs!(solver, zeros(4, 4))
@@ -87,7 +87,7 @@ let ps = rand(6, 10000)
     p = rand(6)
     best_p = ps[:,indmin(sum(abs2, broadcast(-, ps, p),1))]
     idx = ACME.indnearest(t, p)
-    @test_approx_eq sum(abs2, p - best_p) sum(abs2, p - ps[:, idx])
+    @test sum(abs2, p - best_p) ≈ sum(abs2, p - ps[:, idx])
 end
 
 let nleq = ACME.ParametricNonLinEq((res, J, scratch, z) ->
@@ -143,14 +143,14 @@ let i = 1e-3, r=10e3, is=1e-12
     connect!(circ, r1[2], d[:+], vprobe[:+])
     model = DiscreteModel(circ, 1)
     y = run!(model, zeros(0, 1))
-    @test_approx_eq_eps y[1] v_d 1e-6
+    @test y[1] ≈ v_d
 end
 
 function checksteady!(model)
     x_steady = steadystate!(model)
     ACME.set_resabs2tol!(model.solver, 1e-25)
     run!(model, zeros(1, 1))
-    @test_approx_eq model.x x_steady
+    @test model.x ≈ x_steady
 end
 
 include("../examples/sallenkey.jl")
