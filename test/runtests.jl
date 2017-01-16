@@ -143,7 +143,7 @@ let i = 1e-3, r=10e3, is=1e-12
     connect!(circ, r1[2], d[:+], vprobe[:+])
     model = DiscreteModel(circ, 1)
     y = run!(model, zeros(0, 1))
-    @test_approx_eq_eps y[1] v_d 1e-6
+    @test y[1] ≈ v_d
 end
 
 function checksteady!(model)
