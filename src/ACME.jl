@@ -643,7 +643,7 @@ function rank_factorize(a::SparseMatrixCSC)
         i, j = ind2sub(size(nullspace), indmax(map(abs, nullspace)))
         c -= c[:, i] * nullspace[:, j]' / nullspace[i, j]
         c = c[:, [1:i-1; i+1:end]]
-        nullspace -= nullspace[:, j] * nullspace[i:i, :] / nullspace[i, j]
+        nullspace -= nullspace[:, j] * vec(nullspace[i, :])' / nullspace[i, j]
         nullspace = nullspace[[1:i-1; i+1:end], [1:j-1; j+1:end]]
         f = f[[1:i-1; i+1:end], :]
     end
