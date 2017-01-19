@@ -560,6 +560,21 @@ function steadystate!(model::DiscreteModel, u=zeros(nu(model)))
     return x_steady
 end
 
+"""
+    run!(model::DiscreteModel, u::AbstractMatrix{Float64}; showprogress=true)
+
+Run the given `model` by feeding it the input `u` which must be a matrix with
+one row for each of the circuit's inputs and one column for each time step to
+simulate. Likewise, the returned output will be a matrix with one row for each
+of the circuit's outputs and one column for each simulated time step. The order
+of the rows will correspond to the order in which the respective input and
+output elements were added to the `Circuit`. To simulate a circuit without
+inputs, a matrix with zero rows may be passed. The internal state of the model
+(e.g. capacitor charges) is preserved accross calls to `run!`.
+
+By default `run!` will show a progress bar to report its progress. This can be
+disabled by passing `showprogress=false`.
+"""
 run!(model::DiscreteModel, u::AbstractMatrix{Float64}; showprogress=true) =
     return run!(ModelRunner(model, showprogress), u)
 
@@ -581,9 +596,35 @@ end
 ModelRunner{Model<:DiscreteModel}(model::Model) = ModelRunner{Model,true}(model)
 ModelRunner{Model<:DiscreteModel,ShowProgress}(model::Model, ::Val{ShowProgress}) =
     ModelRunner{Model,ShowProgress}(model)
+
+"""
+    ModelRunner(model::DiscreteModel, showprogress::Bool = true)
+
+Construct a `ModelRunner` instance for running `model`. The `ModelRunner`
+instance pre-allocates some memory required for model execution. Hence, when
+running the same model for multiple small input data blocks, some overhead can
+be saved by explicitly using a `ModelRunner`.
+
+By default `run!` for the constructed `ModelRunner` will show a progress bar to
+report its progress. This can be disabled by passing `false` as second
+parameter.
+"""
 ModelRunner{Model<:DiscreteModel}(model::Model, showprogress::Bool) =
     ModelRunner{Model,showprogress}(model)
 
+"""
+    run!(runner::ModelRunner, u::AbstractMatrix{Float64})
+
+Run the given `runner` by feeding it the input `u` which must be a matrix with
+one row for each of the circuit's inputs and one column for each time step to
+simulate. Likewise, the returned output will be a matrix with one row for each
+of the circuit's outputs and one column for each simulated time step. The order
+of the rows will correspond to the order in which the respective input and
+output elements were added to the `Circuit`. To simulate a circuit without
+inputs, a matrix with zero rows may be passed. The internal state of the
+underlying `DiscreteModel` (e.g. capacitor charges) is preserved accross calls
+to `run!`.
+"""
 function run!(runner::ModelRunner, u::AbstractMatrix{Float64})
     y = Array{Float64,2}(ny(runner.model), size(u, 2))
     run!(runner, y, u)
@@ -602,6 +643,19 @@ function checkiosizes(runner::ModelRunner, u::AbstractMatrix{Float64}, y::Abstra
     end
 end
 
+"""
+    run!(runner::ModelRunner, y::AbstractMatrix{Float64}, u::AbstractMatrix{Float64})
+
+Run the given `runner` by feeding it the input `u` and storing the output
+in `y`. The input `u` must be a matrix with one row for each of the circuit's
+inputs and one column for each time step to simulate. Likewise, the output `y`
+must be a matrix with one row for each of the circuit's outputs and one column
+for each simulated time step. The order of the rows will correspond to the order
+in which the respective input and output elements were added to the `Circuit`.
+To simulate a circuit without inputs, a matrix with zero rows may be passed.
+The internal state of the  underlying `DiscreteModel` (e.g. capacitor charges)
+is preserved accross calls to `run!`.
+"""
 function run!{Model<:DiscreteModel}(runner::ModelRunner{Model,true},
                                     y::AbstractMatrix{Float64},
                                     u::AbstractMatrix{Float64})

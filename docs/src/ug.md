@@ -108,8 +108,23 @@ y = run!(model, zeros(0, 100))
 ```
 
 The internal state of the model (e.g. capacitor charges) is preserved accross
-calls to `run!`. Initially, all states are zeroed. It is also possible to set
-the states to a steady state (if one can be found) with:
+calls to `run!`.
+
+Each invocation of `run!` in this way has to allocate some memory as temporary
+storage. To avoid this overhead when running the same model for many small input
+blocks, a `ModelRunner` instance can be created explicitly:
+
+```Julia
+runner = ModelRunner(model, false)
+run!(runner, y, u)
+```
+
+By using a pre-allocated output `y` as in the example, allocations in `run!` are
+reduced to a minimum.
+
+Upon creation of a `DiscreteModel`, its internal states (e.g. capacitor charges)
+are set to zero. It is also possible to set the states to a steady state (if
+one can be found) with:
 
 ```Julia
 steadystate!(model)
