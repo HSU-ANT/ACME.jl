@@ -39,17 +39,14 @@ calc_Jp!(nleq::ParametricNonLinEq) = nleq.calc_Jp(nleq.scratch, nleq.Jp)
 evaluate!(nleq::ParametricNonLinEq, z) =
     nleq.func(nleq.res, nleq.J, nleq.scratch, z)
 
-immutable LinearSolver{R<:Ref{Base.LinAlg.BlasInt}}
+immutable LinearSolver
     factors::Matrix{Float64}
     ipiv::Vector{Base.LinAlg.BlasInt}
-    info::R #Ref{Base.LinAlg.BlasInt}
-    function LinearSolver(n::Int, info::R)
-        new(zeros(n, n), zeros(Base.LinAlg.BlasInt, n), info)
+    info::typeof(Ref{Base.LinAlg.BlasInt}(0))
+    function LinearSolver(n::Int)
+        new(zeros(n, n), zeros(Base.LinAlg.BlasInt, n), Ref{Base.LinAlg.BlasInt}(0))
     end
 end
-
-LinearSolver{R<:Ref{Base.LinAlg.BlasInt}}(n::Int, info::R) = LinearSolver{R}(n, info)
-LinearSolver(n::Int) = LinearSolver{}(n, Ref{Base.LinAlg.BlasInt}(0))
 
 function setlhs!(solver::LinearSolver, A::Matrix{Float64})
     m, n = size(solver.factors)
