@@ -316,14 +316,14 @@ type DiscreteModel{Solver}
     solver::Solver
     x::Vector{Float64}
 
-    function DiscreteModel(circ::Circuit, t::Float64)
+    @compat function (::Type{DiscreteModel{Solver}}){Solver}(circ::Circuit, t::Float64)
         Base.depwarn("DiscreteModel{Solver}(circ, t) is deprecated, use DiscreteModel(circ, t, Solver) instead.",
                      :DiscreteModel)
         DiscreteModel(circ, t, Solver)
     end
 
-    function DiscreteModel(mats::Dict{Symbol}, nonlinear_eq::Expr, solver::Solver)
-        model = new()
+    @compat function (::Type{DiscreteModel{Solver}}){Solver}(mats::Dict{Symbol}, nonlinear_eq::Expr, solver::Solver)
+        model = new{Solver}()
 
         for mat in (:a, :b, :c, :pexp, :dq, :eq, :fq, :dy, :ey, :fy, :x0, :q0, :y0)
             setfield!(model, mat, convert(fieldtype(typeof(model), mat), mats[mat]))
@@ -584,12 +584,12 @@ immutable ModelRunner{Model<:DiscreteModel,ShowProgress}
     p::Vector{Float64}
     ycur::Vector{Float64}
     xnew::Vector{Float64}
-    function ModelRunner(model::Model)
+    @compat function (::Type{ModelRunner{Model,ShowProgress}}){Model<:DiscreteModel,ShowProgress}(model::Model)
         ucur = Array{Float64,1}(nu(model))
         p = Array{Float64,1}(np(model))
         ycur = Array{Float64,1}(ny(model))
         xnew = Array{Float64,1}(nx(model))
-        return new(model, ucur, p, ycur, xnew)
+        return new{Model,ShowProgress}(model, ucur, p, ycur, xnew)
     end
 end
 
