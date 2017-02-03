@@ -3,6 +3,7 @@
 
 using ACME
 using Base.Test
+using Compat
 
 tv, ti = ACME.topomat(sparse([1 -1 1; -1 1 -1]))
 @test tv*ti'==spzeros(2,1)
@@ -50,7 +51,7 @@ let circ = Circuit(), r = resistor(0), probe = currentprobe()
     rd, wr = redirect_stderr()
     model = DiscreteModel(circ, 1)
     # should warn because output is indeterminate
-    @test !isempty(search(convert(ASCIIString, readavailable(rd)), "WARNING"))
+    @test !isempty(search(convert(Compat.ASCIIString, readavailable(rd)), "WARNING"))
     redirect_stderr(orig_stderr)
 end
 
@@ -68,7 +69,7 @@ let circ = Circuit(), d = diode(), src=currentsource(), probe=voltageprobe()
     rd, wr = redirect_stderr()
     @test size(run!(model, hcat([-1.0]))) == (1, 1)
     # should warn because solution exists as diode cannot reach reverse current of 1A
-    @test !isempty(search(convert(ASCIIString, readavailable(rd)), "WARNING"))
+    @test !isempty(search(convert(Compat.ASCIIString, readavailable(rd)), "WARNING"))
     redirect_stderr(orig_stderr)
 end
 
