@@ -197,7 +197,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Element Reference",
     "title": "ACME.voltagesource",
     "category": "Function",
-    "text": "voltagesource()\nvoltagesource(v)\n\nCreates a voltage source. The source voltage v has to be given in Volt. If omitted, the source voltage will be an input of the circuit.\n\nPins: + and - with v being measured from + to -\n\n\n\n"
+    "text": "voltagesource(; rs=0)\nvoltagesource(v; rs=0)\n\nCreates a voltage source. The source voltage v has to be given in Volt. If omitted, the source voltage will be an input of the circuit. Optionally, an internal series resistance rs (in Ohm) can be given which defaults to zero.\n\nPins: + and - with v being measured from + to -\n\n\n\n"
 },
 
 {
@@ -205,7 +205,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Element Reference",
     "title": "ACME.currentsource",
     "category": "Function",
-    "text": "currentsource()\ncurrentsource(i)\n\nCreates a current source. The source current i has to be given in Ampere. If omitted, the source current will be an input of the circuit.\n\nPins: + and - where i measures the current leaving source at the + pin\n\n\n\n"
+    "text": "currentsource(; gp=0)\ncurrentsource(i; gp=0)\n\nCreates a current source. The source current i has to be given in Ampere. If omitted, the source current will be an input of the circuit. Optionally, an internal parallel conductance gp (in Ohm⁻¹) can be given which defaults to zero.\n\nPins: + and - where i measures the current leaving source at the + pin\n\n\n\n"
 },
 
 {
@@ -221,7 +221,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Element Reference",
     "title": "ACME.voltageprobe",
     "category": "Function",
-    "text": "voltageprobe()\n\nCreates a voltage probe, provding the measured voltage as a circuit output.\n\nPins: + and - with the output voltage being measured from + to -\n\n\n\n"
+    "text": "voltageprobe()\n\nCreates a voltage probe, providing the measured voltage as a circuit output. Optionally, an internal parallel conductance gp (in Ohm⁻¹) can be given which defaults to zero.\n\nPins: + and - with the output voltage being measured from + to -\n\n\n\n"
 },
 
 {
@@ -229,7 +229,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Element Reference",
     "title": "ACME.currentprobe",
     "category": "Function",
-    "text": "currentprobe()\n\nCreates a current probe, provding the measured current as a circuit output.\n\nPins: + and - with the output current being the current entering the probe at +\n\n\n\n"
+    "text": "currentprobe()\n\nCreates a current probe, providing the measured current as a circuit output. Optionally, an internal series resistance rs (in Ohm) can be given which defaults to zero.\n\nPins: + and - with the output current being the current entering the probe at +\n\n\n\n"
 },
 
 {
