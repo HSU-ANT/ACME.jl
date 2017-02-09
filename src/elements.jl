@@ -1,4 +1,4 @@
-# Copyright 2015, 2016 Martin Holters
+# Copyright 2015, 2016, 2017 Martin Holters
 # See accompanying license file.
 
 export resistor, potentiometer, capacitor, inductor, transformer,
@@ -170,49 +170,56 @@ inductor(::Type{Val{:JA}}; n=230, args...) =
     transformer(Val{:JA}; ns=[n], args...)
 
 """
-    voltagesource()
-    voltagesource(v)
+    voltagesource(; rs=0)
+    voltagesource(v; rs=0)
 
 Creates a voltage source. The source voltage `v` has to be given in Volt. If
-omitted, the source voltage will be an input of the circuit.
+omitted, the source voltage will be an input of the circuit. Optionally, an
+internal series resistance `rs` (in Ohm) can be given which defaults to zero.
 
 Pins: `+` and `-` with `v` being measured from `+` to `-`
 """
 function voltagesource end
-voltagesource(v) = Element(mv=1, u0=v, pins=[:+; :-])
-voltagesource() = Element(mv=1, mu=1, pins=[:+; :-])
+voltagesource(v; rs=0) = Element(mv=1, mi=-rs, u0=v, pins=[:+; :-])
+voltagesource(; rs=0) = Element(mv=1, mi=-rs, mu=1, pins=[:+; :-])
 
 """
-    currentsource()
-    currentsource(i)
+    currentsource(; gp=0)
+    currentsource(i; gp=0)
 
 Creates a current source. The source current `i` has to be given in Ampere. If
-omitted, the source current will be an input of the circuit.
+omitted, the source current will be an input of the circuit. Optionally, an
+internal parallel conductance `gp` (in Ohm⁻¹) can be given which defaults to
+zero.
 
 Pins: `+` and `-` where `i` measures the current leaving source at the `+` pin
 """
 function currentsource end
-currentsource(i) = Element(mi=-1, u0=i, pins=[:+; :-])
-currentsource() = Element(mi=-1, mu=1, pins=[:+; :-])
+currentsource(i; gp=0) = Element(mv=gp, mi=-1, u0=i, pins=[:+; :-])
+currentsource(; gp=0) = Element(mv=gp, mi=-1, mu=1, pins=[:+; :-])
 
 """
     voltageprobe()
 
-Creates a voltage probe, provding the measured voltage as a circuit output.
+Creates a voltage probe, providing the measured voltage as a circuit output.
+Optionally, an internal parallel conductance `gp` (in Ohm⁻¹) can be given which
+defaults to zero.
 
 Pins: `+` and `-` with the output voltage being measured from `+` to `-`
 """
-voltageprobe() = Element(mi=1, pv=1, pins=[:+; :-])
+voltageprobe(;gp=0) = Element(mv=-gp, mi=1, pv=1, pins=[:+; :-])
 
 """
     currentprobe()
 
-Creates a current probe, provding the measured current as a circuit output.
+Creates a current probe, providing the measured current as a circuit output.
+Optionally, an internal series resistance `rs` (in Ohm) can be given which
+defaults to zero.
 
 Pins: `+` and `-` with the output current being the current entering the probe
 at `+`
 """
-currentprobe() = Element(mv=1, pi=1, pins=[:+; :-])
+currentprobe(;rs=0) = Element(mv=1, mi=-rs, pi=1, pins=[:+; :-])
 
 doc"""
     diode(;is=1e-12, η = 1)

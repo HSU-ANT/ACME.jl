@@ -125,6 +125,44 @@ let a = Rational{BigInt}[1 1 1; 1 1 2; 1 2 1; 1 2 2; 2 1 1; 2 1 2],
     @test size(mats[:pexp], 2) == 3
 end
 
+# sources and probes with internal resistance/conductance
+let circ = Circuit(), src=currentsource(100e-3, gp=1//100000), probe=voltageprobe()
+    connect!(circ, src[:+], probe[:+])
+    connect!(circ, src[:-], probe[:-])
+    model = DiscreteModel(circ, 1)
+    @test run!(model, zeros(0,1)) ≈ [100000*100e-3]
+end
+let circ = Circuit(), src=currentsource(gp=1//100000), probe=voltageprobe()
+    connect!(circ, src[:+], probe[:+])
+    connect!(circ, src[:-], probe[:-])
+    model = DiscreteModel(circ, 1)
+    @test run!(model, hcat([100e-3])) ≈ [100000*100e-3]
+end
+let circ = Circuit(), src=currentsource(100e-3), probe=voltageprobe(gp=1//100000)
+    connect!(circ, src[:+], probe[:+])
+    connect!(circ, src[:-], probe[:-])
+    model = DiscreteModel(circ, 1)
+    @test run!(model, zeros(0,1)) ≈ [100000*100e-3]
+end
+let circ = Circuit(), src=voltagesource(10, rs=100000), probe=currentprobe()
+    connect!(circ, src[:+], probe[:+])
+    connect!(circ, src[:-], probe[:-])
+    model = DiscreteModel(circ, 1)
+    @test run!(model, zeros(0,1)) ≈ [10/100000]
+end
+let circ = Circuit(), src=voltagesource(rs=100000), probe=currentprobe()
+    connect!(circ, src[:+], probe[:+])
+    connect!(circ, src[:-], probe[:-])
+    model = DiscreteModel(circ, 1)
+    @test run!(model, hcat([10.0])) ≈ [10/100000]
+end
+let circ = Circuit(), src=voltagesource(10), probe=currentprobe(rs=100000)
+    connect!(circ, src[:+], probe[:+])
+    connect!(circ, src[:-], probe[:-])
+    model = DiscreteModel(circ, 1)
+    @test run!(model, zeros(0,1)) ≈ [10/100000]
+end
+
 # simple circuit: resistor and diode in series, driven by constant voltage,
 # chosen such that a prescribe current flows
 let i = 1e-3, r=10e3, is=1e-12
