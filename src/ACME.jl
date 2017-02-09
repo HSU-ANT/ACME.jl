@@ -5,7 +5,8 @@ __precompile__()
 
 module ACME
 
-export Circuit, add!, connect!, DiscreteModel, run!, steadystate, steadystate!
+export Circuit, add!, connect!, DiscreteModel, run!, steadystate, steadystate!,
+    ModelRunner
 
 using ProgressMeter
 using Compat
@@ -315,14 +316,14 @@ type DiscreteModel{Solver}
     solver::Solver
     x::Vector{Float64}
 
-    function DiscreteModel(circ::Circuit, t::Float64)
+    @compat function (::Type{DiscreteModel{Solver}}){Solver}(circ::Circuit, t::Float64)
         Base.depwarn("DiscreteModel{Solver}(circ, t) is deprecated, use DiscreteModel(circ, t, Solver) instead.",
                      :DiscreteModel)
         DiscreteModel(circ, t, Solver)
     end
 
-    function DiscreteModel(mats::Dict{Symbol}, nonlinear_eq::Expr, solver::Solver)
-        model = new()
+    @compat function (::Type{DiscreteModel{Solver}}){Solver}(mats::Dict{Symbol}, nonlinear_eq::Expr, solver::Solver)
+        model = new{Solver}()
 
         for mat in (:a, :b, :c, :pexp, :dq, :eq, :fq, :dy, :ey, :fy, :x0, :q0, :y0)
             setfield!(model, mat, convert(fieldtype(typeof(model), mat), mats[mat]))
@@ -559,47 +560,155 @@ function steadystate!(model::DiscreteModel, u=zeros(nu(model)))
     return x_steady
 end
 
-function run!(model::DiscreteModel, u::AbstractMatrix{Float64})
-    if size(u, 1) ≠ nu(model)
-        throw(DimensionMismatch("input matrix has $(size(u,1)) rows, but model requires $(nu(model)) inputs"))
+"""
+    run!(model::DiscreteModel, u::AbstractMatrix{Float64}; showprogress=true)
+
+Run the given `model` by feeding it the input `u` which must be a matrix with
+one row for each of the circuit's inputs and one column for each time step to
+simulate. Likewise, the returned output will be a matrix with one row for each
+of the circuit's outputs and one column for each simulated time step. The order
+of the rows will correspond to the order in which the respective input and
+output elements were added to the `Circuit`. To simulate a circuit without
+inputs, a matrix with zero rows may be passed. The internal state of the model
+(e.g. capacitor charges) is preserved accross calls to `run!`.
+
+By default `run!` will show a progress bar to report its progress. This can be
+disabled by passing `showprogress=false`.
+"""
+run!(model::DiscreteModel, u::AbstractMatrix{Float64}; showprogress=true) =
+    return run!(ModelRunner(model, showprogress), u)
+
+immutable ModelRunner{Model<:DiscreteModel,ShowProgress}
+    model::Model
+    ucur::Vector{Float64}
+    p::Vector{Float64}
+    ycur::Vector{Float64}
+    xnew::Vector{Float64}
+    @compat function (::Type{ModelRunner{Model,ShowProgress}}){Model<:DiscreteModel,ShowProgress}(model::Model)
+        ucur = Array{Float64,1}(nu(model))
+        p = Array{Float64,1}(np(model))
+        ycur = Array{Float64,1}(ny(model))
+        xnew = Array{Float64,1}(nx(model))
+        return new{Model,ShowProgress}(model, ucur, p, ycur, xnew)
     end
-    y = Array{Float64,2}(ny(model), size(u)[2])
-    ucur = Array{Float64,1}(nu(model))
-    p = Array{Float64,1}(np(model))
-    ycur = Array{Float64,1}(ny(model))
-    xnew = Array{Float64,1}(nx(model))
-    @showprogress 1 "Running model: " for n = 1:size(u)[2]
-        # copy!(p, model.dq * model.x + model.eq * u[:,n])
-        copy!(ucur, 1, u, (n-1)*nu(model)+1, nu(model))
-        if size(model.dq, 2) == 0
-            fill!(p, 0.0)
-        else
-            BLAS.gemv!('N', 1., model.dq, model.x, 0., p)
-        end
-        BLAS.gemv!('N', 1., model.eq, ucur, 1., p)
-        z = solve(model.solver, p)
-        if !hasconverged(model.solver)
-            if all(isfinite, z)
-                warn("Failed to converge while solving non-linear equation.")
-            else
-                error("Failed to converge while solving non-linear equation, got non-finite result.")
-            end
-        end
-        #y[:,n] = model.dy * model.x + model.ey * u[:,n] + model.fy * z + model.y0
-        copy!(ycur, model.y0)
-        BLAS.gemv!('N', 1., model.dy, model.x, 1., ycur)
-        BLAS.gemv!('N', 1., model.ey, ucur, 1., ycur)
-        BLAS.gemv!('N', 1., model.fy, z, 1., ycur)
-        #y[:,n] = ycur
-        copy!(y, (n-1)*ny(model)+1, ycur, 1, ny(model))
-        #model.x = model.a * model.x + model.b * u[:,n] + model.c * z + model.x0
-        copy!(xnew, model.x0)
-        BLAS.gemv!('N', 1., model.a, model.x, 1., xnew)
-        BLAS.gemv!('N', 1., model.b, ucur, 1.,xnew)
-        BLAS.gemv!('N', 1., model.c, z, 1., xnew)
-        copy!(model.x, xnew)
-    end
+end
+
+ModelRunner{Model<:DiscreteModel}(model::Model) = ModelRunner{Model,true}(model)
+ModelRunner{Model<:DiscreteModel,ShowProgress}(model::Model, ::Val{ShowProgress}) =
+    ModelRunner{Model,ShowProgress}(model)
+
+"""
+    ModelRunner(model::DiscreteModel, showprogress::Bool = true)
+
+Construct a `ModelRunner` instance for running `model`. The `ModelRunner`
+instance pre-allocates some memory required for model execution. Hence, when
+running the same model for multiple small input data blocks, some overhead can
+be saved by explicitly using a `ModelRunner`.
+
+By default `run!` for the constructed `ModelRunner` will show a progress bar to
+report its progress. This can be disabled by passing `false` as second
+parameter.
+"""
+ModelRunner{Model<:DiscreteModel}(model::Model, showprogress::Bool) =
+    ModelRunner{Model,showprogress}(model)
+
+"""
+    run!(runner::ModelRunner, u::AbstractMatrix{Float64})
+
+Run the given `runner` by feeding it the input `u` which must be a matrix with
+one row for each of the circuit's inputs and one column for each time step to
+simulate. Likewise, the returned output will be a matrix with one row for each
+of the circuit's outputs and one column for each simulated time step. The order
+of the rows will correspond to the order in which the respective input and
+output elements were added to the `Circuit`. To simulate a circuit without
+inputs, a matrix with zero rows may be passed. The internal state of the
+underlying `DiscreteModel` (e.g. capacitor charges) is preserved accross calls
+to `run!`.
+"""
+function run!(runner::ModelRunner, u::AbstractMatrix{Float64})
+    y = Array{Float64,2}(ny(runner.model), size(u, 2))
+    run!(runner, y, u)
     return y
+end
+
+function checkiosizes(runner::ModelRunner, u::AbstractMatrix{Float64}, y::AbstractMatrix{Float64})
+    if size(u, 1) ≠ nu(runner.model)
+        throw(DimensionMismatch("input matrix has $(size(u,1)) rows, but model has $(nu(runner.model)) inputs"))
+    end
+    if size(y, 1) ≠ ny(runner.model)
+        throw(DimensionMismatch("output matrix has $(size(y,1)) rows, but model has $(ny(runner.model)) outputs"))
+    end
+    if size(u, 2) ≠ size(y, 2)
+        throw(DimensionMismatch("input matrix has $(size(u,2)) columns, output matrix has $(size(y,2)) columns"))
+    end
+end
+
+"""
+    run!(runner::ModelRunner, y::AbstractMatrix{Float64}, u::AbstractMatrix{Float64})
+
+Run the given `runner` by feeding it the input `u` and storing the output
+in `y`. The input `u` must be a matrix with one row for each of the circuit's
+inputs and one column for each time step to simulate. Likewise, the output `y`
+must be a matrix with one row for each of the circuit's outputs and one column
+for each simulated time step. The order of the rows will correspond to the order
+in which the respective input and output elements were added to the `Circuit`.
+To simulate a circuit without inputs, a matrix with zero rows may be passed.
+The internal state of the  underlying `DiscreteModel` (e.g. capacitor charges)
+is preserved accross calls to `run!`.
+"""
+function run!{Model<:DiscreteModel}(runner::ModelRunner{Model,true},
+                                    y::AbstractMatrix{Float64},
+                                    u::AbstractMatrix{Float64})
+    checkiosizes(runner, u, y)
+    @showprogress "Running model: " for n = 1:size(u, 2)
+        step!(runner, y, u, n)
+    end
+end
+
+function run!{Model<:DiscreteModel}(runner::ModelRunner{Model,false},
+                                    y::AbstractMatrix{Float64},
+                                    u::AbstractMatrix{Float64})
+    checkiosizes(runner, u, y)
+    for n = 1:size(u, 2)
+        step!(runner, y, u, n)
+    end
+end
+
+function step!(runner::ModelRunner, y::AbstractMatrix{Float64}, u::AbstractMatrix{Float64}, n)
+    model = runner.model
+    ucur = runner.ucur
+    p = runner.p
+    ycur = runner.ycur
+    xnew = runner.xnew
+    # copy!(p, model.dq * model.x + model.eq * u[:,n])
+    copy!(ucur, 1, u, (n-1)*nu(model)+1, nu(model))
+    if size(model.dq, 2) == 0
+        fill!(p, 0.0)
+    else
+        BLAS.gemv!('N', 1., model.dq, model.x, 0., p)
+    end
+    BLAS.gemv!('N', 1., model.eq, ucur, 1., p)
+    z = solve(model.solver, p)
+    if !hasconverged(model.solver)
+        if all(isfinite, z)
+            warn("Failed to converge while solving non-linear equation.")
+        else
+            error("Failed to converge while solving non-linear equation, got non-finite result.")
+        end
+    end
+    #y[:,n] = model.dy * model.x + model.ey * u[:,n] + model.fy * z + model.y0
+    copy!(ycur, model.y0)
+    BLAS.gemv!('N', 1., model.dy, model.x, 1., ycur)
+    BLAS.gemv!('N', 1., model.ey, ucur, 1., ycur)
+    BLAS.gemv!('N', 1., model.fy, z, 1., ycur)
+    #y[:,n] = ycur
+    copy!(y, (n-1)*ny(model)+1, ycur, 1, ny(model))
+    #model.x = model.a * model.x + model.b * u[:,n] + model.c * z + model.x0
+    copy!(xnew, model.x0)
+    BLAS.gemv!('N', 1., model.a, model.x, 1., xnew)
+    BLAS.gemv!('N', 1., model.b, ucur, 1.,xnew)
+    BLAS.gemv!('N', 1., model.c, z, 1., xnew)
+    copy!(model.x, xnew)
 end
 
 # lines marked with !SV avoid creation of SparseVector by indexing with Ranges

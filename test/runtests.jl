@@ -3,6 +3,7 @@
 
 using ACME
 using Base.Test
+using Compat
 
 tv, ti = ACME.topomat(sparse([1 -1 1; -1 1 -1]))
 @test tv*ti'==spzeros(2,1)
@@ -50,7 +51,7 @@ let circ = Circuit(), r = resistor(0), probe = currentprobe()
     rd, wr = redirect_stderr()
     model = DiscreteModel(circ, 1)
     # should warn because output is indeterminate
-    @test !isempty(search(convert(ASCIIString, readavailable(rd)), "WARNING"))
+    @test !isempty(search(convert(Compat.ASCIIString, readavailable(rd)), "WARNING"))
     redirect_stderr(orig_stderr)
 end
 
@@ -68,7 +69,7 @@ let circ = Circuit(), d = diode(), src=currentsource(), probe=voltageprobe()
     rd, wr = redirect_stderr()
     @test size(run!(model, hcat([-1.0]))) == (1, 1)
     # should warn because solution exists as diode cannot reach reverse current of 1A
-    @test !isempty(search(convert(ASCIIString, readavailable(rd)), "WARNING"))
+    @test !isempty(search(convert(Compat.ASCIIString, readavailable(rd)), "WARNING"))
     redirect_stderr(orig_stderr)
 end
 
@@ -124,6 +125,44 @@ let a = Rational{BigInt}[1 1 1; 1 1 2; 1 2 1; 1 2 2; 2 1 1; 2 1 2],
     @test size(mats[:pexp], 2) == 3
 end
 
+# sources and probes with internal resistance/conductance
+let circ = Circuit(), src=currentsource(100e-3, gp=1//100000), probe=voltageprobe()
+    connect!(circ, src[:+], probe[:+])
+    connect!(circ, src[:-], probe[:-])
+    model = DiscreteModel(circ, 1)
+    @test run!(model, zeros(0,1)) ≈ [100000*100e-3]
+end
+let circ = Circuit(), src=currentsource(gp=1//100000), probe=voltageprobe()
+    connect!(circ, src[:+], probe[:+])
+    connect!(circ, src[:-], probe[:-])
+    model = DiscreteModel(circ, 1)
+    @test run!(model, hcat([100e-3])) ≈ [100000*100e-3]
+end
+let circ = Circuit(), src=currentsource(100e-3), probe=voltageprobe(gp=1//100000)
+    connect!(circ, src[:+], probe[:+])
+    connect!(circ, src[:-], probe[:-])
+    model = DiscreteModel(circ, 1)
+    @test run!(model, zeros(0,1)) ≈ [100000*100e-3]
+end
+let circ = Circuit(), src=voltagesource(10, rs=100000), probe=currentprobe()
+    connect!(circ, src[:+], probe[:+])
+    connect!(circ, src[:-], probe[:-])
+    model = DiscreteModel(circ, 1)
+    @test run!(model, zeros(0,1)) ≈ [10/100000]
+end
+let circ = Circuit(), src=voltagesource(rs=100000), probe=currentprobe()
+    connect!(circ, src[:+], probe[:+])
+    connect!(circ, src[:-], probe[:-])
+    model = DiscreteModel(circ, 1)
+    @test run!(model, hcat([10.0])) ≈ [10/100000]
+end
+let circ = Circuit(), src=voltagesource(10), probe=currentprobe(rs=100000)
+    connect!(circ, src[:+], probe[:+])
+    connect!(circ, src[:-], probe[:-])
+    model = DiscreteModel(circ, 1)
+    @test run!(model, zeros(0,1)) ≈ [10/100000]
+end
+
 # simple circuit: resistor and diode in series, driven by constant voltage,
 # chosen such that a prescribe current flows
 let i = 1e-3, r=10e3, is=1e-12
@@ -156,7 +195,7 @@ end
 include("../examples/sallenkey.jl")
 let model=sallenkey()
     println("Running sallenkey")
-    y = run!(model, map(sin, 2π*1000/44100*(0:44099)'))
+    y = run!(model, map(sin, 2π*1000/44100*(0:44099)'); showprogress=false)
     @test size(y) == (1,44100)
     # TODO: further validate y
 
@@ -168,10 +207,21 @@ include("../examples/diodeclipper.jl")
 let model=diodeclipper()
     println("Running diodeclipper")
     @test ACME.np(model) == 1
-    y = run!(model, map(sin, 2π*1000/44100*(0:44099)'))
+    y = run!(model, map(sin, 2π*1000/44100*(0:44099)'); showprogress=false)
     @test size(y) == (1,44100)
     # TODO: further validate y
     checksteady!(model)
+end
+let circ = diodeclipper(Circuit)
+    model = DiscreteModel(circ, 44100, ACME.HomotopySolver{ACME.SimpleSolver})
+    runner = ModelRunner(model, false)
+    u = map(sin, 2π*1000/44100*(0:44099)')
+    y = run!(runner, u)
+    run!(runner, y, u)
+    alloc = @allocated run!(runner, y, u)
+    if alloc > 0
+        warn("Allocated $alloc in run! of HomotopySolver{SimpleSolver} base ModelRunner")
+    end
 end
 
 include("../examples/birdie.jl")
@@ -180,7 +230,7 @@ let model=birdie(vol=0.8)
     @assert ACME.hasconverged(model.solver)
     println("Running birdie with fixed vol")
     @test ACME.np(model) == 2
-    y = run!(model, map(sin, 2π*1000/44100*(0:44099)'))
+    y = run!(model, map(sin, 2π*1000/44100*(0:44099)'); showprogress=false)
     @test size(y) == (1,44100)
     # TODO: further validate y
     checksteady!(model)
@@ -188,7 +238,7 @@ end
 let model=birdie()
     println("Running birdie with varying vol")
     @test ACME.np(model) == 3
-    y = run!(model, [map(sin, 2π*1000/44100*(0:44099).'); linspace(1,0,44100).'])
+    y = run!(model, [map(sin, 2π*1000/44100*(0:44099).'); linspace(1,0,44100).']; showprogress=false)
     @test size(y) == (1,44100)
     # TODO: further validate y
 end
@@ -197,7 +247,7 @@ include("../examples/superover.jl")
 let model=superover(drive=1.0, tone=1.0, level=1.0)
     println("Running superover with fixed potentiometer values")
     @test ACME.np(model) == 5
-    y = run!(model, map(sin, 2π*1000/44100*(0:44099)'))
+    y = run!(model, map(sin, 2π*1000/44100*(0:44099)'); showprogress=false)
     @test size(y) == (1,44100)
     # TODO: further validate y
     checksteady!(model)
@@ -205,7 +255,7 @@ end
 let model=superover()
     println("Running superover with varying potentiometer values")
     @test ACME.np(model) == 11
-    y = run!(model, [map(sin, 2π*1000/44100*(0:999)'); linspace(1,0,1000).'; linspace(0,1,1000).'; linspace(1,0,1000).'])
+    y = run!(model, [map(sin, 2π*1000/44100*(0:999)'); linspace(1,0,1000).'; linspace(0,1,1000).'; linspace(1,0,1000).']; showprogress=false)
     @test size(y) == (1,1000)
     # TODO: further validate y
 end

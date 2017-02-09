@@ -1,4 +1,4 @@
-# Copyright 2016 Martin Holters
+# Copyright 2016, 2017 Martin Holters
 # See accompanying license file.
 
 export SimpleSolver, HomotopySolver, CachingSolver
@@ -12,12 +12,16 @@ type ParametricNonLinEq{F_eval<:Function,F_setp<:Function,F_calcjp<:Function,Scr
     Jp::Matrix{Float64}
     J::Matrix{Float64}
     scratch::Scratch
-    function ParametricNonLinEq(func::F_eval, set_p::F_setp, calc_Jp::F_calcjp,
-                                scratch::Scratch, nn::Integer, np::Integer)
+    @compat function (::Type{ParametricNonLinEq{F_eval,F_setp,F_calcjp,Scratch}}){
+            F_eval<:Function,F_setp<:Function,F_calcjp<:Function,Scratch
+        }(
+            func::F_eval, set_p::F_setp, calc_Jp::F_calcjp, scratch::Scratch,
+            nn::Integer, np::Integer
+        )
         res = zeros(nn)
         Jp = zeros(nn, np)
         J = zeros(nn, nn)
-        return new(func, set_p, calc_Jp, res, Jp, J, scratch)
+        return new{F_eval,F_setp,F_calcjp,Scratch}(func, set_p, calc_Jp, res, Jp, J, scratch)
     end
 end
 ParametricNonLinEq{F_eval<:Function,F_setp<:Function,F_calcjp<:Function,
@@ -39,17 +43,14 @@ calc_Jp!(nleq::ParametricNonLinEq) = nleq.calc_Jp(nleq.scratch, nleq.Jp)
 evaluate!(nleq::ParametricNonLinEq, z) =
     nleq.func(nleq.res, nleq.J, nleq.scratch, z)
 
-immutable LinearSolver{R<:Ref{Base.LinAlg.BlasInt}}
+immutable LinearSolver
     factors::Matrix{Float64}
     ipiv::Vector{Base.LinAlg.BlasInt}
-    info::R #Ref{Base.LinAlg.BlasInt}
-    function LinearSolver(n::Int, info::R)
-        new(zeros(n, n), zeros(Base.LinAlg.BlasInt, n), info)
+    info::typeof(Ref{Base.LinAlg.BlasInt}(0))
+    function LinearSolver(n::Int)
+        new(zeros(n, n), zeros(Base.LinAlg.BlasInt, n), Ref{Base.LinAlg.BlasInt}(0))
     end
 end
-
-LinearSolver{R<:Ref{Base.LinAlg.BlasInt}}(n::Int, info::R) = LinearSolver{R}(n, info)
-LinearSolver(n::Int) = LinearSolver{}(n, Ref{Base.LinAlg.BlasInt}(0))
 
 function setlhs!(solver::LinearSolver, A::Matrix{Float64})
     m, n = size(solver.factors)
@@ -116,8 +117,8 @@ type SimpleSolver{NLEQ<:ParametricNonLinEq}
     tol::Float64
     tmp_nn::Vector{Float64}
     tmp_np::Vector{Float64}
-    function SimpleSolver(nleq::NLEQ, initial_p::Vector{Float64},
-                          initial_z::Vector{Float64})
+    @compat function (::Type{SimpleSolver{NLEQ}}){NLEQ<:ParametricNonLinEq}(
+            nleq::NLEQ, initial_p::Vector{Float64}, initial_z::Vector{Float64})
         z = zeros(nn(nleq))
         linsolver = LinearSolver(nn(nleq))
         last_z = zeros(nn(nleq))
@@ -126,8 +127,8 @@ type SimpleSolver{NLEQ<:ParametricNonLinEq}
         last_linsolver = LinearSolver(nn(nleq))
         tmp_nn = zeros(nn(nleq))
         tmp_np = zeros(np(nleq))
-        solver = new(nleq, z, linsolver, last_z, last_p, last_Jp, last_linsolver,
-                     0, 0.0, 1e-20, tmp_nn, tmp_np)
+        solver = new{NLEQ}(nleq, z, linsolver, last_z, last_p, last_Jp,
+            last_linsolver, 0, 0.0, 1e-20, tmp_nn, tmp_np)
         set_extrapolation_origin(solver, initial_p, initial_z)
         return solver
     end
@@ -204,12 +205,13 @@ type HomotopySolver{BaseSolver}
     start_p::Vector{Float64}
     pa::Vector{Float64}
     iters::Int
-    function HomotopySolver(basesolver::BaseSolver, np::Integer)
-        return new(basesolver, zeros(np), zeros(np), 0)
+    @compat function (::Type{HomotopySolver{BaseSolver}}){BaseSolver}(
+            basesolver::BaseSolver, np::Integer)
+        return new{BaseSolver}(basesolver, zeros(np), zeros(np), 0)
     end
-    function HomotopySolver(nleq::ParametricNonLinEq,
-                            initial_p::Vector{Float64},
-                            initial_z::Vector{Float64})
+    @compat function (::Type{HomotopySolver{BaseSolver}}){BaseSolver}(
+            nleq::ParametricNonLinEq, initial_p::Vector{Float64},
+            initial_z::Vector{Float64})
         basesolver = BaseSolver(nleq, initial_p, initial_z)
         return HomotopySolver{typeof(basesolver)}(basesolver, np(nleq))
     end
@@ -277,15 +279,15 @@ type CachingSolver{BaseSolver}
     new_count::Int
     new_count_limit::Int
     alts::Alts{Float64}
-    function CachingSolver(basesolver::BaseSolver, initial_p::Vector{Float64},
-                           initial_z::Vector{Float64}, nn::Integer)
+    @compat function (::Type{CachingSolver{BaseSolver}}){BaseSolver}(basesolver::BaseSolver,
+            initial_p::Vector{Float64}, initial_z::Vector{Float64}, nn::Integer)
          ps_tree = KDTree(hcat(initial_p))
          zs = reshape(copy(initial_z), nn, 1)
          alts = Alts(initial_p)
-         return new(basesolver, ps_tree, zs, 1, 0, 2, alts)
+         return new{BaseSolver}(basesolver, ps_tree, zs, 1, 0, 2, alts)
     end
-    function CachingSolver(nleq::ParametricNonLinEq, initial_p::Vector{Float64},
-                          initial_z::Vector{Float64})
+    @compat function (::Type{CachingSolver{BaseSolver}}){BaseSolver}(nleq::ParametricNonLinEq,
+            initial_p::Vector{Float64}, initial_z::Vector{Float64})
         basesolver = BaseSolver(nleq, initial_p, initial_z)
         return CachingSolver{typeof(basesolver)}(basesolver, initial_p, initial_z, nn(nleq))
     end
