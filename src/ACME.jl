@@ -97,14 +97,14 @@ ny(e::Element) = size(e.pv, 1)
 nn(e::Element) = nb(e) + nx(e) + nq(e) - nl(e)
 
 # a Pin combines an element with a branch/polarity list
-typealias Pin Tuple{Element, Vector{Tuple{Int,Int}}}
+const Pin = Tuple{Element, Vector{Tuple{Int,Int}}}
 
 # allow elem[:pin] notation to get an elements pin
 getindex(e::Element, p) = (e, e.pins[Symbol(p)])
 
 include("elements.jl")
 
-typealias Net Vector{Tuple{Int,Int}} # each net is a list of branch/polarity pairs
+const Net = Vector{Tuple{Int,Int}} # each net is a list of branch/polarity pairs
 
 type Circuit
     elements :: Vector{Element}
