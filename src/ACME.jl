@@ -248,7 +248,7 @@ function topomat!{T<:Integer}(incidence::SparseMatrixCSC{T})
 
     row = 1;
     for col = 1:size(incidence)[2]
-        rows = filter(r -> r ≥ row, find(incidence[:,col:col])) # !SV
+        rows = filter(r -> r ≥ row, find(incidence[:, col]))
         @assert length(rows) ≤ 2
 
         isempty(rows) && continue
@@ -262,33 +262,22 @@ function topomat!{T<:Integer}(incidence::SparseMatrixCSC{T})
             incidence[rows[2],:] = incidence[rows[2],:] + incidence[row,:]
         end
         if incidence[row, col] < 0
-            cols = find(incidence[row:row,:]) # !SV
+            cols = find(incidence[row, :])
             incidence[row,cols] = -incidence[row,cols]
         end
-        rows = find(incidence[1:row-1,col:col] .== 1) # !SV
-        incidence[rows,:] = broadcast(-, incidence[rows, :], incidence[row:row,:]) # !SV
-        rows = find(incidence[1:row-1,col:col] .== -1) # !SV
-        incidence[rows,:] = broadcast(+, incidence[rows, :], incidence[row:row,:]) # !SV
+        rows = find(incidence[1:row-1, col] .== 1)
+        incidence[rows, :] .-= incidence[row:row, :] # !SV
+        rows = find(incidence[1:row-1, col] .== -1)
+        incidence[rows, :] .+= incidence[row:row, :] # !SV
         row += 1
     end
 
-    if row > 1
-        ti = incidence[1:row-1, :]
-    else
-        ti = spzeros(T, 0, size(incidence)[2])
-    end
+    ti = incidence[1:row-1, :]
 
-    if all(t)
-        dl = spzeros(T, row-1, 0)
-        tv = spzeros(T, 0, size(incidence)[2])
-    else
-        dl = ti[:, !t]
-        tv = spzeros(T, size(dl)[2], size(incidence)[2])
-        if !all(!t)
-            tv[:,find(t)] = -dl' # with julia 0.3.2, sparse([1 -1]).' -> [1, 0], hence use of ' (conjugate transpose)
-        end
-        tv[:,find(!t)] = speye(T,size(dl)[2])
-    end
+    dl = ti[:, broadcast(!, t)]
+    tv = spzeros(T, size(dl, 2), size(incidence, 2))
+    tv[:, t] = -dl.'
+    tv[:, broadcast(!, t)] = speye(T, size(dl, 2))
 
     tv, ti
 end
