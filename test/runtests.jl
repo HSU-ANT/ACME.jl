@@ -187,7 +187,7 @@ end
 
 function checksteady!(model)
     x_steady = steadystate!(model)
-    ACME.set_resabs2tol!(model.solver, 1e-25)
+    ACME.set_resabstol!(model.solver, 1e-13)
     run!(model, zeros(1, 1))
     @test model.x ≈ x_steady
 end

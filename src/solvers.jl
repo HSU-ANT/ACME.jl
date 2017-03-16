@@ -113,7 +113,7 @@ type SimpleSolver{NLEQ<:ParametricNonLinEq}
     last_Jp::Matrix{Float64}
     last_linsolver::LinearSolver
     iters::Int
-    ressumabs2::Float64
+    resmaxabs::Float64
     tol::Float64
     tmp_nn::Vector{Float64}
     tmp_np::Vector{Float64}
@@ -128,7 +128,7 @@ type SimpleSolver{NLEQ<:ParametricNonLinEq}
         tmp_nn = zeros(nn(nleq))
         tmp_np = zeros(np(nleq))
         solver = new{NLEQ}(nleq, z, linsolver, last_z, last_p, last_Jp,
-            last_linsolver, 0, 0.0, 1e-20, tmp_nn, tmp_np)
+            last_linsolver, 0, 0.0, 1e-10, tmp_nn, tmp_np)
         set_extrapolation_origin(solver, initial_p, initial_z)
         return solver
     end
@@ -137,7 +137,7 @@ SimpleSolver{NLEQ<:ParametricNonLinEq}(nleq::NLEQ, initial_p::Vector{Float64},
                                        initial_z::Vector{Float64}) =
     SimpleSolver{NLEQ}(nleq, initial_p, initial_z)
 
-set_resabs2tol!(solver::SimpleSolver, tol) = solver.tol = tol
+set_resabstol!(solver::SimpleSolver, tol) = solver.tol = tol
 
 function set_extrapolation_origin(solver::SimpleSolver, p, z)
     set_p!(solver.nleq, p)
@@ -156,7 +156,7 @@ end
 
 get_extrapolation_origin(solver::SimpleSolver) = solver.last_p, solver.last_z
 
-hasconverged(solver::SimpleSolver) = solver.ressumabs2 < solver.tol
+hasconverged(solver::SimpleSolver) = solver.resmaxabs < solver.tol
 
 needediterations(solver::SimpleSolver) = solver.iters
 
@@ -172,8 +172,8 @@ function solve(solver::SimpleSolver, p::AbstractVector{Float64}, maxiter=500)
 
     for solver.iters=1:maxiter
         evaluate!(solver.nleq, solver.z)
-        solver.ressumabs2 = normsquared(solver.nleq.res)
-        if !isfinite(solver.ressumabs2) || !all(isfinite, solver.nleq.J)
+        solver.resmaxabs = isempty(solver.nleq.res) ? 0.0 : maximum(abs, solver.nleq.res)
+        if !isfinite(solver.resmaxabs) || !all(isfinite, solver.nleq.J)
             return solver.z
         end
         if !setlhs!(solver.linsolver, solver.nleq.J) # J was singular
@@ -217,8 +217,8 @@ type HomotopySolver{BaseSolver}
     end
 end
 
-set_resabs2tol!(solver::HomotopySolver, tol) =
-    set_resabs2tol!(solver.basesolver, tol)
+set_resabstol!(solver::HomotopySolver, tol) =
+    set_resabstol!(solver.basesolver, tol)
 
 set_extrapolation_origin(solver::HomotopySolver, p, z) =
     set_extrapolation_origin(solver.basesolver, p, z)
@@ -293,8 +293,8 @@ type CachingSolver{BaseSolver}
     end
 end
 
-set_resabs2tol!(solver::CachingSolver, tol) =
-    set_resabs2tol!(solver.basesolver, tol)
+set_resabstol!(solver::CachingSolver, tol) =
+    set_resabstol!(solver.basesolver, tol)
 
 hasconverged(solver::CachingSolver) = hasconverged(solver.basesolver)
 needediterations(solver::CachingSolver) = needediterations(solver.basesolver)
@@ -352,3 +352,10 @@ end
 
 get_extrapolation_origin(solver::CachingSolver) =
     get_extrapolation_origin(solver.basesolver)
+
+
+function set_resabs2tol!(solver, tol)
+    Base.depwarn(string("set_resabs2tol!(solver, tol) is deprecated, use set_resabstol!(solver, sqrt(tol)) instead."),
+                 :set_resabs2tol!)
+    set_resabstol!(solver, sqrt(tol))
+end

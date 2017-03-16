@@ -533,7 +533,7 @@ function steadystate(model::DiscreteModel, u=zeros(nu(model)))
         steady_nleq = ParametricNonLinEq(steady_nl_eq_func, nn($model), nq($model))
         steady_solver = HomotopySolver{SimpleSolver}(steady_nleq, zeros(nq($model)),
                                                      zeros(nn($model)))
-        set_resabs2tol!(steady_solver, 1e-30)
+        set_resabstol!(steady_solver, 1e-15)
         steady_z = solve(steady_solver, $steady_q0)
         if !hasconverged(steady_solver)
             error("Failed to find steady state solution")
