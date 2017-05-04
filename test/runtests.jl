@@ -49,6 +49,51 @@ let circ = Circuit(), r = resistor(0)
     @test run!(model, zeros(0, 20)) == zeros(0, 20)
 end
 
+let circ = Circuit(), r1 = resistor(10), r2 = resistor(100),
+    src=voltagesource(1), probe=currentprobe()
+    connect!(circ, src[:+], probe[:+])
+    connect!(circ, probe[:-], r1[1], r2[1])
+    connect!(circ, src[:-], r1[2], r2[2])
+    model = DiscreteModel(circ, 1)
+    @test run!(model, zeros(0, 1))[1,1] ≈ 1/10 + 1/100
+    disconnect!(circ, r2[1])
+    model = DiscreteModel(circ, 1)
+    @test run!(model, zeros(0, 1))[1,1] ≈ 1/10
+    disconnect!(circ, r1[2])
+    model = DiscreteModel(circ, 1)
+    @test run!(model, zeros(0, 1))[1,1] ≈ 0
+    connect!(circ, r1[2], r2[1])
+    model = DiscreteModel(circ, 1)
+    @test run!(model, zeros(0, 1))[1,1] ≈ 1/(10+100)
+end
+
+let circ = Circuit(), r1 = resistor(10), r2 = resistor(100), r3 = resistor(470),
+    r4 = resistor(1000), src=voltagesource(1), probe=currentprobe()
+    add!(circ, :r1, r1)
+    add!(circ, src)
+    add!(circ, probe)
+    add!(circ, :r2, r2)
+    add!(circ, :r3, r3)
+    add!(circ, :r4, r4)
+    connect!(circ, src[:+], probe[:+])
+    connect!(circ, probe[:-], r1[1], r2[1], r3[1], r4[1])
+    connect!(circ, src[:-], r1[2], r2[2], r3[2], r4[2])
+    model = DiscreteModel(circ, 1)
+    @test run!(model, zeros(0, 1))[1,1] ≈ 1/10 + 1/100 + 1/470 + 1/1000
+    delete!(circ, :r1)
+    model = DiscreteModel(circ, 1)
+    @test run!(model, zeros(0, 1))[1,1] ≈ 1/100 + 1/470 + 1/1000
+    delete!(circ, :r4)
+    model = DiscreteModel(circ, 1)
+    @test run!(model, zeros(0, 1))[1,1] ≈ 1/100 + 1/470
+    delete!(circ, :r3)
+    model = DiscreteModel(circ, 1)
+    @test run!(model, zeros(0, 1))[1,1] ≈ 1/100
+    delete!(circ, :r2)
+    model = DiscreteModel(circ, 1)
+    @test run!(model, zeros(0, 1))[1,1] ≈ 0
+end
+
 let circ = Circuit(), r = resistor(0), probe = currentprobe()
     connect!(circ, r[1], probe[:+])
     connect!(circ, r[2], probe[:-])

@@ -1,16 +1,19 @@
 # Copyright 2015, 2016, 2017 Martin Holters
 # See accompanying license file.
 
-export Circuit, add!, connect!
+export Circuit, add!, connect!, disconnect!
+
+import Base: delete!
 
 const Net = Vector{Tuple{Int,Int}} # each net is a list of branch/polarity pairs
 
 #struct Circuit
 @struct Circuit begin
     elements :: Vector{Element}
+    element_names :: Dict{Symbol, Int} # map name to offset in elements
     nets :: Vector{Net}
     net_names :: Dict{Symbol, Net}
-    Circuit() = new([], [], Dict{Symbol, Net}())
+    Circuit() = new([], Dict{Symbol, Int}(), [], Dict{Symbol, Net}())
 end
 
 for n in [:nb; :nx; :nq; :nu; :nl; :ny; :nn]
@@ -103,6 +106,28 @@ end
 
 add!(c::Circuit, elems::Element...) = for elem in elems add!(c, elem) end
 
+function add!(c::Circuit, designator::Symbol, elem::Element)
+    add!(c, elem)
+    c.element_names[designator] = length(c.elements)
+end
+
+function delete!(c::Circuit, designator::Symbol)
+    idx = c.element_names[designator]
+    elem = c.elements[idx]
+    b_offset = branch_offset(c, elem)
+    for net in c.nets
+        filter!(bp -> !(b_offset < bp[1] ≤ b_offset + nb(elem)), net)
+        map!(bp -> (bp[1] ≤ b_offset ? bp[1] : bp[1] - nb(elem), bp[2]), net, net)
+    end
+    delete!(c.element_names, designator)
+    deleteat!(c.elements, idx)
+    for (des, i) in c.element_names
+        if i > idx
+            c.element_names[des] = i - 1
+        end
+    end
+end
+
 function branch_offset(c::Circuit, elem::Element)
     offset = 0
     for el in c.elements
@@ -136,6 +161,16 @@ function connect!(c::Circuit, pins::Union{Pin,Symbol}...)
                 c.net_names[name] = nets[1]
             end
         end
+    end
+end
+
+function disconnect!(c::Circuit, pin::Pin)
+    element = pin[1]
+    b_offset = branch_offset(c, element)
+    net = netfor!(c, pin)
+    for (branch, pol) in pin[2]
+        filter!(bp -> bp != (branch + b_offset, pol), net)
+        push!(c.nets, [(b_offset + branch, pol)])
     end
 end
 
