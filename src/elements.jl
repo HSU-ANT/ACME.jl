@@ -309,72 +309,121 @@ function bjt(typ; is=1e-12, η=1, isc=is, ise=is, ηc=η, ηe=η, βf=1000, βr=
         throw(ArgumentError(string("Unknown bjt type ", typ,
                                    ", must be :npn or :pnp")))
     end
-    expEL = (ηel ≠ ηe && ile ≠ 0) ? :(exp(vE*$(1/(25e-3*ηel)))) : :(expE)
-    expCL = (ηcl ≠ ηc && ilc ≠ 0) ? :(exp(vC*$(1/(25e-3*ηcl)))) : :(expC)
-    if ikf ≠ Inf || ikr ≠ Inf
-        qs = quote
+    kernel = quote
+        i_f = $(βf/(1+βf)*ise) * (expE - 1)
+        i_r = $(βr/(1+βr)*isc) * (expC - 1)
+        di_f1 = $(βf/(1+βf)*ise/(25e-3*ηe)) * expE
+        di_r2 = $(βr/(1+βr)*isc/(25e-3*ηc)) * expC
+    end
+    if var == Inf && vaf == Inf && ikf == Inf && ikr == Inf
+        append!(kernel.args, (quote
+            i_cc = i_f-i_r
+            di_cc1 = di_f1
+            di_cc2 = -di_r2
+        end).args)
+    elseif (var ≠ Inf || vaf ≠ Inf) && ikf == Inf && ikr == Inf
+        append!(kernel.args, (quote
+            # inverse Early voltage factor
+            q₁⁻¹ = 1 - vE*$(1/var) - vC*$(1/vaf)
+            i_cc = q₁⁻¹ * (i_f-i_r)
+            # partial derivatives without high level injection effect
+            dq₁⁻¹1 = $(-1/var)
+            dq₁⁻¹2 = $(-1/vaf)
+            di_cc1 = dq₁⁻¹1*(i_f-i_r) + q₁⁻¹*di_f1
+            di_cc2 = dq₁⁻¹2*(i_f-i_r) - q₁⁻¹*di_r2
+        end).args)
+    elseif var == Inf && vaf == Inf && (ikf ≠ Inf || ikr ≠ Inf)
+        append!(kernel.args, (quote
+            # high level injection effect
+            q₂ = i_f*$(1/ikf) + i_r*$(1/ikr)
+            qden = 1+sqrt(1+4q₂)
+            qfact = 2/qden
+            i_cc = qfact * (i_f-i_r)
+            # partial derivatives without Early effect
+            dq₂1 = di_f1*$(1/ikf)
+            dq₂2 = di_r2*$(1/ikr)
+            dqfact1 = -4dq₂1/(qden-1) / (qden^2)
+            dqfact2 = -4dq₂2/(qden-1) / (qden^2)
+            di_cc1 = dqfact1*(i_f-i_r) + qfact*di_f1
+            di_cc2 = dqfact2*(i_f-i_r) - qfact*di_r2
+        end).args)
+    else
+        append!(kernel.args, (quote
             # inverse Early voltage factor
             q₁⁻¹ = 1 - vE*$(1/var) - vC*$(1/vaf)
             # high level injection effect
             q₂ = i_f*$(1/ikf) + i_r*$(1/ikr)
             qden = 1+sqrt(1+4q₂)
             qfact = 2q₁⁻¹/qden
-        end
-        dqs = quote
-            # partial derivatives
+            i_cc = qfact * (i_f-i_r)
+            # partial derivatives with high level injection effect and Early effect
             dq₁⁻¹1 = $(-1/var)
             dq₁⁻¹2 = $(-1/vaf)
             dq₂1 = di_f1*$(1/ikf)
             dq₂2 = di_r2*$(1/ikr)
-            dqfact1 = (2dq₁⁻¹1*qden - 2q₁⁻¹*4dq₂1/(2*(qden-1))) / (qden^2)
-            dqfact2 = (2dq₁⁻¹2*qden - 2q₁⁻¹*4dq₂2/(2*(qden-1))) / (qden^2)
+            dqfact1 = (2dq₁⁻¹1*qden - q₁⁻¹*4dq₂1/(qden-1)) / (qden^2)
+            dqfact2 = (2dq₁⁻¹2*qden - q₁⁻¹*4dq₂2/(qden-1)) / (qden^2)
+            di_cc1 = dqfact1*(i_f-i_r) + qfact*di_f1
+            di_cc2 = dqfact2*(i_f-i_r) - qfact*di_r2
+        end).args)
+    end
+
+    if ile ≠ 0
+        if ηel ≠ ηe
+            append!(kernel.args, (quote
+                expEl = exp(vE*$(1/(25e-3*ηel)))
+                iBE = $(1/βf)*i_f + $ile*(expEl - 1)
+                diBE1 = $(1/βf)*di_f1 + $(ile/(25e-3*ηe))*expEl
+            end).args)
+        else
+            append!(kernel.args, (quote
+                iBE = $(1/βf)*i_f + $ile*(expE - 1)
+                diBE1 = $(1/βf)*di_f1 + $(ile/(25e-3*ηe))*expE
+            end).args)
         end
     else
-        # ikf==ikr==Inf => no high level injection effect
-        qs = quote
-            # inverse Early voltage factor
-            q₁⁻¹ = 1 - vE*$(1/var) - vC*$(1/vaf)
-            qfact = q₁⁻¹
-        end
-        dqs = quote
-            # partial derivatives without high level injection effect
-            dq₁⁻¹1 = $(-1/var)
-            dq₁⁻¹2 = $(-1/vaf)
-            dqfact1 = dq₁⁻¹1
-            dqfact2 = dq₁⁻¹2
-        end
+        append!(kernel.args, (quote
+            iBE = $(1/βf)*i_f
+            diBE1 = $(1/βf)*di_f1
+        end).args)
     end
+    if ilc ≠ 0
+        if ηcl ≠ ηc
+            append!(kernel.args, (quote
+                expCl = exp(vC*$(1/(25e-3*ηcl)))
+                iBC = $(1/βr)*i_r + $ilc*(expCl - 1)
+                diBC2 = $(1/βr)*di_r2 + $(ilc/(25e-3*ηc))*expCl
+            end).args)
+        else
+            append!(kernel.args, (quote
+                iBC = $(1/βr)*i_r + $ilc*(expC - 1)
+                diBC2 = $(1/βr)*di_r2 + $(ilc/(25e-3*ηc))*expC
+            end).args)
+        end
+    else
+        append!(kernel.args, (quote
+            iBC = $(1/βr)*i_r
+            diBC2 = $(1/βr)*di_r2
+        end).args)
+    end
+
     nonlinear_eq =
         quote
             let vE = q[1], vC = q[2], iE = q[3], iC = q[4],
-                expE=exp(vE*$(1/(25e-3*ηe))), expC=exp(vC*$(1/(25e-3*ηc))),
-                expEl=$expEL, expCl=$expCL
+                expE=exp(vE*$(1/(25e-3*ηe))), expC=exp(vC*$(1/(25e-3*ηc)))
 
-                i_f = $(βf/(1+βf)*ise) * (expE - 1)
-                i_r = $(βr/(1+βr)*isc) * (expC - 1)
-                $qs
-                i_cc = qfact * (i_f-i_r)
-                iBE = $(1/βf)*i_f + $ile*(expEl - 1)
-                iBC = $(1/βr)*i_r + $ilc*(expCl - 1)
-
-                di_f1 = $(βf/(1+βf)*ise/(25e-3*ηe)) * expE
-                di_r2 = $(βr/(1+βr)*isc/(25e-3*ηc)) * expC
-                $dqs
-                di_cc1 = dqfact1*(i_f-i_r) + qfact*di_f1
-                di_cc2 = dqfact2*(i_f-i_r) - qfact*di_r2
-                diBE1 = $(1/βf)*di_f1 + $(ile/(25e-3*ηe))*expEl
-                diBC2 = $(1/βr)*di_r2 + $(ilc/(25e-3*ηc))*expCl
+                $kernel
 
                 res[1] = i_cc + iBE - iE
                 res[2] = -i_cc + iBC - iC
                 J[1,1] = di_cc1 + diBE1
                 J[1,2] = di_cc2
-                J[1,3] = -1
-                J[1,4] = 0
+                J[1,3] = -1.0
+                J[1,4] = 0.0
                 J[2,1] = -di_cc1
                 J[2,2] = -di_cc2 + diBC2
-                J[2,3] = 0
-                J[2,4] = -1
+                J[2,3] = 0.0
+                J[2,4] = -1.0
             end
         end
     return Element(mv=[1 0; 0 1; 0 0; 0 0], mi = [0 0; 0 0; 1 0; 0 1],
