@@ -241,18 +241,40 @@ diode(;is::Real=1e-12, η::Real = 1) =
       end
     end
   )
-doc"""
-    bjt(typ; is=1e-12, η=1, isc=is, ise=is, ηc=η, ηe=η, βf=1000, βr=10)
 
-Creates a bipolar junction transistor obeying the Ebers-Moll equation
+doc"""
+    bjt(typ; is=1e-12, η=1, isc=is, ise=is, ηc=η, ηe=η, βf=1000, βr=10,
+        ile=0, ilc=0, ηcl=ηc, ηel=ηe, vaf=Inf, var=Inf, ikf=Inf, ikr=Inf)
+
+Creates a bipolar junction transistor obeying the Gummel-Poon model
+
+$i_f = \frac{\beta_f}{1+\beta_f} I_{S,E} \cdot (e^{v_E/(\eta_E v_T)}-1)$
+
+$i_r = \frac{\beta_r}{1+\beta_r} I_{S,C} \cdot (e^{v_C/(\eta_C v_T)}-1)$
+
+$i_{cc} = \frac{2(1-\frac{V_E}{V_{ar}}-\frac{V_C}{V_{af}})}
+               {1+\sqrt{1+4(\frac{i_f}{I_{KF}}+\frac{i_r}{I_{KR}})}}
+          (i_f - i_r)$
+
+$i_{BE} = \frac{1}{\beta_f} i_f + I_{L,E} \cdot (e^{v_E/(\eta_{EL} v_T)}-1)$
+
+$i_{BC} = \frac{1}{\beta_r} i_r + I_{L,C} \cdot (e^{v_C/(\eta_{CL} v_T)}-1)$
+
+$i_E = i_{cc} + i_{BE} \qquad i_C=-i_{cc} + i_{BC}$
+
+where $v_T$ is fixed at 25 mV. For
+
+$I_{L,E}=I_{L,C}=0,\quad V_{ar}=V_{af}=I_{KF}=I_{KR}=∞,$
+
+this reduces to the Ebers-Moll equation
 
 $i_E = I_{S,E} \cdot (e^{v_E/(\eta_E v_T)}-1)
            - \frac{\beta_r}{1+\beta_r} I_{S,C} \cdot (e^{v_C/(\eta_C v_T)}-1)$
 
 $i_C = -\frac{\beta_f}{1+\beta_f} I_{S,E} \cdot (e^{v_E/(\eta_E v_T)}-1)
-           + I_{S,C} \cdot (e^{v_C/(\eta_C v_T)}-1)$
+           + I_{S,C} \cdot (e^{v_C/(\eta_C v_T)}-1).$
 
-where $v_T$ is fixed at 25 mV. The parameters are set using named arguments:
+The parameters are set using named arguments:
 
 | parameter | description |
 |:--------- |:------------|
@@ -265,10 +287,19 @@ where $v_T$ is fixed at 25 mV. The parameters are set using named arguments:
 | `ηe`  | Emitter emission coefficient (overriding `η`)
 | `βf`  | Forward current gain
 | `βr`  | Reverse current gain
+| `ilc` | Base-collector junction leakage current in Ampere
+| `ile` | Base-emitter junction leakage current in Ampere
+| `ηcl` | Base-collector junction leakage emission coefficient (overriding `η`)
+| `ηel` | Base-emitter junction leakage emission coefficient (overriding `η`)
+| `vaf` | Forward Early voltage in Volt
+| `var` | Reverse Early voltage in Volt
+| `ikf` | Forward knee current (gain roll-off) in Ampere
+| `ikr` | Reverse knee current (gain roll-off) in Ampere
 
 Pins: `base`, `emitter`, `collector`
 """
-function bjt(typ; is=1e-12, η=1, isc=is, ise=is, ηc=η, ηe=η, βf=1000, βr=10)
+function bjt(typ; is=1e-12, η=1, isc=is, ise=is, ηc=η, ηe=η, βf=1000, βr=10,
+             ile=0, ilc=0, ηcl=ηc, ηel=ηe, vaf=Inf, var=Inf, ikf=Inf, ikr=Inf)
     local polarity
     if typ == :npn
         polarity = 1
@@ -278,21 +309,70 @@ function bjt(typ; is=1e-12, η=1, isc=is, ise=is, ηc=η, ηe=η, βf=1000, βr=
         throw(ArgumentError(string("Unknown bjt type ", typ,
                                    ", must be :npn or :pnp")))
     end
-    αf = -βf/(1+βf)
-    αr = -βr/(1+βr)
+    expEL = (ηel ≠ ηe && ile ≠ 0) ? :(exp(vE*$(1/(25e-3*ηel)))) : :(expE)
+    expCL = (ηcl ≠ ηc && ilc ≠ 0) ? :(exp(vC*$(1/(25e-3*ηcl)))) : :(expC)
+    if ikf ≠ Inf || ikr ≠ Inf
+        qs = quote
+            # inverse Early voltage factor
+            q₁⁻¹ = 1 - vE*$(1/var) - vC*$(1/vaf)
+            # high level injection effect
+            q₂ = i_f*$(1/ikf) + i_r*$(1/ikr)
+            qden = 1+sqrt(1+4q₂)
+            qfact = 2q₁⁻¹/qden
+        end
+        dqs = quote
+            # partial derivatives
+            dq₁⁻¹1 = $(-1/var)
+            dq₁⁻¹2 = $(-1/vaf)
+            dq₂1 = di_f1*$(1/ikf)
+            dq₂2 = di_r2*$(1/ikr)
+            dqfact1 = (2dq₁⁻¹1*qden - 2q₁⁻¹*4dq₂1/(2*(qden-1))) / (qden^2)
+            dqfact2 = (2dq₁⁻¹2*qden - 2q₁⁻¹*4dq₂2/(2*(qden-1))) / (qden^2)
+        end
+    else
+        # ikf==ikr==Inf => no high level injection effect
+        qs = quote
+            # inverse Early voltage factor
+            q₁⁻¹ = 1 - vE*$(1/var) - vC*$(1/vaf)
+            qfact = q₁⁻¹
+        end
+        dqs = quote
+            # partial derivatives without high level injection effect
+            dq₁⁻¹1 = $(-1/var)
+            dq₁⁻¹2 = $(-1/vaf)
+            dqfact1 = dq₁⁻¹1
+            dqfact2 = dq₁⁻¹2
+        end
+    end
     nonlinear_eq =
         quote
             let vE = q[1], vC = q[2], iE = q[3], iC = q[4],
-                expE=exp(vE*$(1/(25e-3*ηe))), expC=exp(vC*$(1/(25e-3*ηc)))
+                expE=exp(vE*$(1/(25e-3*ηe))), expC=exp(vC*$(1/(25e-3*ηc))),
+                expEl=$expEL, expCl=$expCL
 
-                res[1] = $(ise) * (expE-1) + $(αr*isc) * (expC-1) - iE
-                res[2] = $(αf*ise) * (expE-1) + $(isc) * (expC-1) - iC
-                J[1,1] = $(ise/(25e-3*ηe)) * expE
-                J[1,2] = $(αr*isc/(25e-3*ηc)) * expC
+                i_f = $(βf/(1+βf)*ise) * (expE - 1)
+                i_r = $(βr/(1+βr)*isc) * (expC - 1)
+                $qs
+                i_cc = qfact * (i_f-i_r)
+                iBE = $(1/βf)*i_f + $ile*(expEl - 1)
+                iBC = $(1/βr)*i_r + $ilc*(expCl - 1)
+
+                di_f1 = $(βf/(1+βf)*ise/(25e-3*ηe)) * expE
+                di_r2 = $(βr/(1+βr)*isc/(25e-3*ηc)) * expC
+                $dqs
+                di_cc1 = dqfact1*(i_f-i_r) + qfact*di_f1
+                di_cc2 = dqfact2*(i_f-i_r) - qfact*di_r2
+                diBE1 = $(1/βf)*di_f1 + $(ile/(25e-3*ηe))*expEl
+                diBC2 = $(1/βr)*di_r2 + $(ilc/(25e-3*ηc))*expCl
+
+                res[1] = i_cc + iBE - iE
+                res[2] = -i_cc + iBC - iC
+                J[1,1] = di_cc1 + diBE1
+                J[1,2] = di_cc2
                 J[1,3] = -1
                 J[1,4] = 0
-                J[2,1] = $(αf*ise/(25e-3*ηe)) * expE
-                J[2,2] = $(isc/(25e-3*ηc)) * expC
+                J[2,1] = -di_cc1
+                J[2,2] = -di_cc2 + diBC2
                 J[2,3] = 0
                 J[2,4] = -1
             end
