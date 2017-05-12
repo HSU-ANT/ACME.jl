@@ -274,6 +274,8 @@ $i_E = I_{S,E} \cdot (e^{v_E/(\eta_E v_T)}-1)
 $i_C = -\frac{\beta_f}{1+\beta_f} I_{S,E} \cdot (e^{v_E/(\eta_E v_T)}-1)
            + I_{S,C} \cdot (e^{v_C/(\eta_C v_T)}-1).$
 
+Additionally, terminal series resistances are supported.
+
 The parameters are set using named arguments:
 
 | parameter | description |
@@ -295,11 +297,15 @@ The parameters are set using named arguments:
 | `var` | Reverse Early voltage in Volt
 | `ikf` | Forward knee current (gain roll-off) in Ampere
 | `ikr` | Reverse knee current (gain roll-off) in Ampere
+| `re`  | Emitter terminal resistance
+| `rc`  | Collector terminal resistance
+| `rb`  | Base terminal resistance
 
 Pins: `base`, `emitter`, `collector`
 """
 function bjt(typ; is=1e-12, η=1, isc=is, ise=is, ηc=η, ηe=η, βf=1000, βr=10,
-             ile=0, ilc=0, ηcl=ηc, ηel=ηe, vaf=Inf, var=Inf, ikf=Inf, ikr=Inf)
+             ile=0, ilc=0, ηcl=ηc, ηel=ηe, vaf=Inf, var=Inf, ikf=Inf, ikr=Inf,
+             re=0, rc=0, rb=0)
     local polarity
     if typ == :npn
         polarity = 1
@@ -426,7 +432,8 @@ function bjt(typ; is=1e-12, η=1, isc=is, ise=is, ηc=η, ηe=η, βf=1000, βr=
                 J[2,4] = -1.0
             end
         end
-    return Element(mv=[1 0; 0 1; 0 0; 0 0], mi = [0 0; 0 0; 1 0; 0 1],
+    return Element(mv=[1 0; 0 1; 0 0; 0 0],
+                   mi = [-(re+rb) -rb; -rb -(rc+rb); 1 0; 0 1],
                    mq = -polarity*speye(4), nonlinear_eq = nonlinear_eq,
                    pins = [:base; :emitter; :base; :collector])
 end

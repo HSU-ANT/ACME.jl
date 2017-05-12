@@ -235,6 +235,47 @@ let isc=1e-6, ise=2e-6, ηc=1.1, ηe=1.0, βf=100, βr=10, ηcl=1.2, ηel=1.3
         @test ic ≈ -icc + ibc
     end
 end
+# compare internal to external terminal resistances
+let rb=100, re=10, rc=20
+    for (typ, ib, vce) in ((:npn, 1e-3, 1), (:pnp, -1e-3, -1))
+        t1 = bjt(typ)
+        rbref=resistor(rb)
+        rcref=resistor(rc)
+        reref=resistor(re)
+        isrc1 = currentsource(ib)
+        vscr1 = voltagesource(vce)
+        veprobe1 = voltageprobe()
+        vcprobe1 = voltageprobe()
+        ieprobe1 = currentprobe()
+        icprobe1 = currentprobe()
+        t2 = bjt(typ, rb=rb, re=re, rc=rc)
+        isrc2 = currentsource(ib)
+        vscr2 = voltagesource(vce)
+        veprobe2 = voltageprobe()
+        vcprobe2 = voltageprobe()
+        ieprobe2 = currentprobe()
+        icprobe2 = currentprobe()
+        circ = Circuit()
+        add!(circ, veprobe1, vcprobe1, ieprobe1, icprobe1)
+        connect!(circ, t1[:base], rbref[1])
+        connect!(circ, rbref[2], isrc1[:+], veprobe1[:+], vcprobe1[:+])
+        connect!(circ, t1[:collector], rcref[1])
+        connect!(circ, rcref[2], icprobe1[:+])
+        connect!(circ, vcprobe1[:-], icprobe1[:-], vscr1[:+])
+        connect!(circ, t1[:emitter], reref[1])
+        connect!(circ, reref[2], ieprobe1[:+])
+        connect!(circ, veprobe1[:-], ieprobe1[:-], vscr1[:-], isrc1[:-])
+        add!(circ, veprobe2, vcprobe2, ieprobe2, icprobe2)
+        connect!(circ, t2[:base], isrc2[:+], veprobe2[:+], vcprobe2[:+])
+        connect!(circ, t2[:collector], icprobe2[:+])
+        connect!(circ, vcprobe2[:-], icprobe2[:-], vscr2[:+])
+        connect!(circ, t2[:emitter], ieprobe2[:+])
+        connect!(circ, veprobe2[:-], ieprobe2[:-], vscr2[:-], isrc2[:-])
+        model = DiscreteModel(circ, 1)
+        output = run!(model, zeros(0,1))
+        @test output[1:4,:] ≈ output[5:8,:]
+    end
+end
 
 # simple circuit: resistor and diode in series, driven by constant voltage,
 # chosen such that a prescribe current flows
