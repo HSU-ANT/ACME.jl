@@ -174,10 +174,10 @@ end
 
 # BJT Ebers-Moll model
 let isc=1e-6, ise=2e-6, ηc=1.1, ηe=1.0, βf=100, βr=10
-    for (typ, ib, vce) in ((:npn, 1e-3, 1), (:pnp, -1e-3, -1))
+    for (typ, ib) in ((:npn, 1e-3), (:pnp, -1e-3))
         t = bjt(typ, isc=isc, ise=ise, ηc=ηc, ηe=ηe, βf=βf, βr=βr)
-        isrc = currentsource(ib)
-        vscr = voltagesource(vce)
+        isrc = currentsource()
+        vsrc = voltagesource()
         veprobe = voltageprobe()
         vcprobe = voltageprobe()
         ieprobe = currentprobe()
@@ -186,17 +186,20 @@ let isc=1e-6, ise=2e-6, ηc=1.1, ηe=1.0, βf=100, βr=10
         add!(circ, veprobe, vcprobe, ieprobe, icprobe)
         connect!(circ, t[:base], isrc[:+], veprobe[:+], vcprobe[:+])
         connect!(circ, t[:collector], icprobe[:+])
-        connect!(circ, vcprobe[:-], icprobe[:-], vscr[:+])
+        connect!(circ, vcprobe[:-], icprobe[:-], vsrc[:+])
         connect!(circ, t[:emitter], ieprobe[:+])
-        connect!(circ, veprobe[:-], ieprobe[:-], vscr[:-], isrc[:-])
+        connect!(circ, veprobe[:-], ieprobe[:-], vsrc[:-], isrc[:-])
         model = DiscreteModel(circ, 1)
-        output = run!(model, zeros(0,1))
+        N = 100
+        output = run!(model, [linspace(0, ib, N).'; linspace(1, -1, N÷2).' linspace(-1, 1, N÷2).'])
         if typ == :pnp
             output = -output
         end
-        ve, vc, ie, ic = output
-        @test ie ≈ ise*(exp(ve/(ηe*25e-3))-1) - βr/(1+βr)*isc*(exp(vc/(ηc*25e-3))-1)
-        @test ic ≈ -βf/(1+βf)*ise*(exp(ve/(ηe*25e-3))-1) + isc*(exp(vc/(ηc*25e-3))-1)
+        for n in 1:N
+            ve, vc, ie, ic = output[:,n]
+            @test isapprox(ie, ise*(exp(ve/(ηe*25e-3))-1) - βr/(1+βr)*isc*(exp(vc/(ηc*25e-3))-1), atol=1e-10)
+            @test isapprox(ic, -βf/(1+βf)*ise*(exp(ve/(ηe*25e-3))-1) + isc*(exp(vc/(ηc*25e-3))-1), atol=1e-10)
+        end
     end
 end
 # BJT Gummel-Poon model
@@ -204,11 +207,11 @@ let isc=1e-6, ise=2e-6, ηc=1.1, ηe=1.0, βf=100, βr=10, ηcl=1.2, ηel=1.3
     for ile in (0, 50e-9), ilc in (0, 100e-9), ηcl in (ηc, 1.2), ηel in (ηe, 1.1),
              vaf in (Inf, 10), var in (Inf, 50),
              ikf in (Inf, 50e-3), ikr in (Inf, 500e-3),
-             (typ, ib, vce) in ((:npn, 1e-3, 1), (:pnp, -1e-3, -1))
+             (typ, ib) in ((:npn, 1e-3), (:pnp, -1e-3))
         t = bjt(typ, isc=isc, ise=ise, ηc=ηc, ηe=ηe, βf=βf, βr=βr, ile=ile,
                 ilc=ilc, ηcl=ηcl, ηel=ηel, vaf=vaf, var=var, ikf=ikf, ikr=ikr)
-        isrc = currentsource(ib)
-        vscr = voltagesource(vce)
+        isrc = currentsource()
+        vsrc = voltagesource()
         veprobe = voltageprobe()
         vcprobe = voltageprobe()
         ieprobe = currentprobe()
@@ -217,22 +220,25 @@ let isc=1e-6, ise=2e-6, ηc=1.1, ηe=1.0, βf=100, βr=10, ηcl=1.2, ηel=1.3
         add!(circ, veprobe, vcprobe, ieprobe, icprobe)
         connect!(circ, t[:base], isrc[:+], veprobe[:+], vcprobe[:+])
         connect!(circ, t[:collector], icprobe[:+])
-        connect!(circ, vcprobe[:-], icprobe[:-], vscr[:+])
+        connect!(circ, vcprobe[:-], icprobe[:-], vsrc[:+])
         connect!(circ, t[:emitter], ieprobe[:+])
-        connect!(circ, veprobe[:-], ieprobe[:-], vscr[:-], isrc[:-])
+        connect!(circ, veprobe[:-], ieprobe[:-], vsrc[:-], isrc[:-])
         model = DiscreteModel(circ, 1)
-        output = run!(model, zeros(0,1))
+        N = 100
+        output = run!(model, [linspace(0, ib, N).'; linspace(1, -1, N÷2).' linspace(-1, 1, N÷2).'])
         if typ == :pnp
             output = -output
         end
-        ve, vc, ie, ic = output
-        i_f = βf/(1+βf)*ise*(exp(ve/(ηe*25e-3))-1)
-        i_r = βr/(1+βr)*isc*(exp(vc/(ηc*25e-3))-1)
-        icc = (2*(1-ve/var-vc/vaf))/(1+sqrt(1+4(i_f/ikf+i_r/ikr))) * (i_f - i_r)
-        ibe = 1/βf*i_f + ile*(exp(ve/(ηel*25e-3))-1)
-        ibc = 1/βr*i_r + ilc*(exp(vc/(ηcl*25e-3))-1)
-        @test ie ≈ icc + ibe
-        @test ic ≈ -icc + ibc
+        for n in 1:N
+            ve, vc, ie, ic = output[:,n]
+            i_f = βf/(1+βf)*ise*(exp(ve/(ηe*25e-3))-1)
+            i_r = βr/(1+βr)*isc*(exp(vc/(ηc*25e-3))-1)
+            icc = (2*(1-ve/var-vc/vaf))/(1+sqrt(1+4(i_f/ikf+i_r/ikr))) * (i_f - i_r)
+            ibe = 1/βf*i_f + ile*(exp(ve/(ηel*25e-3))-1)
+            ibc = 1/βr*i_r + ilc*(exp(vc/(ηcl*25e-3))-1)
+            @test isapprox(ie, icc + ibe, atol=1e-10)
+            @test isapprox(ic, -icc + ibc, atol=1e-10)
+        end
     end
 end
 # compare internal to external terminal resistances
