@@ -1,4 +1,4 @@
-# Copyright 2016 Martin Holters
+# Copyright 2016, 2017 Martin Holters
 # See accompanying license file.
 
 import Base.deleteat!
