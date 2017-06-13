@@ -4,6 +4,7 @@
 using ACME
 using Base.Test
 using Compat
+using ProgressMeter
 
 tv, ti = ACME.topomat(sparse([1 -1 1; -1 1 -1]))
 @test tv*ti'==spzeros(2,1)
@@ -204,10 +205,11 @@ let isc=1e-6, ise=2e-6, ηc=1.1, ηe=1.0, βf=100, βr=10
 end
 # BJT Gummel-Poon model
 let isc=1e-6, ise=2e-6, ηc=1.1, ηe=1.0, βf=100, βr=10, ηcl=1.2, ηel=1.3
-    for ile in (0, 50e-9), ilc in (0, 100e-9), ηcl in (ηc, 1.2), ηel in (ηe, 1.1),
-             vaf in (Inf, 10), var in (Inf, 50),
-             ikf in (Inf, 50e-3), ikr in (Inf, 500e-3),
-             (typ, ib) in ((:npn, 1e-3), (:pnp, -1e-3))
+    @showprogress "Testing Gummel-Poon model: " for ile in (0, 50e-9),
+            ilc in (0, 100e-9), ηcl in (ηc, 1.2), ηel in (ηe, 1.1),
+            vaf in (Inf, 10), var in (Inf, 50),
+            ikf in (Inf, 50e-3), ikr in (Inf, 500e-3),
+            (typ, ib) in ((:npn, 1e-3), (:pnp, -1e-3))
         t = bjt(typ, isc=isc, ise=ise, ηc=ηc, ηe=ηe, βf=βf, βr=βr, ile=ile,
                 ilc=ilc, ηcl=ηcl, ηel=ηel, vaf=vaf, var=var, ikf=ikf, ikr=ikr)
         isrc = currentsource()
