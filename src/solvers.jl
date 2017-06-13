@@ -4,7 +4,8 @@
 export SimpleSolver, HomotopySolver, CachingSolver
 import Base.copy!
 
-type ParametricNonLinEq{F_eval<:Function,F_setp<:Function,F_calcjp<:Function,Scratch}
+#struct ParametricNonLinEq{F_eval<:Function,F_setp<:Function,F_calcjp<:Function,Scratch}
+eval(Expr(:type, false, :(ParametricNonLinEq{F_eval<:Function,F_setp<:Function,F_calcjp<:Function,Scratch}), quote
     func::F_eval
     set_p::F_setp
     calc_Jp::F_calcjp
@@ -23,7 +24,7 @@ type ParametricNonLinEq{F_eval<:Function,F_setp<:Function,F_calcjp<:Function,Scr
         J = zeros(nn, nn)
         return new{F_eval,F_setp,F_calcjp,Scratch}(func, set_p, calc_Jp, res, Jp, J, scratch)
     end
-end
+end))
 ParametricNonLinEq{F_eval<:Function,F_setp<:Function,F_calcjp<:Function,
                    Scratch}(func::F_eval, set_p::F_setp, calc_Jp::F_calcjp,
                             scratch::Scratch, nn::Integer, np::Integer) =
@@ -43,14 +44,15 @@ calc_Jp!(nleq::ParametricNonLinEq) = nleq.calc_Jp(nleq.scratch, nleq.Jp)
 evaluate!(nleq::ParametricNonLinEq, z) =
     nleq.func(nleq.res, nleq.J, nleq.scratch, z)
 
-immutable LinearSolver
+#struct LinearSolver
+eval(Expr(:type, false, :LinearSolver, quote
     factors::Matrix{Float64}
     ipiv::Vector{Base.LinAlg.BlasInt}
     info::typeof(Ref{Base.LinAlg.BlasInt}(0))
     function LinearSolver(n::Int)
         new(zeros(n, n), zeros(Base.LinAlg.BlasInt, n), Ref{Base.LinAlg.BlasInt}(0))
     end
-end
+end))
 
 function setlhs!(solver::LinearSolver, A::Matrix{Float64})
     m, n = size(solver.factors)
@@ -94,17 +96,8 @@ function copy!(dest::LinearSolver, src::LinearSolver)
     dest.info[] = src.info[]
 end
 
-"""
-    SimpleSolver
-
-The `SimpleSolver` is the simplest available solver. It uses Newton iteration
-which features fast local convergence, but makes no guarantees about global
-convergence. The initial solution of the iteration is obtained by extrapolating
-the last solution found (or another solution provided externally) using the
-available Jacobians. Due to the missing global convergence, the `SimpleSolver`
-is rarely useful as such.
-"""
-type SimpleSolver{NLEQ<:ParametricNonLinEq}
+#mutable struct SimpleSolver{NLEQ<:ParametricNonLinEq}
+eval(Expr(:type, true, :(SimpleSolver{NLEQ<:ParametricNonLinEq}), quote
     nleq::NLEQ
     z::Vector{Float64}
     linsolver::LinearSolver
@@ -113,7 +106,7 @@ type SimpleSolver{NLEQ<:ParametricNonLinEq}
     last_Jp::Matrix{Float64}
     last_linsolver::LinearSolver
     iters::Int
-    ressumabs2::Float64
+    resmaxabs::Float64
     tol::Float64
     tmp_nn::Vector{Float64}
     tmp_np::Vector{Float64}
@@ -128,16 +121,27 @@ type SimpleSolver{NLEQ<:ParametricNonLinEq}
         tmp_nn = zeros(nn(nleq))
         tmp_np = zeros(np(nleq))
         solver = new{NLEQ}(nleq, z, linsolver, last_z, last_p, last_Jp,
-            last_linsolver, 0, 0.0, 1e-20, tmp_nn, tmp_np)
+            last_linsolver, 0, 0.0, 1e-10, tmp_nn, tmp_np)
         set_extrapolation_origin(solver, initial_p, initial_z)
         return solver
     end
-end
+end))
+@doc """
+    SimpleSolver
+
+The `SimpleSolver` is the simplest available solver. It uses Newton iteration
+which features fast local convergence, but makes no guarantees about global
+convergence. The initial solution of the iteration is obtained by extrapolating
+the last solution found (or another solution provided externally) using the
+available Jacobians. Due to the missing global convergence, the `SimpleSolver`
+is rarely useful as such.
+""" SimpleSolver
+
 SimpleSolver{NLEQ<:ParametricNonLinEq}(nleq::NLEQ, initial_p::Vector{Float64},
                                        initial_z::Vector{Float64}) =
     SimpleSolver{NLEQ}(nleq, initial_p, initial_z)
 
-set_resabs2tol!(solver::SimpleSolver, tol) = solver.tol = tol
+set_resabstol!(solver::SimpleSolver, tol) = solver.tol = tol
 
 function set_extrapolation_origin(solver::SimpleSolver, p, z)
     set_p!(solver.nleq, p)
@@ -156,7 +160,7 @@ end
 
 get_extrapolation_origin(solver::SimpleSolver) = solver.last_p, solver.last_z
 
-hasconverged(solver::SimpleSolver) = solver.ressumabs2 < solver.tol
+hasconverged(solver::SimpleSolver) = solver.resmaxabs < solver.tol
 
 needediterations(solver::SimpleSolver) = solver.iters
 
@@ -172,8 +176,8 @@ function solve(solver::SimpleSolver, p::AbstractVector{Float64}, maxiter=500)
 
     for solver.iters=1:maxiter
         evaluate!(solver.nleq, solver.z)
-        solver.ressumabs2 = normsquared(solver.nleq.res)
-        if !isfinite(solver.ressumabs2) || !all(isfinite, solver.nleq.J)
+        solver.resmaxabs = isempty(solver.nleq.res) ? 0.0 : maximum(abs, solver.nleq.res)
+        if !isfinite(solver.resmaxabs) || !all(isfinite, solver.nleq.J)
             return solver.z
         end
         if !setlhs!(solver.linsolver, solver.nleq.J) # J was singular
@@ -191,16 +195,8 @@ function solve(solver::SimpleSolver, p::AbstractVector{Float64}, maxiter=500)
     return solver.z
 end
 
-"""
-    HomotopySolver{BaseSolver}
-
-The `HomotopySolver` extends an existing solver (provided as the type parameter)
-by applying homotopy to (at least theoretically) ensure global convergence. It
-can be combined with the `SimpleSolver` as `HomotopySolver{SimpleSolver}` to
-obtain a useful Newton homtopy solver with generally good convergence
-properties.
-"""
-type HomotopySolver{BaseSolver}
+#mutable struct HomotopySolver{BaseSolver}
+eval(Expr(:type, true, :(HomotopySolver{BaseSolver}), quote
     basesolver::BaseSolver
     start_p::Vector{Float64}
     pa::Vector{Float64}
@@ -215,10 +211,19 @@ type HomotopySolver{BaseSolver}
         basesolver = BaseSolver(nleq, initial_p, initial_z)
         return HomotopySolver{typeof(basesolver)}(basesolver, np(nleq))
     end
-end
+end))
+@doc """
+    HomotopySolver{BaseSolver}
 
-set_resabs2tol!(solver::HomotopySolver, tol) =
-    set_resabs2tol!(solver.basesolver, tol)
+The `HomotopySolver` extends an existing solver (provided as the type parameter)
+by applying homotopy to (at least theoretically) ensure global convergence. It
+can be combined with the `SimpleSolver` as `HomotopySolver{SimpleSolver}` to
+obtain a useful Newton homtopy solver with generally good convergence
+properties.
+""" -> HomotopySolver
+
+set_resabstol!(solver::HomotopySolver, tol) =
+    set_resabstol!(solver.basesolver, tol)
 
 set_extrapolation_origin(solver::HomotopySolver, p, z) =
     set_extrapolation_origin(solver.basesolver, p, z)
@@ -256,22 +261,8 @@ end
 hasconverged(solver::HomotopySolver) = hasconverged(solver.basesolver)
 needediterations(solver::HomotopySolver) = solver.iters
 
-"""
-    CachingSolver{BaseSolver}
-
-The `CachingSolver` extends an existing solver (provided as the type parameter)
-by storing found solutions in a k-d tree to use as initial solutions in the
-future. Whenever the underlying solver needs more than a preset number of
-iterations (defaults to five), the solution will be stored. Storing new
-solutions is a relatively expensive operation, so until the stored solutions
-suffice to ensure convergence in few iterations throughout, use of a
-`CachingSolver` may actually slow things down.
-
-See [M. Holters, U. Zölzer, "A k-d Tree Based Solution Cache for the Non-linear
-Equation of Circuit Simulations"](http://www.eurasip.org/Proceedings/Eusipco/Eusipco2016/papers/1570255150.pdf)
-for a more detailed discussion.
-"""
-type CachingSolver{BaseSolver}
+#mutable struct CachingSolver{BaseSolver}
+eval(Expr(:type, true, :(CachingSolver{BaseSolver}), quote
     basesolver::BaseSolver
     ps_tree::KDTree{Vector{Float64}, Matrix{Float64}}
     zs::Matrix{Float64}
@@ -291,10 +282,25 @@ type CachingSolver{BaseSolver}
         basesolver = BaseSolver(nleq, initial_p, initial_z)
         return CachingSolver{typeof(basesolver)}(basesolver, initial_p, initial_z, nn(nleq))
     end
-end
+end))
+@doc """
+    CachingSolver{BaseSolver}
 
-set_resabs2tol!(solver::CachingSolver, tol) =
-    set_resabs2tol!(solver.basesolver, tol)
+The `CachingSolver` extends an existing solver (provided as the type parameter)
+by storing found solutions in a k-d tree to use as initial solutions in the
+future. Whenever the underlying solver needs more than a preset number of
+iterations (defaults to five), the solution will be stored. Storing new
+solutions is a relatively expensive operation, so until the stored solutions
+suffice to ensure convergence in few iterations throughout, use of a
+`CachingSolver` may actually slow things down.
+
+See [M. Holters, U. Zölzer, "A k-d Tree Based Solution Cache for the Non-linear
+Equation of Circuit Simulations"](http://www.eurasip.org/Proceedings/Eusipco/Eusipco2016/papers/1570255150.pdf)
+for a more detailed discussion.
+""" -> CachingSolver
+
+set_resabstol!(solver::CachingSolver, tol) =
+    set_resabstol!(solver.basesolver, tol)
 
 hasconverged(solver::CachingSolver) = hasconverged(solver.basesolver)
 needediterations(solver::CachingSolver) = needediterations(solver.basesolver)
@@ -352,3 +358,10 @@ end
 
 get_extrapolation_origin(solver::CachingSolver) =
     get_extrapolation_origin(solver.basesolver)
+
+
+function set_resabs2tol!(solver, tol)
+    Base.depwarn(string("set_resabs2tol!(solver, tol) is deprecated, use set_resabstol!(solver, sqrt(tol)) instead."),
+                 :set_resabs2tol!)
+    set_resabstol!(solver, sqrt(tol))
+end

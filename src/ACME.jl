@@ -10,6 +10,7 @@ export Circuit, add!, connect!, DiscreteModel, run!, steadystate, steadystate!,
 
 using ProgressMeter
 using Compat
+using Iterators
 
 import Base.getindex
 
@@ -17,7 +18,8 @@ include("kdtree.jl")
 include("solvers.jl")
 
 
-type Element
+#mutable struct Element
+eval(Expr(:type, true, :Element, quote
   mv :: SparseMatrixCSC{Real,Int}
   mi :: SparseMatrixCSC{Real,Int}
   mx :: SparseMatrixCSC{Real,Int}
@@ -87,7 +89,7 @@ type Element
     end
     elem
   end
-end
+end))
 
 for (n,m) in Dict(:nb => :mv, :nx => :mx, :nq => :mq, :nu => :mu)
   @eval ($n)(e::Element) = size(e.$m, 2)
@@ -97,21 +99,22 @@ ny(e::Element) = size(e.pv, 1)
 nn(e::Element) = nb(e) + nx(e) + nq(e) - nl(e)
 
 # a Pin combines an element with a branch/polarity list
-typealias Pin Tuple{Element, Vector{Tuple{Int,Int}}}
+const Pin = Tuple{Element, Vector{Tuple{Int,Int}}}
 
 # allow elem[:pin] notation to get an elements pin
 getindex(e::Element, p) = (e, e.pins[Symbol(p)])
 
 include("elements.jl")
 
-typealias Net Vector{Tuple{Int,Int}} # each net is a list of branch/polarity pairs
+const Net = Vector{Tuple{Int,Int}} # each net is a list of branch/polarity pairs
 
-type Circuit
+#struct Circuit
+eval(Expr(:type, false, :Circuit, quote
     elements :: Vector{Element}
     nets :: Vector{Net}
     net_names :: Dict{Symbol, Net}
     Circuit() = new([], [], Dict{Symbol, Net}())
-end
+end))
 
 for n in [:nb; :nx; :nq; :nu; :nl; :ny; :nn]
     @eval ($n)(c::Circuit) = sum([$n(elem) for elem in c.elements])
@@ -141,14 +144,14 @@ function incidence(c::Circuit)
     sparse(findnz(sparse(i,j,v))..., length(c.nets), nb(c))
 end
 
-function nonlinear_eq(c::Circuit)
+function nonlinear_eq(c::Circuit, elem_idxs=1:length(c.elements))
     # construct a block expression containing all element's expressions after
     # offsetting their indexes into q, J and res
 
     row_offset = 0
     col_offset = 0
     nl_expr = Expr(:block)
-    for elem in c.elements
+    for elem in c.elements[elem_idxs]
         index_offsets = Dict( :q => (col_offset,),
                               :J => (row_offset, col_offset),
                               :res => (row_offset,) )
@@ -248,7 +251,7 @@ function topomat!{T<:Integer}(incidence::SparseMatrixCSC{T})
 
     row = 1;
     for col = 1:size(incidence)[2]
-        rows = filter(r -> r ≥ row, find(incidence[:,col:col])) # !SV
+        rows = filter(r -> r ≥ row, find(incidence[:, col]))
         @assert length(rows) ≤ 2
 
         isempty(rows) && continue
@@ -262,33 +265,22 @@ function topomat!{T<:Integer}(incidence::SparseMatrixCSC{T})
             incidence[rows[2],:] = incidence[rows[2],:] + incidence[row,:]
         end
         if incidence[row, col] < 0
-            cols = find(incidence[row:row,:]) # !SV
+            cols = find(incidence[row, :])
             incidence[row,cols] = -incidence[row,cols]
         end
-        rows = find(incidence[1:row-1,col:col] .== 1) # !SV
-        incidence[rows,:] = broadcast(-, incidence[rows, :], incidence[row:row,:]) # !SV
-        rows = find(incidence[1:row-1,col:col] .== -1) # !SV
-        incidence[rows,:] = broadcast(+, incidence[rows, :], incidence[row:row,:]) # !SV
+        rows = find(incidence[1:row-1, col] .== 1)
+        incidence[rows, :] .-= incidence[row:row, :] # !SV
+        rows = find(incidence[1:row-1, col] .== -1)
+        incidence[rows, :] .+= incidence[row:row, :] # !SV
         row += 1
     end
 
-    if row > 1
-        ti = incidence[1:row-1, :]
-    else
-        ti = spzeros(T, 0, size(incidence)[2])
-    end
+    ti = incidence[1:row-1, :]
 
-    if all(t)
-        dl = spzeros(T, row-1, 0)
-        tv = spzeros(T, 0, size(incidence)[2])
-    else
-        dl = ti[:, !t]
-        tv = spzeros(T, size(dl)[2], size(incidence)[2])
-        if !all(!t)
-            tv[:,find(t)] = -dl' # with julia 0.3.2, sparse([1 -1]).' -> [1, 0], hence use of ' (conjugate transpose)
-        end
-        tv[:,find(!t)] = speye(T,size(dl)[2])
-    end
+    dl = ti[:, broadcast(!, t)]
+    tv = spzeros(T, size(dl, 2), size(incidence, 2))
+    tv[:, t] = -dl.'
+    tv[:, broadcast(!, t)] = speye(T, size(dl, 2))
 
     tv, ti
 end
@@ -296,24 +288,26 @@ end
 topomat{T<:Integer}(incidence::SparseMatrixCSC{T}) = topomat!(copy(incidence))
 topomat(c::Circuit) = topomat!(incidence(c))
 
-type DiscreteModel{Solver}
+#mutable struct DiscreteModel{Solvers}
+eval(Expr(:type, true, :(DiscreteModel{Solvers}), quote
     a::Matrix{Float64}
     b::Matrix{Float64}
     c::Matrix{Float64}
     x0::Vector{Float64}
-    pexp::Matrix{Float64}
-    dq::Matrix{Float64}
-    eq::Matrix{Float64}
-    fq::Matrix{Float64}
-    q0::Vector{Float64}
+    pexps::Vector{Matrix{Float64}}
+    dqs::Vector{Matrix{Float64}}
+    eqs::Vector{Matrix{Float64}}
+    fqprevs::Vector{Matrix{Float64}}
+    fqs::Vector{Matrix{Float64}}
+    q0s::Vector{Vector{Float64}}
     dy::Matrix{Float64}
     ey::Matrix{Float64}
     fy::Matrix{Float64}
     y0::Vector{Float64}
 
-    nonlinear_eq :: Expr
+    nonlinear_eqs::Vector{Expr}
 
-    solver::Solver
+    solvers::Solvers
     x::Vector{Float64}
 
     @compat function (::Type{DiscreteModel{Solver}}){Solver}(circ::Circuit, t::Float64)
@@ -322,68 +316,115 @@ type DiscreteModel{Solver}
         DiscreteModel(circ, t, Solver)
     end
 
-    @compat function (::Type{DiscreteModel{Solver}}){Solver}(mats::Dict{Symbol}, nonlinear_eq::Expr, solver::Solver)
-        model = new{Solver}()
+    @compat function (::Type{DiscreteModel{Solvers}}){Solvers}(mats::Dict{Symbol}, nonlinear_eqs::Vector{Expr}, solvers::Solvers)
+        model = new{Solvers}()
 
-        for mat in (:a, :b, :c, :pexp, :dq, :eq, :fq, :dy, :ey, :fy, :x0, :q0, :y0)
+        for mat in (:a, :b, :c, :pexps, :dqs, :eqs, :fqprevs, :fqs, :dy, :ey, :fy, :x0, :q0s, :y0)
             setfield!(model, mat, convert(fieldtype(typeof(model), mat), mats[mat]))
         end
 
-        model.nonlinear_eq = nonlinear_eq
-        model.solver = solver
+        model.nonlinear_eqs = nonlinear_eqs
+        model.solvers = solvers
         model.x = zeros(nx(model))
         return model
     end
-end
+end))
 
-function DiscreteModel{Solver}(circ::Circuit, t::Real, ::Type{Solver}=HomotopySolver{CachingSolver{SimpleSolver}})
+function DiscreteModel{Solver}(circ::Circuit, t::Real, ::Type{Solver}=HomotopySolver{CachingSolver{SimpleSolver}};
+                               decompose_nonlinearity=true)
     mats = model_matrices(circ, t)
+
+    nns = Int[nn(e) for e in circ.elements]
+    nqs = Int[nq(e) for e in circ.elements]
+    if decompose_nonlinearity
+        nl_elems = nldecompose!(mats, nns, nqs)
+    else
+        nl_elems = Vector{Int}[filter(e -> nn(circ.elements[e]) > 0, eachindex(circ.elements))]
+    end
+
+    model_nns = Int[sum(nns[nles]) for nles in nl_elems]
+    model_nqs = Int[sum(nqs[nles]) for nles in nl_elems]
+    split_nl_model_matrices!(mats, model_nqs, model_nns)
+
     reduce_pdims!(mats)
 
-    model_nonlinear_eq = quote
+    model_nonlinear_eqs = [quote
         #copy!(q, pfull + fq * z)
         copy!(q, pfull)
         BLAS.gemv!('N',1.,fq,z,1.,q)
         let J=Jq
-            $(nonlinear_eq(circ))
+            $(nonlinear_eq(circ, nles))
         end
         #copy!(J, Jq*model.fq)
         BLAS.gemm!('N', 'N', 1., Jq, fq, 0., J)
+    end for nles in nl_elems]
+
+    model_nps = map(dq -> size(dq, 1), mats[:dqs])
+
+    @assert nn(circ) == sum(model_nns)
+
+    q0s = map(m -> convert(Array{Float64}, m), mats[:q0s])
+    fqs = map(m -> convert(Array{Float64}, m), mats[:fqs])
+    fqprev_fulls = map(m -> convert(Array{Float64}, m), mats[:fqprev_fulls])
+
+    init_zs = [zeros(nn) for nn in model_nns]
+    for idx in eachindex(model_nonlinear_eqs)
+        q = q0s[idx] + fqprev_fulls[idx] * vcat(init_zs...)
+        init_zs[idx] = initial_solution(model_nonlinear_eqs[idx], q, fqs[idx])
     end
 
-    model_nq = length(mats[:q0])
-    model_nn = size(mats[:fq],2)
-    model_np = size(mats[:dq],1)
+    while any(np -> np == 0, model_nps)
+        const_idxs = find(np -> np == 0, model_nps)
+        const_zidxs = vcat(consecranges(model_nns)[const_idxs]...)
+        varying_zidxs = filter(idx -> !(idx in const_zidxs), 1:sum(model_nns))
+        for idx in eachindex(mats[:q0s])
+            mats[:q0s][idx] += mats[:fqprev_fulls][idx][:,const_zidxs] * vcat(init_zs[const_idxs]...)
+            mats[:fqprev_fulls][idx] = mats[:fqprev_fulls][idx][:,varying_zidxs]
+        end
+        mats[:x0] += mats[:c][:,const_zidxs] * vcat(init_zs[const_idxs]...)
+        mats[:y0] += mats[:fy][:,const_zidxs] * vcat(init_zs[const_idxs]...)
+        deleteat!(mats[:q0s], const_idxs)
+        deleteat!(mats[:dq_fulls], const_idxs)
+        deleteat!(mats[:eq_fulls], const_idxs)
+        deleteat!(mats[:fqs], const_idxs)
+        deleteat!(mats[:fqprev_fulls], const_idxs)
+        deleteat!(init_zs, const_idxs)
+        deleteat!(model_nns, const_idxs)
+        deleteat!(model_nqs, const_idxs)
+        deleteat!(model_nonlinear_eqs, const_idxs)
+        deleteat!(nl_elems, const_idxs)
+        mats[:fy] = mats[:fy][:,varying_zidxs]
+        mats[:c] = mats[:c][:,varying_zidxs]
+        reduce_pdims!(mats)
+        model_nps = map(dq -> size(dq, 1), mats[:dqs])
+    end
 
-    @assert nn(circ) == model_nn
+    q0s = map(m -> convert(Array{Float64}, m), mats[:q0s])
+    fqs = map(m -> convert(Array{Float64}, m), mats[:fqs])
+    fqprev_fulls = map(m -> convert(Array{Float64}, m), mats[:fqprev_fulls])
+    pexps = map(m -> convert(Array{Float64}, m), mats[:pexps])
 
-    q0 = convert(Vector{Float64}, mats[:q0])
-    pexp = convert(Matrix{Float64}, mats[:pexp])
-    fq = convert(Matrix{Float64}, mats[:fq])
-
-    init_z = initial_solution(model_nonlinear_eq, q0, fq)
-    nonlinear_eq_func = eval(quote
+    nonlinear_eq_funcs = [eval(quote
         if VERSION < v"0.5.0-dev+2396"
             # wrap up in named function because anonymous functions are slow
             # in old Julia versions
             function $(gensym())(res, J, scratch, z)
                 pfull=scratch[1]
                 Jq=scratch[2]
-                q=$(zeros(model_nq))
+                q=$(zeros(nq))
                 fq=$fq
-                $(model_nonlinear_eq)
+                $(nonlinear_eq)
                 return nothing
             end
         else
             (res, J, scratch, z) ->
-                let pfull=scratch[1], Jq=scratch[2], q=$(zeros(model_nq)),
-                    fq=$fq
-                    $(model_nonlinear_eq)
+                let pfull=scratch[1], Jq=scratch[2], q=$(zeros(nq)), fq=$fq
+                    $(nonlinear_eq)
                     return nothing
                 end
         end
-    end)
-    nonlinear_eq_set_p = eval(quote
+    end) for (nonlinear_eq, fq, nq) in zip(model_nonlinear_eqs, fqs, model_nqs)]
+    nonlinear_eq_set_ps = [eval(quote
         if VERSION < v"0.5.0-dev+2396"
             # wrap up in named function because anonymous functions are slow
             # in old Julia versions
@@ -404,8 +445,8 @@ function DiscreteModel{Solver}(circ::Circuit, t::Real, ::Type{Solver}=HomotopySo
                     return nothing
                 end
         end
-    end)
-    nonlinear_eq_calc_Jp = eval(quote
+    end) for (pexp, q0) in zip(pexps, q0s)]
+    nonlinear_eq_calc_Jps = [eval(quote
         if VERSION < v"0.5.0-dev+2396"
             # wrap up in named function because anonymous functions are slow
             # in old Julia versions
@@ -424,13 +465,15 @@ function DiscreteModel{Solver}(circ::Circuit, t::Real, ::Type{Solver}=HomotopySo
                     return nothing
                 end
         end
-    end)
-    solver = eval(:($Solver(ParametricNonLinEq($nonlinear_eq_func, $nonlinear_eq_set_p,
-                                       $nonlinear_eq_calc_Jp,
-                                       (zeros($model_nq), zeros($model_nn, $model_nq)),
-                                       $model_nn, $model_np),
-                    zeros($model_np), $init_z)))
-    return DiscreteModel{typeof(solver)}(mats, model_nonlinear_eq, solver)
+    end) for pexp in pexps]
+    solvers = ([eval(:($Solver(ParametricNonLinEq($nonlinear_eq_funcs[$idx],
+                                          $nonlinear_eq_set_ps[$idx],
+                                          $nonlinear_eq_calc_Jps[$idx],
+                                          (zeros($model_nqs[$idx]), zeros($model_nns[$idx], $model_nqs[$idx])),
+                                          $model_nns[$idx], $model_nps[$idx]),
+                       zeros($model_nps[$idx]), $init_zs[$idx])))
+                for idx in eachindex(model_nonlinear_eqs)]...)
+    return DiscreteModel{typeof(solvers)}(mats, model_nonlinear_eqs, solvers)
 end
 
 function model_matrices(circ::Circuit, t::Rational{BigInt})
@@ -481,23 +524,104 @@ end
 
 model_matrices(circ::Circuit, t) = model_matrices(circ, Rational{BigInt}(t))
 
-function reduce_pdims!(mats::Dict)
-    # decompose [dq_full eq_full] into pexp*[dq eq] with [dq eq] having minimum
-    # number of rows
-    pexp, dqeq = rank_factorize(sparse([mats[:dq_full] mats[:eq_full]]))
-    mats[:pexp] = pexp
-    colsizes = [size(mats[m], 2) for m in [:dq_full, :eq_full]]
-    mats[:dq], mats[:eq] = matsplit(dqeq, [size(dqeq, 1)], colsizes)
+function tryextract(fq, numcols)
+    a = eye(eltype(fq), size(fq,2))
+    if numcols ≥ size(fq,2)
+        return Nullable(a)
+    end
+    for colcnt in 1:numcols
+        # determine element with maximum absolute value in unprocessed columns
+        # to use as pivot
+        i, j = ind2sub(size(fq), indmax(map(abs, fq[:,colcnt:end])))
+        j += colcnt-1
 
-    # project pexp onto the orthogonal complement of the column space of Fq
-    fq_pinv = gensolve(sparse(mats[:fq]'*mats[:fq]), mats[:fq]')[1]
-    pexp = pexp - mats[:fq]*fq_pinv*pexp
-    # if the new pexp has lower rank, update
-    pexp, f = rank_factorize(sparse(pexp))
-    if size(pexp, 2) < size(mats[:pexp], 2)
-        mats[:pexp] = pexp
-        mats[:dq] = f * mats[:dq]
-        mats[:eq] = f * mats[:eq]
+        # swap pivot to first (unprocessed) column
+        fq[:,[colcnt, j]] = fq[:,[j, colcnt]]
+        a[:,[colcnt, j]] = a[:,[j, colcnt]]
+
+        # elimnate remaining columns in i-th row and perform equivalent
+        # transformation to a
+        jj = colcnt+1:size(fq,2)
+        a[:,jj] -= a[:,colcnt] * (fq[[i],jj] / fq[i,colcnt])
+        fq[:,jj] -= fq[:,colcnt] * (fq[[i],jj] / fq[i,colcnt])
+        # ignore i-th row in following processing steps
+        fq = fq[[1:i-1; i+1:end],:]
+
+        if countnz(fq[:,colcnt+1:end]) == 0
+            return Nullable(a)
+        end
+    end
+    return Nullable{typeof(a)}()
+end
+
+function nldecompose!(mats, nns, nqs)
+    fq = mats[:fq]
+    a = eye(eltype(fq), size(fq,2))
+    sub_ranges = consecranges(nqs)
+    extracted_subs = Vector{Int}[]
+    rem_cols = 1:size(fq, 2)
+    rem_nles = IntSet(filter!(e -> nqs[e] > 0, collect(eachindex(nqs))))
+
+    while !isempty(rem_nles)
+        for sz in 1:length(rem_nles), sub in subsets(collect(rem_nles), sz)
+            nn_sub = sum(nns[sub])
+            maybe_a = tryextract(fq[[sub_ranges[sub]...;],rem_cols], nn_sub)
+            if !isnull(maybe_a)
+                fq[:,rem_cols] = fq[:,rem_cols] * get(maybe_a)
+                a[:,rem_cols] = a[:,rem_cols] * get(maybe_a)
+                rem_cols = first(rem_cols)+nn_sub:size(fq, 2)
+                push!(extracted_subs, sub)
+                for nle in sub
+                    delete!(rem_nles, nle)
+                end
+                break
+            end
+        end
+    end
+
+    mats[:c] = mats[:c] * a
+    # mats[:fq] is updated as part of the loop
+    mats[:fy] = mats[:fy] * a
+    return extracted_subs
+end
+
+function split_nl_model_matrices!(mats, model_nqs, model_nns)
+    mats[:dq_fulls] = Matrix[matsplit(mats[:dq_full], model_nqs)...]
+    mats[:eq_fulls] = Matrix[matsplit(mats[:eq_full], model_nqs)...]
+    let fqsplit = matsplit(mats[:fq], model_nqs, model_nns)
+        mats[:fqs] = Matrix[fqsplit[i,i] for i in 1:length(model_nqs)]
+        mats[:fqprev_fulls] = Matrix[[fqsplit[i, 1:i-1]... zeros(eltype(mats[:fq]), model_nqs[i], sum(model_nns[i:end]))]
+                                     for i in 1:length(model_nqs)]
+    end
+    mats[:q0s] = Vector[matsplit(mats[:q0], model_nqs)...]
+end
+
+function reduce_pdims!(mats::Dict)
+    subcount = length(mats[:dq_fulls])
+    mats[:dqs] = Vector{Matrix}(subcount)
+    mats[:eqs] = Vector{Matrix}(subcount)
+    mats[:fqprevs] = Vector{Matrix}(subcount)
+    mats[:pexps] = Vector{Matrix}(subcount)
+    for idx in 1:subcount
+        # decompose [dq_full eq_full] into pexp*[dq eq] with [dq eq] having minimum
+        # number of rows
+        pexp, dqeq = rank_factorize(sparse([mats[:dq_fulls][idx] mats[:eq_fulls][idx] mats[:fqprev_fulls][idx]]))
+        mats[:pexps][idx] = pexp
+        colsizes = [size(mats[m][idx], 2) for m in [:dq_fulls, :eq_fulls, :fqprev_fulls]]
+        mats[:dqs][idx], mats[:eqs][idx], mats[:fqprevs][idx] = matsplit(dqeq, [size(dqeq, 1)], colsizes)
+
+        # project pexp onto the orthogonal complement of the column space of Fq
+        fq = mats[:fqs][idx]
+        fq_pinv = gensolve(sparse(fq'*fq), fq')[1]
+        pexp = pexp - fq*fq_pinv*pexp
+        # if the new pexp has lower rank, update
+        pexp, f = rank_factorize(sparse(pexp))
+        if size(pexp, 2) < size(mats[:pexps][idx], 2)
+            mats[:pexps][idx] = pexp
+            mats[:dqs][idx] = f * mats[:dqs][idx]
+            mats[:eqs][idx] = f * mats[:eqs][idx]
+            mats[:fqprevs][idx] = f * mats[:fqprevs][idx]
+        end
     end
 end
 
@@ -523,34 +647,41 @@ function initial_solution(nleq, q0, fq)
 end
 
 nx(model::DiscreteModel) = length(model.x0)
-nq(model::DiscreteModel) = length(model.q0)
-np(model::DiscreteModel) = size(model.dq, 1)
-nu(model::DiscreteModel) = size(model.eq, 2)
+nq(model::DiscreteModel, subidx) = length(model.q0s[subidx])
+np(model::DiscreteModel, subidx) = size(model.dqs[subidx], 1)
+nu(model::DiscreteModel) = size(model.b, 2)
 ny(model::DiscreteModel) = length(model.y0)
-nn(model::DiscreteModel) = size(model.fq, 2)
+nn(model::DiscreteModel, subidx) = size(model.fqs[subidx], 2)
+nn(model::DiscreteModel) = sum([size(fq, 2) for fq in model.fqs])
 
 function steadystate(model::DiscreteModel, u=zeros(nu(model)))
     IA_LU = lufact(eye(nx(model))-model.a)
-    steady_q0 = model.q0 + model.pexp*(model.dq/IA_LU*model.b + model.eq)*u +
-    model.pexp*model.dq/IA_LU*model.x0
-    steady_z = eval(quote
-        steady_nl_eq_func = (res, J, scratch, z) ->
-            let pfull=scratch[1], Jp=scratch[2],
-                q=$(zeros(nq(model))), Jq=$(zeros(nn(model), nq(model))),
-                fq=$(model.pexp*model.dq/IA_LU*model.c + model.fq)
-                $(model.nonlinear_eq)
-                return nothing
+    steady_z = zeros(nn(model))
+    zoff = 1
+    for idx in 1:length(model.solvers)
+        zoff_last = zoff+nn(model,idx)-1
+        steady_q0 = model.q0s[idx] + model.pexps[idx]*((model.dqs[idx]/IA_LU*model.b + model.eqs[idx])*u + (model.dqs[idx]/IA_LU*model.c + model.fqprevs[idx])*steady_z) +
+            model.pexps[idx]*model.dqs[idx]/IA_LU*model.x0
+        steady_z[zoff:zoff_last] = eval(quote
+            steady_nl_eq_func = (res, J, scratch, z) ->
+                let pfull=scratch[1], Jp=scratch[2],
+                    q=$(zeros(nq(model, idx))), Jq=$(zeros(nn(model, idx), nq(model, idx))),
+                    fq=$(model.pexps[idx]*model.dqs[idx]/IA_LU*model.c[:,zoff:zoff_last] + model.fqs[idx])
+                    $(model.nonlinear_eqs[idx])
+                    return nothing
+                end
+            steady_nleq = ParametricNonLinEq(steady_nl_eq_func, nn($model, $idx), nq($model, $idx))
+            steady_solver = HomotopySolver{SimpleSolver}(steady_nleq, zeros(nq($model, $idx)),
+                                                         zeros(nn($model, $idx)))
+            set_resabstol!(steady_solver, 1e-15)
+            steady_z = solve(steady_solver, $steady_q0)
+            if !hasconverged(steady_solver)
+                error("Failed to find steady state solution")
             end
-        steady_nleq = ParametricNonLinEq(steady_nl_eq_func, nn($model), nq($model))
-        steady_solver = HomotopySolver{SimpleSolver}(steady_nleq, zeros(nq($model)),
-                                                     zeros(nn($model)))
-        set_resabs2tol!(steady_solver, 1e-30)
-        steady_z = solve(steady_solver, $steady_q0)
-        if !hasconverged(steady_solver)
-            error("Failed to find steady state solution")
-        end
-        return steady_z
-    end)
+            return steady_z
+        end)
+        zoff += nn(model,idx)
+    end
     return IA_LU\(model.b*u + model.c*steady_z + model.x0)
 end
 
@@ -578,20 +709,23 @@ disabled by passing `showprogress=false`.
 run!(model::DiscreteModel, u::AbstractMatrix{Float64}; showprogress=true) =
     return run!(ModelRunner(model, showprogress), u)
 
-immutable ModelRunner{Model<:DiscreteModel,ShowProgress}
+#struct ModelRunner{Model<:DiscreteModel,ShowProgress}
+eval(Expr(:type, false, :(ModelRunner{Model<:DiscreteModel,ShowProgress}), quote
     model::Model
     ucur::Vector{Float64}
-    p::Vector{Float64}
+    ps::Vector{Vector{Float64}}
     ycur::Vector{Float64}
     xnew::Vector{Float64}
+    z::Vector{Float64}
     @compat function (::Type{ModelRunner{Model,ShowProgress}}){Model<:DiscreteModel,ShowProgress}(model::Model)
         ucur = Array{Float64,1}(nu(model))
-        p = Array{Float64,1}(np(model))
+        ps = Vector{Float64}[Vector{Float64}(np(model, idx)) for idx in 1:length(model.solvers)]
         ycur = Array{Float64,1}(ny(model))
         xnew = Array{Float64,1}(nx(model))
-        return new{Model,ShowProgress}(model, ucur, p, ycur, xnew)
+        z = Array{Float64,1}(nn(model))
+        return new{Model,ShowProgress}(model, ucur, ps, ycur, xnew, z)
     end
-end
+end))
 
 ModelRunner{Model<:DiscreteModel}(model::Model) = ModelRunner{Model,true}(model)
 ModelRunner{Model<:DiscreteModel,ShowProgress}(model::Model, ::Val{ShowProgress}) =
@@ -677,24 +811,34 @@ end
 function step!(runner::ModelRunner, y::AbstractMatrix{Float64}, u::AbstractMatrix{Float64}, n)
     model = runner.model
     ucur = runner.ucur
-    p = runner.p
     ycur = runner.ycur
     xnew = runner.xnew
-    # copy!(p, model.dq * model.x + model.eq * u[:,n])
+    z = runner.z
     copy!(ucur, 1, u, (n-1)*nu(model)+1, nu(model))
-    if size(model.dq, 2) == 0
-        fill!(p, 0.0)
-    else
-        BLAS.gemv!('N', 1., model.dq, model.x, 0., p)
-    end
-    BLAS.gemv!('N', 1., model.eq, ucur, 1., p)
-    z = solve(model.solver, p)
-    if !hasconverged(model.solver)
-        if all(isfinite, z)
-            warn("Failed to converge while solving non-linear equation.")
+    zoff = 1
+    fill!(z, 0.0)
+    for idx in 1:length(model.solvers)
+        p = runner.ps[idx]
+        # copy!(p, model.dqs[idx] * model.x + model.eqs[idx] * u[:,n]) + model.fqprevs[idx] * z
+        if size(model.dqs[idx], 2) == 0
+            fill!(p, 0.0)
         else
-            error("Failed to converge while solving non-linear equation, got non-finite result.")
+            BLAS.gemv!('N', 1., model.dqs[idx], model.x, 0., p)
         end
+        BLAS.gemv!('N', 1., model.eqs[idx], ucur, 1., p)
+        if idx > 1
+            BLAS.gemv!('N', 1., model.fqprevs[idx], z, 1., p)
+        end
+        zsub = solve(model.solvers[idx], p)
+        if !hasconverged(model.solvers[idx])
+            if all(isfinite, zsub)
+                warn("Failed to converge while solving non-linear equation.")
+            else
+                error("Failed to converge while solving non-linear equation, got non-finite result.")
+            end
+        end
+        copy!(z, zoff, zsub, 1, length(zsub))
+        zoff += length(zsub)
     end
     #y[:,n] = model.dy * model.x + model.ey * u[:,n] + model.fy * z + model.y0
     copy!(ycur, model.y0)
@@ -759,9 +903,10 @@ function rank_factorize(a::SparseMatrixCSC)
     return c, f
 end
 
-consecranges(lengths) = map(range, cumsum([1; lengths[1:end-1]]), lengths)
+consecranges(lengths) = isempty(lengths) ? [] : map(range, cumsum([1; lengths[1:end-1]]), lengths)
 
-matsplit(m, rowsizes, colsizes=[size(m)[2]]) =
+matsplit(v::AbstractVector, rowsizes) = [v[rs] for rs in consecranges(rowsizes)]
+matsplit(m::AbstractMatrix, rowsizes, colsizes=[size(m,2)]) =
     [m[rs, cs] for rs in consecranges(rowsizes), cs in consecranges(colsizes)]
 
     if VERSION < v"0.5.0"

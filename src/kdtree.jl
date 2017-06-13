@@ -1,16 +1,17 @@
-# Copyright 2016 Martin Holters
+# Copyright 2016, 2017 Martin Holters
 # See accompanying license file.
 
 import Base.deleteat!
 import Base.isless
 import Base.isempty
 
-type KDTree{Tcv<:AbstractVector,Tp<:AbstractMatrix}
+#mutable struct KDTree{Tcv<:AbstractVector,Tp<:AbstractMatrix}
+eval(Expr(:type, true, :(KDTree{Tcv<:AbstractVector,Tp<:AbstractMatrix}), quote
     cut_dim::Vector{Int}
     cut_val::Tcv
     ps_idx::Vector{Int}
     ps::Tp
-end
+end))
 
 function KDTree(p::AbstractMatrix, Np=size(p,2))
     function calc_cut_idx(min_idx, max_idx)
@@ -76,20 +77,22 @@ function KDTree(p::AbstractMatrix, Np=size(p,2))
     return KDTree{typeof(cut_val),typeof(p)}(cut_dim, cut_val, p_idx_final, p)
 end
 
-type AltEntry{T}
+#mutable struct AltEntry{T}
+eval(Expr(:type, true, :(AltEntry{T}), quote
     idx::Int
     delta::Vector{T}
     delta_norm::T
-end
+end))
 
 isless(e1::AltEntry, e2::AltEntry) = isless(e1.delta_norm, e2.delta_norm)
 
-type Alts{T}
+#mutable struct Alts{T}
+eval(Expr(:type, true, :(Alts{T}), quote
     entries::Vector{AltEntry{T}}
     best_dist::T
     best_pidx::Int
     number_valid::Int
-end
+end))
 
 Alts{T}(p::Vector{T}) = Alts([AltEntry(1, zeros(p), zero(T))], typemax(T), 0, 1)
 

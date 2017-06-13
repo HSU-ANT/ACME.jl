@@ -4,6 +4,7 @@
 using ACME
 using Base.Test
 using Compat
+using ProgressMeter
 
 tv, ti = ACME.topomat(sparse([1 -1 1; -1 1 -1]))
 @test tv*ti'==spzeros(2,1)
@@ -61,6 +62,7 @@ let circ = Circuit(), d = diode(), src=currentsource(), probe=voltageprobe()
     connect!(circ, d[:+], probe[:+])
     connect!(circ, d[:-], probe[:-])
     model = DiscreteModel(circ, 1)
+    @test ACME.nn(model) == 1
     y = run!(model, [1.0 1.0])
     @test size(y) == (1, 2)
     @test y[1,1] == y[1,2]
@@ -117,12 +119,20 @@ let a = Rational{BigInt}[1 1 1; 1 1 2; 1 2 1; 1 2 2; 2 1 1; 2 1 2],
     fq = Rational{BigInt}[1 0 0; 10 0 0; 0 1 0; 0 10 0; 0 0 1; 0 0 10],
     z = Rational{BigInt}[1 2 0 0 2 1; 0 1 2 2 0 1; 0 0 1 0 1 1]
     mats = Dict{Symbol,Array}(:dq_full => a * b, :eq_full => zeros(Rational{BigInt},6,0), :fq => fq)
+    mats[:dq_fulls]=Matrix[mats[:dq_full]]
+    mats[:eq_fulls]=Matrix[mats[:eq_full]]
+    mats[:fqprev_fulls]=Matrix[mats[:eq_full]]
+    mats[:fqs]=Matrix[mats[:fq]]
     ACME.reduce_pdims!(mats)
-    @test size(mats[:pexp], 2) == 3
-    @test mats[:pexp] * mats[:dq] == mats[:dq_full]
+    @test size(mats[:pexps][1], 2) == 3
+    @test mats[:pexps][1] * mats[:dqs][1] == mats[:dq_fulls][1]
     mats = Dict{Symbol,Array}(:dq_full => a * b + fq * z, :eq_full => zeros(Rational{BigInt},6,0), :fq => fq)
+    mats[:dq_fulls]=Matrix[mats[:dq_full]]
+    mats[:eq_fulls]=Matrix[mats[:eq_full]]
+    mats[:fqprev_fulls]=Matrix[mats[:eq_full]]
+    mats[:fqs]=Matrix[mats[:fq]]
     ACME.reduce_pdims!(mats)
-    @test size(mats[:pexp], 2) == 3
+    @test size(mats[:pexps][1], 2) == 3
 end
 
 # sources and probes with internal resistance/conductance
@@ -163,6 +173,118 @@ let circ = Circuit(), src=voltagesource(10), probe=currentprobe(rs=100000)
     @test run!(model, zeros(0,1)) ≈ [10/100000]
 end
 
+# BJT Ebers-Moll model
+let isc=1e-6, ise=2e-6, ηc=1.1, ηe=1.0, βf=100, βr=10
+    for (typ, ib) in ((:npn, 1e-3), (:pnp, -1e-3))
+        t = bjt(typ, isc=isc, ise=ise, ηc=ηc, ηe=ηe, βf=βf, βr=βr)
+        isrc = currentsource()
+        vsrc = voltagesource()
+        veprobe = voltageprobe()
+        vcprobe = voltageprobe()
+        ieprobe = currentprobe()
+        icprobe = currentprobe()
+        circ = Circuit()
+        add!(circ, veprobe, vcprobe, ieprobe, icprobe)
+        connect!(circ, t[:base], isrc[:+], veprobe[:+], vcprobe[:+])
+        connect!(circ, t[:collector], icprobe[:+])
+        connect!(circ, vcprobe[:-], icprobe[:-], vsrc[:+])
+        connect!(circ, t[:emitter], ieprobe[:+])
+        connect!(circ, veprobe[:-], ieprobe[:-], vsrc[:-], isrc[:-])
+        model = DiscreteModel(circ, 1)
+        N = 100
+        output = run!(model, [linspace(0, ib, N).'; linspace(1, -1, N÷2).' linspace(-1, 1, N÷2).'])
+        if typ == :pnp
+            output = -output
+        end
+        for n in 1:N
+            ve, vc, ie, ic = output[:,n]
+            @test isapprox(ie, ise*(exp(ve/(ηe*25e-3))-1) - βr/(1+βr)*isc*(exp(vc/(ηc*25e-3))-1), atol=1e-10)
+            @test isapprox(ic, -βf/(1+βf)*ise*(exp(ve/(ηe*25e-3))-1) + isc*(exp(vc/(ηc*25e-3))-1), atol=1e-10)
+        end
+    end
+end
+# BJT Gummel-Poon model
+let isc=1e-6, ise=2e-6, ηc=1.1, ηe=1.0, βf=100, βr=10, ηcl=1.2, ηel=1.3
+    @showprogress "Testing Gummel-Poon model: " for ile in (0, 50e-9),
+            ilc in (0, 100e-9), ηcl in (ηc, 1.2), ηel in (ηe, 1.1),
+            vaf in (Inf, 10), var in (Inf, 50),
+            ikf in (Inf, 50e-3), ikr in (Inf, 500e-3),
+            (typ, ib) in ((:npn, 1e-3), (:pnp, -1e-3))
+        t = bjt(typ, isc=isc, ise=ise, ηc=ηc, ηe=ηe, βf=βf, βr=βr, ile=ile,
+                ilc=ilc, ηcl=ηcl, ηel=ηel, vaf=vaf, var=var, ikf=ikf, ikr=ikr)
+        isrc = currentsource()
+        vsrc = voltagesource()
+        veprobe = voltageprobe()
+        vcprobe = voltageprobe()
+        ieprobe = currentprobe()
+        icprobe = currentprobe()
+        circ = Circuit()
+        add!(circ, veprobe, vcprobe, ieprobe, icprobe)
+        connect!(circ, t[:base], isrc[:+], veprobe[:+], vcprobe[:+])
+        connect!(circ, t[:collector], icprobe[:+])
+        connect!(circ, vcprobe[:-], icprobe[:-], vsrc[:+])
+        connect!(circ, t[:emitter], ieprobe[:+])
+        connect!(circ, veprobe[:-], ieprobe[:-], vsrc[:-], isrc[:-])
+        model = DiscreteModel(circ, 1)
+        N = 100
+        output = run!(model, [linspace(0, ib, N).'; linspace(1, -1, N÷2).' linspace(-1, 1, N÷2).'])
+        if typ == :pnp
+            output = -output
+        end
+        for n in 1:N
+            ve, vc, ie, ic = output[:,n]
+            i_f = βf/(1+βf)*ise*(exp(ve/(ηe*25e-3))-1)
+            i_r = βr/(1+βr)*isc*(exp(vc/(ηc*25e-3))-1)
+            icc = (2*(1-ve/var-vc/vaf))/(1+sqrt(1+4(i_f/ikf+i_r/ikr))) * (i_f - i_r)
+            ibe = 1/βf*i_f + ile*(exp(ve/(ηel*25e-3))-1)
+            ibc = 1/βr*i_r + ilc*(exp(vc/(ηcl*25e-3))-1)
+            @test isapprox(ie, icc + ibe, atol=1e-10)
+            @test isapprox(ic, -icc + ibc, atol=1e-10)
+        end
+    end
+end
+# compare internal to external terminal resistances
+let rb=100, re=10, rc=20
+    for (typ, ib, vce) in ((:npn, 1e-3, 1), (:pnp, -1e-3, -1))
+        t1 = bjt(typ)
+        rbref=resistor(rb)
+        rcref=resistor(rc)
+        reref=resistor(re)
+        isrc1 = currentsource(ib)
+        vscr1 = voltagesource(vce)
+        veprobe1 = voltageprobe()
+        vcprobe1 = voltageprobe()
+        ieprobe1 = currentprobe()
+        icprobe1 = currentprobe()
+        t2 = bjt(typ, rb=rb, re=re, rc=rc)
+        isrc2 = currentsource(ib)
+        vscr2 = voltagesource(vce)
+        veprobe2 = voltageprobe()
+        vcprobe2 = voltageprobe()
+        ieprobe2 = currentprobe()
+        icprobe2 = currentprobe()
+        circ = Circuit()
+        add!(circ, veprobe1, vcprobe1, ieprobe1, icprobe1)
+        connect!(circ, t1[:base], rbref[1])
+        connect!(circ, rbref[2], isrc1[:+], veprobe1[:+], vcprobe1[:+])
+        connect!(circ, t1[:collector], rcref[1])
+        connect!(circ, rcref[2], icprobe1[:+])
+        connect!(circ, vcprobe1[:-], icprobe1[:-], vscr1[:+])
+        connect!(circ, t1[:emitter], reref[1])
+        connect!(circ, reref[2], ieprobe1[:+])
+        connect!(circ, veprobe1[:-], ieprobe1[:-], vscr1[:-], isrc1[:-])
+        add!(circ, veprobe2, vcprobe2, ieprobe2, icprobe2)
+        connect!(circ, t2[:base], isrc2[:+], veprobe2[:+], vcprobe2[:+])
+        connect!(circ, t2[:collector], icprobe2[:+])
+        connect!(circ, vcprobe2[:-], icprobe2[:-], vscr2[:+])
+        connect!(circ, t2[:emitter], ieprobe2[:+])
+        connect!(circ, veprobe2[:-], ieprobe2[:-], vscr2[:-], isrc2[:-])
+        model = DiscreteModel(circ, 1)
+        output = run!(model, zeros(0,1))
+        @test output[1:4,:] ≈ output[5:8,:]
+    end
+end
+
 # simple circuit: resistor and diode in series, driven by constant voltage,
 # chosen such that a prescribe current flows
 let i = 1e-3, r=10e3, is=1e-12
@@ -187,7 +309,9 @@ end
 
 function checksteady!(model)
     x_steady = steadystate!(model)
-    ACME.set_resabs2tol!(model.solver, 1e-25)
+    for s in model.solvers
+        ACME.set_resabstol!(s, 1e-13)
+    end
     run!(model, zeros(1, 1))
     @test model.x ≈ x_steady
 end
@@ -206,7 +330,7 @@ end
 include("../examples/diodeclipper.jl")
 let model=diodeclipper()
     println("Running diodeclipper")
-    @test ACME.np(model) == 1
+    @test ACME.np(model, 1) == 1
     y = run!(model, map(sin, 2π*1000/44100*(0:44099)'); showprogress=false)
     @test size(y) == (1,44100)
     # TODO: further validate y
@@ -226,10 +350,10 @@ end
 
 include("../examples/birdie.jl")
 let model=birdie(vol=0.8)
-    ACME.solve(model.solver, [0.003, -0.0002])
-    @assert ACME.hasconverged(model.solver)
+    ACME.solve(model.solvers[1], [0.003, -0.0002])
+    @assert all(ACME.hasconverged, model.solvers)
     println("Running birdie with fixed vol")
-    @test ACME.np(model) == 2
+    @test ACME.np(model, 1) == 2
     y = run!(model, map(sin, 2π*1000/44100*(0:44099)'); showprogress=false)
     @test size(y) == (1,44100)
     # TODO: further validate y
@@ -237,7 +361,7 @@ let model=birdie(vol=0.8)
 end
 let model=birdie()
     println("Running birdie with varying vol")
-    @test ACME.np(model) == 3
+    @test ACME.np(model, 1) == 3
     y = run!(model, [map(sin, 2π*1000/44100*(0:44099).'); linspace(1,0,44100).']; showprogress=false)
     @test size(y) == (1,44100)
     # TODO: further validate y
@@ -246,7 +370,28 @@ end
 include("../examples/superover.jl")
 let model=superover(drive=1.0, tone=1.0, level=1.0)
     println("Running superover with fixed potentiometer values")
-    @test ACME.np(model) == 5
+    @test ACME.np(model, 1) == 5
+    y = run!(model, map(sin, 2π*1000/44100*(0:44099)'); showprogress=false)
+    @test size(y) == (1,44100)
+    # TODO: further validate y
+    checksteady!(model)
+end
+let circ=superover(Circuit, drive=1.0, tone=1.0, level=1.0)
+    println("Running simplified superover with fixed potentiometer values")
+    vbsrc = voltagesource(4.5)
+    connect!(circ, vbsrc[:+], :vb)
+    connect!(circ, vbsrc[:-], :gnd)
+    model = DiscreteModel(circ, 1/44100)
+    @test ACME.np(model, 1) == 2
+    @test ACME.np(model, 2) == 1
+    @test ACME.np(model, 3) == 2
+    y = run!(model, map(sin, 2π*1000/44100*(0:44099)'); showprogress=false)
+    @test size(y) == (1,44100)
+    # TODO: further validate y
+    checksteady!(model)
+    println("Running simplified, non-decomposed superover with fixed potentiometer values")
+    model = DiscreteModel(circ, 1/44100, decompose_nonlinearity=false)
+    @test ACME.np(model, 1) == 5
     y = run!(model, map(sin, 2π*1000/44100*(0:44099)'); showprogress=false)
     @test size(y) == (1,44100)
     # TODO: further validate y
@@ -254,7 +399,21 @@ let model=superover(drive=1.0, tone=1.0, level=1.0)
 end
 let model=superover()
     println("Running superover with varying potentiometer values")
-    @test ACME.np(model) == 11
+    @test ACME.np(model, 1) == 11
+    y = run!(model, [map(sin, 2π*1000/44100*(0:999)'); linspace(1,0,1000).'; linspace(0,1,1000).'; linspace(1,0,1000).']; showprogress=false)
+    @test size(y) == (1,1000)
+    # TODO: further validate y
+end
+let circ=superover(Circuit)
+    println("Running simplified superover with varying potentiometer values")
+    vbsrc = voltagesource(4.5)
+    connect!(circ, vbsrc[:+], :vb)
+    connect!(circ, vbsrc[:-], :gnd)
+    model = DiscreteModel(circ, 1/44100)
+    @test ACME.np(model, 1) == 2
+    @test ACME.np(model, 2) == 2
+    @test ACME.np(model, 3) == 2
+    @test ACME.np(model, 4) == 4
     y = run!(model, [map(sin, 2π*1000/44100*(0:999)'); linspace(1,0,1000).'; linspace(0,1,1000).'; linspace(1,0,1000).']; showprogress=false)
     @test size(y) == (1,1000)
     # TODO: further validate y
