@@ -60,8 +60,8 @@ function setlhs!(solver::LinearSolver, A::Matrix{Float64})
     end
     copy!(solver.factors, A)
 
-    # taken from Julia's generic_lufact!; faster than calling out to dgetrf for
-    # sizes up to about 60×60
+    # based on Julia's generic_lufact!, but storing inverses on the diagonal;
+    # faster than calling out to dgetrf for sizes up to about 60×60
     factors = solver.factors
     minmn = min(m,n)
     @inbounds begin
@@ -87,7 +87,7 @@ function setlhs!(solver::LinearSolver, A::Matrix{Float64})
                     end
                 end
                 # Scale first column
-                fkkinv = inv(factors[k,k])
+                fkkinv = factors[k,k] = inv(factors[k,k])
                 for i = k+1:m
                     factors[i,k] *= fkkinv
                 end
@@ -129,10 +129,10 @@ function solve!(solver::LinearSolver, x::Vector{Float64}, b::Vector{Float64})
             x[i] -= solver.factors[i,j] * xj
         end
     end
-    # taken from Julia's naivesub!(::UpperTriangular, ...)
+    # based on Julia's naivesub!(::UpperTriangular, ...), but with factors[j,j]
+    # holding inverses
     @inbounds for j in n:-1:1
-        solver.factors[j,j] == zero(solver.factors[j,j]) && throw(SingularException(j))
-        xj = x[j] = solver.factors[j,j] \ x[j]
+        xj = x[j] = solver.factors[j,j] * x[j]
         for i in 1:j-1
             x[i] -= solver.factors[i,j] * xj
         end
