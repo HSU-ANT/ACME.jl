@@ -47,10 +47,9 @@ evaluate!(nleq::ParametricNonLinEq, z) =
 #struct LinearSolver
 eval(Expr(:type, false, :LinearSolver, quote
     factors::Matrix{Float64}
-    ipiv::Vector{Base.LinAlg.BlasInt}
-    info::typeof(Ref{Base.LinAlg.BlasInt}(0))
+    ipiv::Vector{Int}
     function LinearSolver(n::Int)
-        new(zeros(n, n), zeros(Base.LinAlg.BlasInt, n), Ref{Base.LinAlg.BlasInt}(0))
+        new(zeros(n, n), zeros(Int, n))
     end
 end))
 
@@ -65,7 +64,6 @@ function setlhs!(solver::LinearSolver, A::Matrix{Float64})
     # sizes up to about 60×60
     factors = solver.factors
     minmn = min(m,n)
-    info = 0
     @inbounds begin
         for k = 1:minmn
             # find index max
@@ -93,8 +91,8 @@ function setlhs!(solver::LinearSolver, A::Matrix{Float64})
                 for i = k+1:m
                     factors[i,k] *= fkkinv
                 end
-            elseif info == 0
-                info = k
+            else
+                return false
             end
             # Update the rest
             for j = k+1:n
@@ -104,7 +102,7 @@ function setlhs!(solver::LinearSolver, A::Matrix{Float64})
             end
         end
     end
-    return info == 0
+    return true
 end
 
 function solve!(solver::LinearSolver, x::Vector{Float64}, b::Vector{Float64})
@@ -146,7 +144,6 @@ end
 function copy!(dest::LinearSolver, src::LinearSolver)
     copy!(dest.factors, src.factors)
     copy!(dest.ipiv, src.ipiv)
-    dest.info[] = src.info[]
 end
 
 #mutable struct SimpleSolver{NLEQ<:ParametricNonLinEq}
