@@ -60,12 +60,51 @@ function setlhs!(solver::LinearSolver, A::Matrix{Float64})
         throw(DimensionMismatch("matrix has size $(size(A)), but must have size $(size(solver.factors))"))
     end
     copy!(solver.factors, A)
-    lda  = max(1, m)
-    ccall((Compat.@blasfunc(dgetrf_), Base.LinAlg.LAPACK.liblapack), Void,
-          (Ptr{Base.LinAlg.BlasInt}, Ptr{Base.LinAlg.BlasInt}, Ptr{Float64},
-           Ptr{Base.LinAlg.BlasInt}, Ptr{Base.LinAlg.BlasInt}, Ptr{Base.LinAlg.BlasInt}),
-          &m, &n, solver.factors, &lda, solver.ipiv, solver.info)
-    return solver.info[] == 0
+
+    # taken from Julia's generic_lufact!; faster than calling out to dgetrf for
+    # sizes up to about 60×60
+    factors = solver.factors
+    minmn = min(m,n)
+    info = 0
+    @inbounds begin
+        for k = 1:minmn
+            # find index max
+            kp = k
+            amax = 0.0
+            for i = k:m
+                absi = abs(factors[i,k])
+                if absi > amax
+                    kp = i
+                    amax = absi
+                end
+            end
+            solver.ipiv[k] = kp
+            if factors[kp,k] != 0.0
+                if k != kp
+                    # Interchange
+                    for i = 1:n
+                        tmp = factors[k,i]
+                        factors[k,i] = factors[kp,i]
+                        factors[kp,i] = tmp
+                    end
+                end
+                # Scale first column
+                fkkinv = inv(factors[k,k])
+                for i = k+1:m
+                    factors[i,k] *= fkkinv
+                end
+            elseif info == 0
+                info = k
+            end
+            # Update the rest
+            for j = k+1:n
+                for i = k+1:m
+                    factors[i,j] -= factors[i,k]*factors[k,j]
+                end
+            end
+        end
+    end
+    return info == 0
 end
 
 function solve!(solver::LinearSolver, x::Vector{Float64}, b::Vector{Float64})
