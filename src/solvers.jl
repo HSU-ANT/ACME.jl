@@ -118,14 +118,28 @@ function solve!(solver::LinearSolver, x::Vector{Float64}, b::Vector{Float64})
         end
         copy!(x, b)
     end
-    Base.LinAlg.chkstride1(solver.factors, x, solver.ipiv)
-    ccall((Compat.@blasfunc(dgetrs_), Base.LinAlg.LAPACK.liblapack), Void,
-          (Ptr{UInt8}, Ptr{Base.LinAlg.BlasInt}, Ptr{Base.LinAlg.BlasInt}, Ptr{Float64}, Ptr{Base.LinAlg.BlasInt},
-           Ptr{Base.LinAlg.BlasInt}, Ptr{Float64}, Ptr{Base.LinAlg.BlasInt}, Ptr{Base.LinAlg.BlasInt}),
-          &'N', &n, &1, solver.factors, &max(1,stride(solver.factors,2)), solver.ipiv, x, &max(1,stride(x,2)), solver.info)
-    if solver.info[] ≠ 0
-        throw(Base.LinAlg.LAPACKException(solver.info[]))
+
+    # native Julia implementation seems to be faster than dgetrs up to about
+    # n=45 (and not slower up to about n=70)
+    @inbounds for i in 1:n
+        x[i], x[solver.ipiv[i]] = x[solver.ipiv[i]], x[i]
     end
+    # taken from Julia's naivesub!(::UnitLowerTriangular, ...)
+    @inbounds for j in 1:n
+        xj = x[j]
+        for i in j+1:n
+            x[i] -= solver.factors[i,j] * xj
+        end
+    end
+    # taken from Julia's naivesub!(::UpperTriangular, ...)
+    @inbounds for j in n:-1:1
+        solver.factors[j,j] == zero(solver.factors[j,j]) && throw(SingularException(j))
+        xj = x[j] = solver.factors[j,j] \ x[j]
+        for i in 1:j-1
+            x[i] -= solver.factors[i,j] * xj
+        end
+    end
+
     return nothing
 end
 
