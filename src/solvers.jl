@@ -55,10 +55,45 @@ end))
 
 LinearSolver(n::Int) = LinearSolver{n}()
 
-function setlhs!{N}(solver::LinearSolver{N}, A::Matrix{Float64})
+@inline function _check_lhs_dims{N}(::LinearSolver{N}, A::Matrix{Float64})
     if (N, N) ≠ size(A)
         throw(DimensionMismatch("matrix has size $(size(A)), but must have size $((N, N))"))
     end
+end
+
+@inline function _check_solve_dims{N}(::LinearSolver{N}, x::Vector{Float64}, b::Vector{Float64})
+    if N ≠ length(x)
+        throw(DimensionMismatch("x has length $(length(x)), but needs $N"))
+    end
+    if x !== b
+        if N ≠ length(b)
+            throw(DimensionMismatch("b has length $(length(b)), but needs $N"))
+        end
+    end
+end
+
+function setlhs!(solver::LinearSolver{0}, A::Matrix{Float64})
+    _check_lhs_dims(solver, A)
+    return true
+end
+
+function setlhs!(solver::LinearSolver{1}, A::Matrix{Float64})
+    _check_lhs_dims(solver, A)
+
+    @inbounds begin
+        solver.ipiv[1] = 1
+        if A[1,1] != 0.0
+            # Scale first column
+            solver.factors[1,1] = inv(A[1,1])
+        else
+            return false
+        end
+    end
+    return true
+end
+
+function setlhs!{N}(solver::LinearSolver{N}, A::Matrix{Float64})
+    _check_lhs_dims(solver, A)
     copy!(solver.factors, A)
 
     # based on Julia's generic_lufact!, but storing inverses on the diagonal;
@@ -105,14 +140,21 @@ function setlhs!{N}(solver::LinearSolver{N}, A::Matrix{Float64})
     return true
 end
 
+function solve!(solver::LinearSolver{0}, x::Vector{Float64}, b::Vector{Float64})
+    _check_solve_dims(solver, x, b)
+end
+
+function solve!(solver::LinearSolver{1}, x::Vector{Float64}, b::Vector{Float64})
+    _check_solve_dims(solver, x, b)
+
+    @inbounds x[1] = solver.factors[1,1] * b[1]
+
+    return nothing
+end
+
 function solve!{N}(solver::LinearSolver{N}, x::Vector{Float64}, b::Vector{Float64})
-    if N ≠ length(x)
-        throw(DimensionMismatch("x has length $(length(x)), but needs $N"))
-    end
+    _check_solve_dims(solver, x, b)
     if x !== b
-        if N ≠ length(b)
-            throw(DimensionMismatch("b has length $(length(b)), but needs $N"))
-        end
         copy!(x, b)
     end
 
