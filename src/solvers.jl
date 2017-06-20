@@ -47,10 +47,9 @@ evaluate!(nleq::ParametricNonLinEq, z) =
 #struct LinearSolver
 eval(Expr(:type, false, :LinearSolver, quote
     factors::Matrix{Float64}
-    ipiv::Vector{Base.LinAlg.BlasInt}
-    info::typeof(Ref{Base.LinAlg.BlasInt}(0))
+    ipiv::Vector{Int}
     function LinearSolver(n::Int)
-        new(zeros(n, n), zeros(Base.LinAlg.BlasInt, n), Ref{Base.LinAlg.BlasInt}(0))
+        new(zeros(n, n), zeros(Int, n))
     end
 end))
 
@@ -60,12 +59,50 @@ function setlhs!(solver::LinearSolver, A::Matrix{Float64})
         throw(DimensionMismatch("matrix has size $(size(A)), but must have size $(size(solver.factors))"))
     end
     copy!(solver.factors, A)
-    lda  = max(1, m)
-    ccall((Compat.@blasfunc(dgetrf_), Base.LinAlg.LAPACK.liblapack), Void,
-          (Ptr{Base.LinAlg.BlasInt}, Ptr{Base.LinAlg.BlasInt}, Ptr{Float64},
-           Ptr{Base.LinAlg.BlasInt}, Ptr{Base.LinAlg.BlasInt}, Ptr{Base.LinAlg.BlasInt}),
-          &m, &n, solver.factors, &lda, solver.ipiv, solver.info)
-    return solver.info[] == 0
+
+    # based on Julia's generic_lufact!, but storing inverses on the diagonal;
+    # faster than calling out to dgetrf for sizes up to about 60×60
+    factors = solver.factors
+    minmn = min(m,n)
+    @inbounds begin
+        for k = 1:minmn
+            # find index max
+            kp = k
+            amax = 0.0
+            for i = k:m
+                absi = abs(factors[i,k])
+                if absi > amax
+                    kp = i
+                    amax = absi
+                end
+            end
+            solver.ipiv[k] = kp
+            if factors[kp,k] != 0.0
+                if k != kp
+                    # Interchange
+                    for i = 1:n
+                        tmp = factors[k,i]
+                        factors[k,i] = factors[kp,i]
+                        factors[kp,i] = tmp
+                    end
+                end
+                # Scale first column
+                fkkinv = factors[k,k] = inv(factors[k,k])
+                for i = k+1:m
+                    factors[i,k] *= fkkinv
+                end
+            else
+                return false
+            end
+            # Update the rest
+            for j = k+1:n
+                for i = k+1:m
+                    factors[i,j] -= factors[i,k]*factors[k,j]
+                end
+            end
+        end
+    end
+    return true
 end
 
 function solve!(solver::LinearSolver, x::Vector{Float64}, b::Vector{Float64})
@@ -79,21 +116,34 @@ function solve!(solver::LinearSolver, x::Vector{Float64}, b::Vector{Float64})
         end
         copy!(x, b)
     end
-    Base.LinAlg.chkstride1(solver.factors, x, solver.ipiv)
-    ccall((Compat.@blasfunc(dgetrs_), Base.LinAlg.LAPACK.liblapack), Void,
-          (Ptr{UInt8}, Ptr{Base.LinAlg.BlasInt}, Ptr{Base.LinAlg.BlasInt}, Ptr{Float64}, Ptr{Base.LinAlg.BlasInt},
-           Ptr{Base.LinAlg.BlasInt}, Ptr{Float64}, Ptr{Base.LinAlg.BlasInt}, Ptr{Base.LinAlg.BlasInt}),
-          &'N', &n, &1, solver.factors, &max(1,stride(solver.factors,2)), solver.ipiv, x, &max(1,stride(x,2)), solver.info)
-    if solver.info[] ≠ 0
-        throw(Base.LinAlg.LAPACKException(solver.info[]))
+
+    # native Julia implementation seems to be faster than dgetrs up to about
+    # n=45 (and not slower up to about n=70)
+    @inbounds for i in 1:n
+        x[i], x[solver.ipiv[i]] = x[solver.ipiv[i]], x[i]
     end
+    # taken from Julia's naivesub!(::UnitLowerTriangular, ...)
+    @inbounds for j in 1:n
+        xj = x[j]
+        for i in j+1:n
+            x[i] -= solver.factors[i,j] * xj
+        end
+    end
+    # based on Julia's naivesub!(::UpperTriangular, ...), but with factors[j,j]
+    # holding inverses
+    @inbounds for j in n:-1:1
+        xj = x[j] = solver.factors[j,j] * x[j]
+        for i in 1:j-1
+            x[i] -= solver.factors[i,j] * xj
+        end
+    end
+
     return nothing
 end
 
 function copy!(dest::LinearSolver, src::LinearSolver)
     copy!(dest.factors, src.factors)
     copy!(dest.ipiv, src.ipiv)
-    dest.info[] = src.info[]
 end
 
 #mutable struct SimpleSolver{NLEQ<:ParametricNonLinEq}
