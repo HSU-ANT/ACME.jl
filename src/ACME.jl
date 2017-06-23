@@ -10,7 +10,7 @@ export Circuit, add!, connect!, DiscreteModel, run!, steadystate, steadystate!,
 
 using ProgressMeter
 using Compat
-using Iterators
+using IterTools
 
 import Base.getindex
 
