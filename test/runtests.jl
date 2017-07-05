@@ -135,6 +135,29 @@ let a = Rational{BigInt}[1 1 1; 1 1 2; 1 2 1; 1 2 2; 2 1 1; 2 1 2],
     @test size(mats[:pexps][1], 2) == 3
 end
 
+let circ = Circuit()
+    src1 = voltagesource()
+    probe1 = currentprobe()
+    d1 = diode()
+    d2 = diode()
+    connect!(circ, src1[:+], d1[:+])
+    connect!(circ, d1[:-], d2[:+])
+    connect!(circ, d2[:-], probe1[:+])
+    connect!(circ, probe1[:-], src1[:-])
+    src2 = voltagesource()
+    probe2 = currentprobe()
+    d3 = diode()
+    connect!(circ, src2[:+], d3[:+])
+    connect!(circ, d3[:-], probe2[:+])
+    connect!(circ, probe2[:-], src2[:-])
+    model = DiscreteModel(circ, 1)
+    y = run!(model, hcat([2.0; 1.0]))
+    # single diode is extracted first, although it was added last
+    @test ACME.nn(model, 1) == 1
+    @test ACME.nn(model, 2) == 2
+    @test y[1] ≈ y[2] ≈ 1e-12*(exp(1/25e-3)-1)
+end
+
 # sources and probes with internal resistance/conductance
 let circ = Circuit(), src=currentsource(100e-3, gp=1//100000), probe=voltageprobe()
     connect!(circ, src[:+], probe[:+])

@@ -347,8 +347,8 @@ function DiscreteModel{Solver}(circ::Circuit, t::Real, ::Type{Solver}=HomotopySo
     end
 
     model_nns = Int[sum(nns[nles]) for nles in nl_elems]
-    model_nqs = Int[sum(nqs[nles]) for nles in nl_elems]
-    split_nl_model_matrices!(mats, model_nqs, model_nns)
+    model_qidxs = [vcat(consecranges(nqs)[nles]...) for nles in nl_elems]
+    split_nl_model_matrices!(mats, model_qidxs, model_nns)
 
     reduce_pdims!(mats)
 
@@ -364,6 +364,7 @@ function DiscreteModel{Solver}(circ::Circuit, t::Real, ::Type{Solver}=HomotopySo
     end for nles in nl_elems]
 
     model_nps = map(dq -> size(dq, 1), mats[:dqs])
+    model_nqs = map(pexp -> size(pexp, 1), mats[:pexps])
 
     @assert nn(circ) == sum(model_nns)
 
@@ -590,15 +591,16 @@ function nldecompose!(mats, nns, nqs)
     return extracted_subs
 end
 
-function split_nl_model_matrices!(mats, model_nqs, model_nns)
-    mats[:dq_fulls] = Matrix[matsplit(mats[:dq_full], model_nqs)...]
-    mats[:eq_fulls] = Matrix[matsplit(mats[:eq_full], model_nqs)...]
-    let fqsplit = matsplit(mats[:fq], model_nqs, model_nns)
-        mats[:fqs] = Matrix[fqsplit[i,i] for i in 1:length(model_nqs)]
-        mats[:fqprev_fulls] = Matrix[[fqsplit[i, 1:i-1]... zeros(eltype(mats[:fq]), model_nqs[i], sum(model_nns[i:end]))]
-                                     for i in 1:length(model_nqs)]
+
+function split_nl_model_matrices!(mats, model_qidxs, model_nns)
+    mats[:dq_fulls] = Matrix[mats[:dq_full][qidxs,:] for qidxs in model_qidxs]
+    mats[:eq_fulls] = Matrix[mats[:eq_full][qidxs,:] for qidxs in model_qidxs]
+    let fqsplit = vcat([matsplit(mats[:fq][qidxs,:], [length(qidxs)], model_nns) for qidxs in model_qidxs]...)
+        mats[:fqs] = Matrix[fqsplit[i,i] for i in 1:length(model_qidxs)]
+        mats[:fqprev_fulls] = Matrix[[fqsplit[i, 1:i-1]... zeros(eltype(mats[:fq]), length(model_qidxs[i]), sum(model_nns[i:end]))]
+                                     for i in 1:length(model_qidxs)]
     end
-    mats[:q0s] = Vector[matsplit(mats[:q0], model_nqs)...]
+    mats[:q0s] = Vector[mats[:q0][qidxs] for qidxs in model_qidxs]
 end
 
 function reduce_pdims!(mats::Dict)
