@@ -123,9 +123,13 @@ end
 for mat in [:mv; :mi; :mx; :mxd; :mq; :mu; :pv; :pi; :px; :pxd; :pq]
     # blkdiag() does not work, so include an empty matrix of desired type in
     # case c.elements is empty
+    # as blkdiag for unknown numbner of arguments cannot be inferred properly,
+    # add type-assertion
     @eval ($mat)(c::Circuit) =
          blkdiag(spzeros(Rational{BigInt}, 0, 0),
-                 [convert(SparseMatrixCSC{Rational{BigInt}}, elem.$mat) for elem in c.elements]...)
+                 [convert(SparseMatrixCSC{Rational{BigInt}}, elem.$mat)
+                  for elem in c.elements]...
+                )::SparseMatrixCSC{Rational{BigInt},Int}
 end
 
 u0(c::Circuit) = vcat([elem.u0 for elem in c.elements]...)
@@ -477,10 +481,10 @@ function DiscreteModel{Solver}(circ::Circuit, t::Real, ::Type{Solver}=HomotopySo
 end
 
 function model_matrices(circ::Circuit, t::Rational{BigInt})
-    lhs = convert(SparseMatrixCSC{Rational{BigInt}},
+    lhs = convert(SparseMatrixCSC{Rational{BigInt},Int},
                   sparse([mv(circ) mi(circ) mxd(circ)//t+mx(circ)//2 mq(circ);
                    blkdiag(topomat(circ)...) spzeros(nb(circ), nx(circ) + nq(circ))]))
-    rhs = convert(SparseMatrixCSC{Rational{BigInt}},
+    rhs = convert(SparseMatrixCSC{Rational{BigInt},Int},
                   sparse([u0(circ) mu(circ) mxd(circ)//t-mx(circ)//2;
                           spzeros(nb(circ), 1+nu(circ)+nx(circ))]))
     x, f = map(full, gensolve(lhs, rhs))
@@ -488,7 +492,8 @@ function model_matrices(circ::Circuit, t::Rational{BigInt})
     rowsizes = [nb(circ); nb(circ); nx(circ); nq(circ)]
     res = Dict{Symbol,Array}(zip([:fv; :fi; :c; :fq], matsplit(f, rowsizes)))
 
-    nullspace = gensolve(sparse(res[:fq]), spzeros(size(res[:fq],1), 0))[2]
+    nullspace = gensolve(sparse(res[:fq]::Matrix{Rational{BigInt}}),
+                         spzeros(Rational{BigInt}, size(res[:fq],1), 0))[2]
     indeterminates = f * nullspace
 
     if normsquared(res[:c] * nullspace) > 1e-20
