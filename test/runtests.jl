@@ -135,6 +135,29 @@ let a = Rational{BigInt}[1 1 1; 1 1 2; 1 2 1; 1 2 2; 2 1 1; 2 1 2],
     @test size(mats[:pexps][1], 2) == 3
 end
 
+let circ = Circuit()
+    src1 = voltagesource()
+    probe1 = currentprobe()
+    d1 = diode()
+    d2 = diode()
+    connect!(circ, src1[:+], d1[:+])
+    connect!(circ, d1[:-], d2[:+])
+    connect!(circ, d2[:-], probe1[:+])
+    connect!(circ, probe1[:-], src1[:-])
+    src2 = voltagesource()
+    probe2 = currentprobe()
+    d3 = diode()
+    connect!(circ, src2[:+], d3[:+])
+    connect!(circ, d3[:-], probe2[:+])
+    connect!(circ, probe2[:-], src2[:-])
+    model = DiscreteModel(circ, 1)
+    y = run!(model, hcat([2.0; 1.0]))
+    # single diode is extracted first, although it was added last
+    @test ACME.nn(model, 1) == 1
+    @test ACME.nn(model, 2) == 2
+    @test y[1] ≈ y[2] ≈ 1e-12*(exp(1/25e-3)-1)
+end
+
 # sources and probes with internal resistance/conductance
 let circ = Circuit(), src=currentsource(100e-3, gp=1//100000), probe=voltageprobe()
     connect!(circ, src[:+], probe[:+])
@@ -205,8 +228,9 @@ let isc=1e-6, ise=2e-6, ηc=1.1, ηe=1.0, βf=100, βr=10
 end
 # BJT Gummel-Poon model
 let isc=1e-6, ise=2e-6, ηc=1.1, ηe=1.0, βf=100, βr=10, ηcl=1.2, ηel=1.3
-    @showprogress "Testing Gummel-Poon model: " for ile in (0, 50e-9),
-            ilc in (0, 100e-9), ηcl in (ηc, 1.2), ηel in (ηe, 1.1),
+    prog = Progress(2^9, "Testing Gummel-Poon model: ")
+    for ile in (0, 50e-9), ilc in (0, 100e-9),
+            ηcl in (ηc, 1.2), ηel in (ηe, 1.1),
             vaf in (Inf, 10), var in (Inf, 50),
             ikf in (Inf, 50e-3), ikr in (Inf, 500e-3),
             (typ, ib) in ((:npn, 1e-3), (:pnp, -1e-3))
@@ -241,6 +265,7 @@ let isc=1e-6, ise=2e-6, ηc=1.1, ηe=1.0, βf=100, βr=10, ηcl=1.2, ηel=1.3
             @test isapprox(ie, icc + ibe, atol=1e-10)
             @test isapprox(ic, -icc + ibc, atol=1e-10)
         end
+        next!(prog)
     end
 end
 # compare internal to external terminal resistances

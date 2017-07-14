@@ -10,7 +10,7 @@ export Circuit, add!, connect!, DiscreteModel, run!, steadystate, steadystate!,
 
 using ProgressMeter
 using Compat
-using Iterators
+using IterTools
 
 import Base.getindex
 
@@ -123,9 +123,13 @@ end
 for mat in [:mv; :mi; :mx; :mxd; :mq; :mu; :pv; :pi; :px; :pxd; :pq]
     # blkdiag() does not work, so include an empty matrix of desired type in
     # case c.elements is empty
+    # as blkdiag for unknown numbner of arguments cannot be inferred properly,
+    # add type-assertion
     @eval ($mat)(c::Circuit) =
          blkdiag(spzeros(Rational{BigInt}, 0, 0),
-                 [convert(SparseMatrixCSC{Rational{BigInt}}, elem.$mat) for elem in c.elements]...)
+                 [convert(SparseMatrixCSC{Rational{BigInt}}, elem.$mat)
+                  for elem in c.elements]...
+                )::SparseMatrixCSC{Rational{BigInt},Int}
 end
 
 u0(c::Circuit) = vcat([elem.u0 for elem in c.elements]...)
@@ -343,8 +347,8 @@ function DiscreteModel{Solver}(circ::Circuit, t::Real, ::Type{Solver}=HomotopySo
     end
 
     model_nns = Int[sum(nns[nles]) for nles in nl_elems]
-    model_nqs = Int[sum(nqs[nles]) for nles in nl_elems]
-    split_nl_model_matrices!(mats, model_nqs, model_nns)
+    model_qidxs = [vcat(consecranges(nqs)[nles]...) for nles in nl_elems]
+    split_nl_model_matrices!(mats, model_qidxs, model_nns)
 
     reduce_pdims!(mats)
 
@@ -360,6 +364,7 @@ function DiscreteModel{Solver}(circ::Circuit, t::Real, ::Type{Solver}=HomotopySo
     end for nles in nl_elems]
 
     model_nps = map(dq -> size(dq, 1), mats[:dqs])
+    model_nqs = map(pexp -> size(pexp, 1), mats[:pexps])
 
     @assert nn(circ) == sum(model_nns)
 
@@ -477,10 +482,10 @@ function DiscreteModel{Solver}(circ::Circuit, t::Real, ::Type{Solver}=HomotopySo
 end
 
 function model_matrices(circ::Circuit, t::Rational{BigInt})
-    lhs = convert(SparseMatrixCSC{Rational{BigInt}},
+    lhs = convert(SparseMatrixCSC{Rational{BigInt},Int},
                   sparse([mv(circ) mi(circ) mxd(circ)//t+mx(circ)//2 mq(circ);
                    blkdiag(topomat(circ)...) spzeros(nb(circ), nx(circ) + nq(circ))]))
-    rhs = convert(SparseMatrixCSC{Rational{BigInt}},
+    rhs = convert(SparseMatrixCSC{Rational{BigInt},Int},
                   sparse([u0(circ) mu(circ) mxd(circ)//t-mx(circ)//2;
                           spzeros(nb(circ), 1+nu(circ)+nx(circ))]))
     x, f = map(full, gensolve(lhs, rhs))
@@ -488,7 +493,8 @@ function model_matrices(circ::Circuit, t::Rational{BigInt})
     rowsizes = [nb(circ); nb(circ); nx(circ); nq(circ)]
     res = Dict{Symbol,Array}(zip([:fv; :fi; :c; :fq], matsplit(f, rowsizes)))
 
-    nullspace = gensolve(sparse(res[:fq]), spzeros(size(res[:fq],1), 0))[2]
+    nullspace = gensolve(sparse(res[:fq]::Matrix{Rational{BigInt}}),
+                         spzeros(Rational{BigInt}, size(res[:fq],1), 0))[2]
     indeterminates = f * nullspace
 
     if normsquared(res[:c] * nullspace) > 1e-20
@@ -585,15 +591,16 @@ function nldecompose!(mats, nns, nqs)
     return extracted_subs
 end
 
-function split_nl_model_matrices!(mats, model_nqs, model_nns)
-    mats[:dq_fulls] = Matrix[matsplit(mats[:dq_full], model_nqs)...]
-    mats[:eq_fulls] = Matrix[matsplit(mats[:eq_full], model_nqs)...]
-    let fqsplit = matsplit(mats[:fq], model_nqs, model_nns)
-        mats[:fqs] = Matrix[fqsplit[i,i] for i in 1:length(model_nqs)]
-        mats[:fqprev_fulls] = Matrix[[fqsplit[i, 1:i-1]... zeros(eltype(mats[:fq]), model_nqs[i], sum(model_nns[i:end]))]
-                                     for i in 1:length(model_nqs)]
+
+function split_nl_model_matrices!(mats, model_qidxs, model_nns)
+    mats[:dq_fulls] = Matrix[mats[:dq_full][qidxs,:] for qidxs in model_qidxs]
+    mats[:eq_fulls] = Matrix[mats[:eq_full][qidxs,:] for qidxs in model_qidxs]
+    let fqsplit = vcat([matsplit(mats[:fq][qidxs,:], [length(qidxs)], model_nns) for qidxs in model_qidxs]...)
+        mats[:fqs] = Matrix[fqsplit[i,i] for i in 1:length(model_qidxs)]
+        mats[:fqprev_fulls] = Matrix[[fqsplit[i, 1:i-1]... zeros(eltype(mats[:fq]), length(model_qidxs[i]), sum(model_nns[i:end]))]
+                                     for i in 1:length(model_qidxs)]
     end
-    mats[:q0s] = Vector[matsplit(mats[:q0], model_nqs)...]
+    mats[:q0s] = Vector[mats[:q0][qidxs] for qidxs in model_qidxs]
 end
 
 function reduce_pdims!(mats::Dict)

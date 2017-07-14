@@ -234,7 +234,7 @@ Pins: `+` (anode) and `-` (cathode)
 diode(;is::Real=1e-12, η::Real = 1) =
   Element(mv=[1;0], mi=[0;1], mq=[-1 0; 0 -1], pins=[:+; :-], nonlinear_eq =
     quote
-      let v = q[1], i = q[2], ex = exp(v*$(1./(25e-3 * η)))
+      let v = q[1], i = q[2], ex = exp(v*$(1 / (25e-3 * η)))
         res[1] = $(is) * (ex - 1) - i
         J[1,1] = $(is/(25e-3 * η)) * ex
         J[1,2] = -1
