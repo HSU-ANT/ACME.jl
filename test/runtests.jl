@@ -360,6 +360,15 @@ let model=diodeclipper()
     @test size(y) == (1,44100)
     # TODO: further validate y
     checksteady!(model)
+
+    linmodel = linearize(model)
+    N = 50000
+    u = [1e-3 * sin(π/2 * n^2/N) for n in 0:N]'
+    steadystate!(model)
+    steadystate!(linmodel)
+    y = run!(model, u)
+    ylin = run!(linmodel, u)
+    @test y ≈ ylin
 end
 let circ = diodeclipper(Circuit)
     model = DiscreteModel(circ, 44100, ACME.HomotopySolver{ACME.SimpleSolver})
@@ -383,6 +392,15 @@ let model=birdie(vol=0.8)
     @test size(y) == (1,44100)
     # TODO: further validate y
     checksteady!(model)
+
+    linmodel = linearize(model)
+    N = 50000
+    u = [1e-4 * sin(π/2 * n^2/N) for n in 0:N]'
+    steadystate!(model)
+    steadystate!(linmodel)
+    y = run!(model, u)
+    ylin = run!(linmodel, u)
+    @test maximum(abs, y-ylin) < 1e-6
 end
 let model=birdie()
     println("Running birdie with varying vol")
@@ -400,6 +418,15 @@ let model=superover(drive=1.0, tone=1.0, level=1.0)
     @test size(y) == (1,44100)
     # TODO: further validate y
     checksteady!(model)
+
+    linmodel = linearize(model)
+    N = 50000
+    u = [1e-4 * sin(π/2 * n^2/N) for n in 0:N]'
+    steadystate!(model)
+    steadystate!(linmodel)
+    y = run!(model, u)
+    ylin = run!(linmodel, u)
+    @test maximum(abs, y-ylin) < 2e-4 # SuperOver really is not very linear...
 end
 let circ=superover(Circuit, drive=1.0, tone=1.0, level=1.0)
     println("Running simplified superover with fixed potentiometer values")
@@ -414,6 +441,16 @@ let circ=superover(Circuit, drive=1.0, tone=1.0, level=1.0)
     @test size(y) == (1,44100)
     # TODO: further validate y
     checksteady!(model)
+
+    linmodel = linearize(model)
+    N = 50000
+    u = [1e-4 * sin(π/2 * n^2/N) for n in 0:N]'
+    steadystate!(model)
+    steadystate!(linmodel)
+    y = run!(model, u)
+    ylin = run!(linmodel, u)
+    @test maximum(abs, y-ylin) < 2e-4 # SuperOver really is not very linear...
+
     println("Running simplified, non-decomposed superover with fixed potentiometer values")
     model = DiscreteModel(circ, 1/44100, decompose_nonlinearity=false)
     @test ACME.np(model, 1) == 5
@@ -421,6 +458,15 @@ let circ=superover(Circuit, drive=1.0, tone=1.0, level=1.0)
     @test size(y) == (1,44100)
     # TODO: further validate y
     checksteady!(model)
+
+    linmodel = linearize(model)
+    N = 50000
+    u = [1e-4 * sin(π/2 * n^2/N) for n in 0:N]'
+    steadystate!(model)
+    steadystate!(linmodel)
+    y = run!(model, u)
+    ylin = run!(linmodel, u)
+    @test maximum(abs, y-ylin) < 2e-4 # SuperOver really is not very linear...
 end
 let model=superover()
     println("Running superover with varying potentiometer values")

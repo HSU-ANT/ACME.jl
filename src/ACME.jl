@@ -6,7 +6,7 @@ __precompile__()
 module ACME
 
 export Circuit, add!, connect!, DiscreteModel, run!, steadystate, steadystate!,
-    ModelRunner
+    linearize, ModelRunner
 
 using ProgressMeter
 using Compat
@@ -696,6 +696,54 @@ function steadystate!(model::DiscreteModel, u=zeros(nu(model)))
     x_steady = steadystate(model, u)
     copy!(model.x, x_steady)
     return x_steady
+end
+
+function linearize(model::DiscreteModel, usteady::AbstractVector{Float64}=zeros(nu(model)))
+    xsteady = steadystate(model, usteady)
+    zranges = Vector{UnitRange{Int64}}(length(model.solvers))
+    dzdps = Vector{Matrix{Float64}}(length(model.solvers))
+    dqlins = Vector{Matrix{Float64}}(length(model.solvers))
+    eqlins = Vector{Matrix{Float64}}(length(model.solvers))
+    zsteady = zeros(nn(model))
+    zoff = 1
+    x0 = copy(model.x0)
+    a = copy(model.a)
+    b = copy(model.b)
+    c = copy(model.c)
+    y0 = copy(model.y0)
+    dy = copy(model.dy)
+    ey = copy(model.ey)
+    fy = copy(model.fy)
+
+    for idx in 1:length(model.solvers)
+        psteady = model.dqs[idx] * xsteady + model.eqs[idx] * usteady +
+                  model.fqprevs[idx] * zsteady
+        zsub, dzdps[idx] =
+            Compat.invokelatest(linearize, model.solvers[idx], psteady)
+        copy!(zsteady, zoff, zsub, 1, length(zsub))
+
+        zranges[idx] = zoff:zoff+length(zsub)-1
+        fqdzdps = [model.fqprevs[idx][:,zranges[n]] * dzdps[n] for n in 1:idx-1]
+        dqlins[idx] = reduce(+, model.dqs[idx], fqdzdps .* dqlins[1:idx-1])
+        eqlins[idx] = reduce(+, model.eqs[idx], fqdzdps .* eqlins[1:idx-1])
+
+        x0 += model.c[:,zranges[idx]] * (zsub - dzdps[idx]*psteady)
+        a += model.c[:,zranges[idx]] * dzdps[idx] * dqlins[idx]
+        b += model.c[:,zranges[idx]] * dzdps[idx] * eqlins[idx]
+
+        y0 += model.fy[:,zranges[idx]] * (zsub - dzdps[idx]*psteady)
+        dy += model.fy[:,zranges[idx]] * dzdps[idx] * dqlins[idx]
+        ey += model.fy[:,zranges[idx]] * dzdps[idx] * eqlins[idx]
+
+        zoff += length(zsub)
+    end
+
+    mats = Dict(:a => a, :b => b, :c => zeros(nx(model), 0),
+        :pexps => Matrix{Float64}[], :dqs => Matrix{Float64}[],
+        :eqs => Matrix{Float64}[], :fqprevs => Matrix{Float64}[],
+        :fqs => Matrix{Float64}[], :q0s => Vector{Float64}[],
+        :dy => dy, :ey => ey, :fy => zeros(ny(model), 0), :x0 => x0, :y0 => y0)
+    return DiscreteModel{Tuple{}}(mats, Expr[], ())
 end
 
 """
