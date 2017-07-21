@@ -210,6 +210,9 @@ end
 
 get_extrapolation_origin(solver::SimpleSolver) = solver.last_p, solver.last_z
 
+get_extrapolation_jacobian(solver::SimpleSolver) =
+    -solver.nleq.J \ solver.nleq.Jp
+
 hasconverged(solver::SimpleSolver) = solver.resmaxabs < solver.tol
 
 needediterations(solver::SimpleSolver) = solver.iters
@@ -311,6 +314,9 @@ end
 hasconverged(solver::HomotopySolver) = hasconverged(solver.basesolver)
 needediterations(solver::HomotopySolver) = solver.iters
 
+get_extrapolation_jacobian(solver::HomotopySolver) =
+    get_extrapolation_jacobian(solver.basesolver)
+
 #mutable struct CachingSolver{BaseSolver}
 eval(Expr(:type, true, :(CachingSolver{BaseSolver}), quote
     basesolver::BaseSolver
@@ -409,9 +415,24 @@ end
 get_extrapolation_origin(solver::CachingSolver) =
     get_extrapolation_origin(solver.basesolver)
 
+set_extrapolation_origin(solver::CachingSolver, p, z) =
+    set_extrapolation_origin(solver.basesolver, p, z)
+
+get_extrapolation_jacobian(solver::CachingSolver) =
+    get_extrapolation_jacobian(solver.basesolver)
+
 
 function set_resabs2tol!(solver, tol)
     Base.depwarn(string("set_resabs2tol!(solver, tol) is deprecated, use set_resabstol!(solver, sqrt(tol)) instead."),
                  :set_resabs2tol!)
     set_resabstol!(solver, sqrt(tol))
+end
+
+function linearize(solver, p::AbstractVector{Float64})
+    z = solve(solver, p)
+    set_extrapolation_origin(solver, p, z)
+    if !hasconverged(solver)
+        throw(ArgumentError("Cannot linearize because no solution found at p=$p"))
+    end
+    return z, get_extrapolation_jacobian(solver)
 end
