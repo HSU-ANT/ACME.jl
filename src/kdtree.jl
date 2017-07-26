@@ -94,9 +94,11 @@ eval(Expr(:type, true, :(Alts{T}), quote
     number_valid::Int
 end))
 
-Alts{T}(p::Vector{T}) = Alts([AltEntry(1, zeros(p), zero(T))], typemax(T), 0, 1)
+@pfunction Alts(p::Vector{T}) [T] begin
+     Alts([AltEntry(1, zeros(p), zero(T))], typemax(T), 0, 1)
+ end
 
-function init!{T}(alts::Alts{T}, best_dist, best_pidx)
+@pfunction init!(alts::Alts{T}, best_dist, best_pidx) [T] begin
     alts.number_valid = 1
     alts.entries[1].idx = 1
     fill!(alts.entries[1].delta, zero(T))
@@ -161,7 +163,9 @@ function dequeue!(alts::Alts)
     return e
 end
 
-function enqueue!{T}(alts::Alts{T}, new_idx::Int, ref_delta::Vector{T}, delta_update_dim::Int, delta_update_val::T, new_delta_norm::T)
+@pfunction enqueue!(alts::Alts{T}, new_idx::Int, ref_delta::Vector{T},
+                    delta_update_dim::Int, delta_update_val::T,
+                    new_delta_norm::T) [T] begin
     if alts.number_valid == length(alts.entries)
         delta = copy(ref_delta)
         delta[delta_update_dim] = delta_update_val

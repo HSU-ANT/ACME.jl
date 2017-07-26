@@ -14,6 +14,37 @@ using IterTools
 
 import Base.getindex
 
+if VERSION ≥ v"0.6.0"
+    macro pfunction(sig, params, body)
+        esc(Expr(:function, Expr(:where, sig, params.args...), body))
+    end
+else
+    macro pfunction(sig, params, body)
+        ts = copy(params.args)
+        if VERSION < v"0.5.0"
+            for i in eachindex(ts)
+                if isa(ts[i], Expr) && ts[i].head === :comparison && ts[i].args[2] === :<:
+                    ts[i] = Expr(:<:, ts[i].args[1], ts[i].args[3])
+                end
+            end
+        end
+        esc(Expr(:function,
+                 Expr(:call, Expr(:curly, sig.args[1], ts...),
+                      sig.args[2:end]...),
+                 body))
+    end
+end
+
+macro expandafter(mc)
+    args = copy(mc.args)
+    for i in eachindex(args)
+        if isa(args[i], Expr) && args[i].head === :macrocall
+            args[i] = macroexpand(Compat.@__MODULE__, args[i])
+        end
+    end
+    esc(Expr(:macrocall, args...))
+end
+
 include("kdtree.jl")
 include("solvers.jl")
 
@@ -247,7 +278,7 @@ end
 # lines marked with !SV avoid creation of SparseVector by indexing with Ranges
 # instead of Ints; a better way for cross-julia-version compatibilty would be
 # nice; maybe Compat helps in the future...
-function topomat!{T<:Integer}(incidence::SparseMatrixCSC{T})
+@pfunction topomat!(incidence::SparseMatrixCSC{T}) [T<:Integer] begin
     @assert all(x -> abs(x) == 1, nonzeros(incidence))
     @assert all(sum(incidence, 1) .== 0)
 
@@ -289,7 +320,9 @@ function topomat!{T<:Integer}(incidence::SparseMatrixCSC{T})
     tv, ti
 end
 
-topomat{T<:Integer}(incidence::SparseMatrixCSC{T}) = topomat!(copy(incidence))
+@pfunction topomat(incidence::SparseMatrixCSC{T}) [T<:Integer] begin
+    topomat!(copy(incidence))
+ end
 topomat(c::Circuit) = topomat!(incidence(c))
 
 #mutable struct DiscreteModel{Solvers}
@@ -314,13 +347,15 @@ eval(Expr(:type, true, :(DiscreteModel{Solvers}), quote
     solvers::Solvers
     x::Vector{Float64}
 
-    @compat function (::Type{DiscreteModel{Solver}}){Solver}(circ::Circuit, t::Float64)
+    @expandafter @compat @pfunction (::Type{DiscreteModel{Solver}})(circ::Circuit,
+            t::Float64) [Solver] begin
         Base.depwarn("DiscreteModel{Solver}(circ, t) is deprecated, use DiscreteModel(circ, t, Solver) instead.",
                      :DiscreteModel)
         DiscreteModel(circ, t, Solver)
     end
 
-    @compat function (::Type{DiscreteModel{Solvers}}){Solvers}(mats::Dict{Symbol}, nonlinear_eqs::Vector{Expr}, solvers::Solvers)
+    @expandafter @compat @pfunction (::Type{DiscreteModel{Solvers}})(mats::Dict{Symbol},
+            nonlinear_eqs::Vector{Expr}, solvers::Solvers) [Solvers] begin
         model = new{Solvers}()
 
         for mat in (:a, :b, :c, :pexps, :dqs, :eqs, :fqprevs, :fqs, :dy, :ey, :fy, :x0, :q0s, :y0)
@@ -334,8 +369,8 @@ eval(Expr(:type, true, :(DiscreteModel{Solvers}), quote
     end
 end))
 
-function DiscreteModel{Solver}(circ::Circuit, t::Real, ::Type{Solver}=HomotopySolver{CachingSolver{SimpleSolver}};
-                               decompose_nonlinearity=true)
+@pfunction DiscreteModel(circ::Circuit, t::Real, ::Type{Solver}=HomotopySolver{CachingSolver{SimpleSolver}};
+                         decompose_nonlinearity=true) [Solver] begin
     mats = model_matrices(circ, t)
 
     nns = Int[nn(e) for e in circ.elements]
@@ -772,7 +807,8 @@ eval(Expr(:type, false, :(ModelRunner{Model<:DiscreteModel,ShowProgress}), quote
     ycur::Vector{Float64}
     xnew::Vector{Float64}
     z::Vector{Float64}
-    @compat function (::Type{ModelRunner{Model,ShowProgress}}){Model<:DiscreteModel,ShowProgress}(model::Model)
+    @expandafter @compat @pfunction (::Type{ModelRunner{Model,ShowProgress}})(
+            model::Model) [Model<:DiscreteModel,ShowProgress] begin
         ucur = Array{Float64,1}(nu(model))
         ps = Vector{Float64}[Vector{Float64}(np(model, idx)) for idx in 1:length(model.solvers)]
         ycur = Array{Float64,1}(ny(model))
@@ -782,9 +818,12 @@ eval(Expr(:type, false, :(ModelRunner{Model<:DiscreteModel,ShowProgress}), quote
     end
 end))
 
-ModelRunner{Model<:DiscreteModel}(model::Model) = ModelRunner{Model,true}(model)
-ModelRunner{Model<:DiscreteModel,ShowProgress}(model::Model, ::Val{ShowProgress}) =
+@pfunction ModelRunner(model::Model) [Model<:DiscreteModel] begin
+     ModelRunner{Model,true}(model)
+ end
+@pfunction ModelRunner(model::Model, ::Val{ShowProgress}) [Model<:DiscreteModel,ShowProgress] begin
     ModelRunner{Model,ShowProgress}(model)
+end
 
 """
     ModelRunner(model::DiscreteModel, showprogress::Bool = true)
@@ -798,8 +837,9 @@ By default `run!` for the constructed `ModelRunner` will show a progress bar to
 report its progress. This can be disabled by passing `false` as second
 parameter.
 """
-ModelRunner{Model<:DiscreteModel}(model::Model, showprogress::Bool) =
+@pfunction ModelRunner(model::Model, showprogress::Bool) [Model<:DiscreteModel] begin
     ModelRunner{Model,showprogress}(model)
+end
 
 """
     run!(runner::ModelRunner, u::AbstractMatrix{Float64})
@@ -845,18 +885,16 @@ To simulate a circuit without inputs, a matrix with zero rows may be passed.
 The internal state of the  underlying `DiscreteModel` (e.g. capacitor charges)
 is preserved accross calls to `run!`.
 """
-function run!{Model<:DiscreteModel}(runner::ModelRunner{Model,true},
-                                    y::AbstractMatrix{Float64},
-                                    u::AbstractMatrix{Float64})
+@pfunction run!(runner::ModelRunner{Model,true}, y::AbstractMatrix{Float64},
+                u::AbstractMatrix{Float64}) [Model<:DiscreteModel] begin
     checkiosizes(runner, u, y)
     @showprogress "Running model: " for n = 1:size(u, 2)
         step!(runner, y, u, n)
     end
 end
 
-function run!{Model<:DiscreteModel}(runner::ModelRunner{Model,false},
-                                    y::AbstractMatrix{Float64},
-                                    u::AbstractMatrix{Float64})
+@pfunction run!(runner::ModelRunner{Model,false}, y::AbstractMatrix{Float64},
+                u::AbstractMatrix{Float64}) [Model<:DiscreteModel] begin
     checkiosizes(runner, u, y)
     for n = 1:size(u, 2)
         step!(runner, y, u, n)
