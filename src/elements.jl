@@ -106,7 +106,7 @@ on
 """
 function transformer(::Type{Val{:JA}}; D=2.4e-2, A=4.54e-5, ns=[],
                      a=14.1, α=5e-5, c=0.55, k=17.8, Ms=2.75e5)
-    const μ0 = 1.2566370614e-6
+    μ0 = 1.2566370614e-6
     nonlinear_eq = quote
         coth_q1 = coth(q[1])
         a_q1 = abs(q[1])

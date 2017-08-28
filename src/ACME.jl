@@ -90,7 +90,7 @@ eval(Expr(:type, true, :Element, quote
     end
     make_pin_dict(dict::Dict) = dict
 
-    const mat_dims =
+    mat_dims =
         Dict( :mv => (:nl,:nb), :mi => (:nl,:nb), :mx => (:nl,:nx),
               :mxd => (:nl,:nx), :mq => (:nl,:nq), :mu => (:nl,:nu),
               :u0 => (:nl, :n0),
