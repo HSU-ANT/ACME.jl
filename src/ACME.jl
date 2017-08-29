@@ -45,12 +45,28 @@ macro expandafter(mc)
     esc(Expr(:macrocall, args...))
 end
 
+if VERSION ≥ v"0.6.0"
+    @eval macro $(:struct)(head, body)
+        Expr(parse("struct Foo end").head, false, esc(head), Expr(:block, [esc(a) for a in body.args]...))
+    end
+    macro mutable_struct(head, body)
+        Expr(parse("struct Foo end").head, true, esc(head), Expr(:block, [esc(a) for a in body.args]...))
+    end
+else
+    @eval macro $(:struct)(head, body)
+        Expr(:type, false, esc(head), Expr(:block, [esc(a) for a in body.args]...))
+    end
+    macro mutable_struct(head, body)
+        Expr(:type, true, esc(head), Expr(:block, [esc(a) for a in body.args]...))
+    end
+end
+
 include("kdtree.jl")
 include("solvers.jl")
 
 
 #mutable struct Element
-eval(Expr(:type, true, :Element, quote
+@mutable_struct Element begin
   mv :: SparseMatrixCSC{Real,Int}
   mi :: SparseMatrixCSC{Real,Int}
   mx :: SparseMatrixCSC{Real,Int}
@@ -120,7 +136,7 @@ eval(Expr(:type, true, :Element, quote
     end
     elem
   end
-end))
+end
 
 for (n,m) in Dict(:nb => :mv, :nx => :mx, :nq => :mq, :nu => :mu)
   @eval ($n)(e::Element) = size(e.$m, 2)
@@ -140,12 +156,12 @@ include("elements.jl")
 const Net = Vector{Tuple{Int,Int}} # each net is a list of branch/polarity pairs
 
 #struct Circuit
-eval(Expr(:type, false, :Circuit, quote
+@struct Circuit begin
     elements :: Vector{Element}
     nets :: Vector{Net}
     net_names :: Dict{Symbol, Net}
     Circuit() = new([], [], Dict{Symbol, Net}())
-end))
+end
 
 for n in [:nb; :nx; :nq; :nu; :nl; :ny; :nn]
     @eval ($n)(c::Circuit) = sum([$n(elem) for elem in c.elements])
@@ -326,7 +342,7 @@ end
 topomat(c::Circuit) = topomat!(incidence(c))
 
 #mutable struct DiscreteModel{Solvers}
-eval(Expr(:type, true, :(DiscreteModel{Solvers}), quote
+@mutable_struct DiscreteModel{Solvers} begin
     a::Matrix{Float64}
     b::Matrix{Float64}
     c::Matrix{Float64}
@@ -367,7 +383,7 @@ eval(Expr(:type, true, :(DiscreteModel{Solvers}), quote
         model.x = zeros(nx(model))
         return model
     end
-end))
+end
 
 @pfunction DiscreteModel(circ::Circuit, t::Real, ::Type{Solver}=HomotopySolver{CachingSolver{SimpleSolver}};
                          decompose_nonlinearity=true) [Solver] begin
@@ -800,7 +816,7 @@ run!(model::DiscreteModel, u::AbstractMatrix{Float64}; showprogress=true) =
     return run!(ModelRunner(model, showprogress), u)
 
 #struct ModelRunner{Model<:DiscreteModel,ShowProgress}
-eval(Expr(:type, false, :(ModelRunner{Model<:DiscreteModel,ShowProgress}), quote
+@struct ModelRunner{Model<:DiscreteModel,ShowProgress} begin
     model::Model
     ucur::Vector{Float64}
     ps::Vector{Vector{Float64}}
@@ -816,7 +832,7 @@ eval(Expr(:type, false, :(ModelRunner{Model<:DiscreteModel,ShowProgress}), quote
         z = Array{Float64,1}(nn(model))
         return new{Model,ShowProgress}(model, ucur, ps, ycur, xnew, z)
     end
-end))
+end
 
 @pfunction ModelRunner(model::Model) [Model<:DiscreteModel] begin
      ModelRunner{Model,true}(model)

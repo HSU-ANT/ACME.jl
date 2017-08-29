@@ -6,12 +6,12 @@ import Base.isless
 import Base.isempty
 
 #mutable struct KDTree{Tcv<:AbstractVector,Tp<:AbstractMatrix}
-eval(Expr(:type, true, :(KDTree{Tcv<:AbstractVector,Tp<:AbstractMatrix}), quote
+@mutable_struct KDTree{Tcv<:AbstractVector,Tp<:AbstractMatrix} begin
     cut_dim::Vector{Int}
     cut_val::Tcv
     ps_idx::Vector{Int}
     ps::Tp
-end))
+end
 
 function KDTree(p::AbstractMatrix, Np=size(p,2))
     function calc_cut_idx(min_idx, max_idx)
@@ -78,21 +78,21 @@ function KDTree(p::AbstractMatrix, Np=size(p,2))
 end
 
 #mutable struct AltEntry{T}
-eval(Expr(:type, true, :(AltEntry{T}), quote
+@mutable_struct AltEntry{T} begin
     idx::Int
     delta::Vector{T}
     delta_norm::T
-end))
+end
 
 isless(e1::AltEntry, e2::AltEntry) = isless(e1.delta_norm, e2.delta_norm)
 
 #mutable struct Alts{T}
-eval(Expr(:type, true, :(Alts{T}), quote
+@mutable_struct Alts{T} begin
     entries::Vector{AltEntry{T}}
     best_dist::T
     best_pidx::Int
     number_valid::Int
-end))
+end
 
 @pfunction Alts(p::Vector{T}) [T] begin
      Alts([AltEntry(1, zeros(p), zero(T))], typemax(T), 0, 1)

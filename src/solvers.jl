@@ -5,7 +5,7 @@ export SimpleSolver, HomotopySolver, CachingSolver
 import Base.copy!
 
 #struct ParametricNonLinEq{F_eval<:Function,F_setp<:Function,F_calcjp<:Function,Scratch}
-eval(Expr(:type, false, :(ParametricNonLinEq{F_eval<:Function,F_setp<:Function,F_calcjp<:Function,Scratch}), quote
+@struct ParametricNonLinEq{F_eval<:Function,F_setp<:Function,F_calcjp<:Function,Scratch} begin
     func::F_eval
     set_p::F_setp
     calc_Jp::F_calcjp
@@ -22,7 +22,7 @@ eval(Expr(:type, false, :(ParametricNonLinEq{F_eval<:Function,F_setp<:Function,F
         J = zeros(nn, nn)
         return new{F_eval,F_setp,F_calcjp,Scratch}(func, set_p, calc_Jp, res, Jp, J, scratch)
     end
-end))
+end
 @pfunction ParametricNonLinEq(func::F_eval, set_p::F_setp, calc_Jp::F_calcjp,
         scratch::Scratch, nn::Integer, np::Integer) [F_eval<:Function,
         F_setp<:Function,F_calcjp<:Function,Scratch] begin
@@ -44,13 +44,13 @@ evaluate!(nleq::ParametricNonLinEq, z) =
     nleq.func(nleq.res, nleq.J, nleq.scratch, z)
 
 #struct LinearSolver
-eval(Expr(:type, false, :LinearSolver, quote
+@struct LinearSolver begin
     factors::Matrix{Float64}
     ipiv::Vector{Int}
     function LinearSolver(n::Int)
         new(zeros(n, n), zeros(Int, n))
     end
-end))
+end
 
 function setlhs!(solver::LinearSolver, A::Matrix{Float64})
     m, n = size(solver.factors)
@@ -146,7 +146,7 @@ function copy!(dest::LinearSolver, src::LinearSolver)
 end
 
 #mutable struct SimpleSolver{NLEQ<:ParametricNonLinEq}
-eval(Expr(:type, true, :(SimpleSolver{NLEQ<:ParametricNonLinEq}), quote
+@mutable_struct SimpleSolver{NLEQ<:ParametricNonLinEq} begin
     nleq::NLEQ
     z::Vector{Float64}
     linsolver::LinearSolver
@@ -174,7 +174,7 @@ eval(Expr(:type, true, :(SimpleSolver{NLEQ<:ParametricNonLinEq}), quote
         set_extrapolation_origin(solver, initial_p, initial_z)
         return solver
     end
-end))
+end
 @doc """
     SimpleSolver
 
@@ -249,7 +249,7 @@ function solve(solver::SimpleSolver, p::AbstractVector{Float64}, maxiter=500)
 end
 
 #mutable struct HomotopySolver{BaseSolver}
-eval(Expr(:type, true, :(HomotopySolver{BaseSolver}), quote
+@mutable_struct HomotopySolver{BaseSolver} begin
     basesolver::BaseSolver
     start_p::Vector{Float64}
     pa::Vector{Float64}
@@ -264,7 +264,7 @@ eval(Expr(:type, true, :(HomotopySolver{BaseSolver}), quote
         basesolver = BaseSolver(nleq, initial_p, initial_z)
         return HomotopySolver{typeof(basesolver)}(basesolver, np(nleq))
     end
-end))
+end
 @doc """
     HomotopySolver{BaseSolver}
 
@@ -318,7 +318,7 @@ get_extrapolation_jacobian(solver::HomotopySolver) =
     get_extrapolation_jacobian(solver.basesolver)
 
 #mutable struct CachingSolver{BaseSolver}
-eval(Expr(:type, true, :(CachingSolver{BaseSolver}), quote
+@mutable_struct CachingSolver{BaseSolver} begin
     basesolver::BaseSolver
     ps_tree::KDTree{Vector{Float64}, Matrix{Float64}}
     zs::Matrix{Float64}
@@ -338,7 +338,7 @@ eval(Expr(:type, true, :(CachingSolver{BaseSolver}), quote
         basesolver = BaseSolver(nleq, initial_p, initial_z)
         return CachingSolver{typeof(basesolver)}(basesolver, initial_p, initial_z, nn(nleq))
     end
-end))
+end
 @doc """
     CachingSolver{BaseSolver}
 
