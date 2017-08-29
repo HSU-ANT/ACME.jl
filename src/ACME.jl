@@ -266,11 +266,9 @@ function netfor!(c::Circuit, p::Pin)
     element = p[1]
     add!(c, element)
     b_offset = branch_offset(c, element)
-    local net
     for (branch, pol) in p[2], net in c.nets
-        (branch + b_offset, pol) ∈ net && break
+        (branch + b_offset, pol) ∈ net && return net
     end
-    net
 end
 
 function netfor!(c::Circuit, name::Symbol)
