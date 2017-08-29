@@ -145,6 +145,16 @@ function copy!(dest::LinearSolver, src::LinearSolver)
     copy!(dest.ipiv, src.ipiv)
 end
 
+"""
+    SimpleSolver
+
+The `SimpleSolver` is the simplest available solver. It uses Newton iteration
+which features fast local convergence, but makes no guarantees about global
+convergence. The initial solution of the iteration is obtained by extrapolating
+the last solution found (or another solution provided externally) using the
+available Jacobians. Due to the missing global convergence, the `SimpleSolver`
+is rarely useful as such.
+"""
 #mutable struct SimpleSolver{NLEQ<:ParametricNonLinEq}
 @mutable_struct SimpleSolver{NLEQ<:ParametricNonLinEq} begin
     nleq::NLEQ
@@ -175,16 +185,6 @@ end
         return solver
     end
 end
-@doc """
-    SimpleSolver
-
-The `SimpleSolver` is the simplest available solver. It uses Newton iteration
-which features fast local convergence, but makes no guarantees about global
-convergence. The initial solution of the iteration is obtained by extrapolating
-the last solution found (or another solution provided externally) using the
-available Jacobians. Due to the missing global convergence, the `SimpleSolver`
-is rarely useful as such.
-""" SimpleSolver
 
 @pfunction SimpleSolver(nleq::NLEQ, initial_p::Vector{Float64},
                         initial_z::Vector{Float64}) [NLEQ<:ParametricNonLinEq] begin
@@ -248,6 +248,15 @@ function solve(solver::SimpleSolver, p::AbstractVector{Float64}, maxiter=500)
     return solver.z
 end
 
+"""
+    HomotopySolver{BaseSolver}
+
+The `HomotopySolver` extends an existing solver (provided as the type parameter)
+by applying homotopy to (at least theoretically) ensure global convergence. It
+can be combined with the `SimpleSolver` as `HomotopySolver{SimpleSolver}` to
+obtain a useful Newton homtopy solver with generally good convergence
+properties.
+"""
 #mutable struct HomotopySolver{BaseSolver}
 @mutable_struct HomotopySolver{BaseSolver} begin
     basesolver::BaseSolver
@@ -265,15 +274,6 @@ end
         return HomotopySolver{typeof(basesolver)}(basesolver, np(nleq))
     end
 end
-@doc """
-    HomotopySolver{BaseSolver}
-
-The `HomotopySolver` extends an existing solver (provided as the type parameter)
-by applying homotopy to (at least theoretically) ensure global convergence. It
-can be combined with the `SimpleSolver` as `HomotopySolver{SimpleSolver}` to
-obtain a useful Newton homtopy solver with generally good convergence
-properties.
-""" -> HomotopySolver
 
 set_resabstol!(solver::HomotopySolver, tol) =
     set_resabstol!(solver.basesolver, tol)
@@ -317,6 +317,21 @@ needediterations(solver::HomotopySolver) = solver.iters
 get_extrapolation_jacobian(solver::HomotopySolver) =
     get_extrapolation_jacobian(solver.basesolver)
 
+"""
+    CachingSolver{BaseSolver}
+
+The `CachingSolver` extends an existing solver (provided as the type parameter)
+by storing found solutions in a k-d tree to use as initial solutions in the
+future. Whenever the underlying solver needs more than a preset number of
+iterations (defaults to five), the solution will be stored. Storing new
+solutions is a relatively expensive operation, so until the stored solutions
+suffice to ensure convergence in few iterations throughout, use of a
+`CachingSolver` may actually slow things down.
+
+See [M. Holters, U. Zölzer, "A k-d Tree Based Solution Cache for the Non-linear
+Equation of Circuit Simulations"](http://www.eurasip.org/Proceedings/Eusipco/Eusipco2016/papers/1570255150.pdf)
+for a more detailed discussion.
+"""
 #mutable struct CachingSolver{BaseSolver}
 @mutable_struct CachingSolver{BaseSolver} begin
     basesolver::BaseSolver
@@ -339,21 +354,6 @@ get_extrapolation_jacobian(solver::HomotopySolver) =
         return CachingSolver{typeof(basesolver)}(basesolver, initial_p, initial_z, nn(nleq))
     end
 end
-@doc """
-    CachingSolver{BaseSolver}
-
-The `CachingSolver` extends an existing solver (provided as the type parameter)
-by storing found solutions in a k-d tree to use as initial solutions in the
-future. Whenever the underlying solver needs more than a preset number of
-iterations (defaults to five), the solution will be stored. Storing new
-solutions is a relatively expensive operation, so until the stored solutions
-suffice to ensure convergence in few iterations throughout, use of a
-`CachingSolver` may actually slow things down.
-
-See [M. Holters, U. Zölzer, "A k-d Tree Based Solution Cache for the Non-linear
-Equation of Circuit Simulations"](http://www.eurasip.org/Proceedings/Eusipco/Eusipco2016/papers/1570255150.pdf)
-for a more detailed discussion.
-""" -> CachingSolver
 
 set_resabstol!(solver::CachingSolver, tol) =
     set_resabstol!(solver.basesolver, tol)
