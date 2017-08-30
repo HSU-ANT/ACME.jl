@@ -602,7 +602,7 @@ function tryextract(fq, numcols)
         # ignore i-th row in following processing steps
         fq = fq[[1:i-1; i+1:end],:]
 
-        if countnz(fq[:,colcnt+1:end]) == 0
+        if all(iszero, fq[:,colcnt+1:end])
             return Nullable(a)
         end
     end
