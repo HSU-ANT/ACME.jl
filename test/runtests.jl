@@ -410,6 +410,25 @@ let model=birdie()
     # TODO: further validate y
 end
 
+include("../examples/dasplus.jl")
+let model=dasplus(gain=0.8, level=0.5)
+    println("Running dasplus with fixed potentiometer values")
+    @test ACME.np(model, 1) == 1
+    @test ACME.np(model, 2) == 1
+    y = run!(model, map(sin, 2π*1000/44100*(0:44099)'); showprogress=false)
+    @test size(y) == (1,44100)
+    # TODO: further validate y
+    checksteady!(model)
+end
+let model=dasplus()
+    println("Running dasplus with varying potentiometer values")
+    @test ACME.np(model, 1) == 3
+    @test ACME.np(model, 2) == 2
+    y = run!(model, [map(sin, 2π*1000/44100*(0:44099).'); linspace(1,0,44100).'; linspace(0,1,44100).']; showprogress=false)
+    @test size(y) == (1,44100)
+    # TODO: further validate y
+end
+
 include("../examples/superover.jl")
 let model=superover(drive=1.0, tone=1.0, level=1.0)
     println("Running superover with fixed potentiometer values")
