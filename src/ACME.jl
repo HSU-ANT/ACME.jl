@@ -61,6 +61,15 @@ else
     end
 end
 
+function _indmax(a::AbstractMatrix)
+    ind = indmax(a)
+    if isa(ind, CartesianIndex) # since 0.7.0-DEV.1660
+        return (ind[1], ind[2])
+    else
+        return ind2sub(size(a), ind)
+    end
+end
+
 include("kdtree.jl")
 include("solvers.jl")
 
@@ -550,7 +559,7 @@ function model_matrices(circ::Circuit, t::Rational{BigInt})
         warn("State update depends on indeterminate quantity")
     end
     while size(nullspace, 2) > 0
-        i, j = ind2sub(size(nullspace), indmax(map(abs, nullspace)))
+        i, j = _indmax(map(abs, nullspace))
         nullspace = nullspace[[1:i-1; i+1:end], [1:j-1; j+1:end]]
         f = f[:, [1:j-1; j+1:end]]
         for k in [:fv; :fi; :c; :fq]
@@ -587,7 +596,7 @@ function tryextract(fq, numcols)
     for colcnt in 1:numcols
         # determine element with maximum absolute value in unprocessed columns
         # to use as pivot
-        i, j = ind2sub(size(fq), indmax(map(abs, fq[:,colcnt:end])))
+        i, j = _indmax(map(abs, fq[:,colcnt:end]))
         j += colcnt-1
 
         # swap pivot to first (unprocessed) column
@@ -1000,7 +1009,7 @@ function rank_factorize(a::SparseMatrixCSC)
     nullspace = gensolve(a', spzeros(size(a, 2), 0))[2]
     c = eye(eltype(a), size(a, 1))
     while size(nullspace, 2) > 0
-        i, j = ind2sub(size(nullspace), indmax(map(abs, nullspace)))
+        i, j = _indmax(map(abs, nullspace))
         c -= c[:, i] * nullspace[:, j]' / nullspace[i, j]
         c = c[:, [1:i-1; i+1:end]]
         nullspace -= nullspace[:, j] * vec(nullspace[i, :])' / nullspace[i, j]

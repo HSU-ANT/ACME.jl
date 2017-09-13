@@ -88,7 +88,7 @@ end
 let ps = rand(6, 10000)
     t = ACME.KDTree(ps)
     p = rand(6)
-    best_p = ps[:,indmin(sum(abs2, broadcast(-, ps, p),1))]
+    best_p = ps[:,indmin(vec(sum(abs2, broadcast(-, ps, p),1)))]
     idx = ACME.indnearest(t, p)
     @test sum(abs2, p - best_p) ≈ sum(abs2, p - ps[:, idx])
 end
