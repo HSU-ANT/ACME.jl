@@ -58,7 +58,7 @@ function KDTree(p::AbstractMatrix, Np=size(p,2))
         end
         dim = indmax(vec(var(p[:,p_idx[min_idx[n]:max_idx[n]]],2)))
         idx = sortperm(vec(p[dim,p_idx[min_idx[n]:max_idx[n]]]))
-        p_idx[min_idx[n]:max_idx[n]] = p_idx[idx + min_idx[n] - 1]
+        p_idx[min_idx[n]:max_idx[n]] = p_idx[idx .+ min_idx[n] .- 1]
         cut_idx[n] = calc_cut_idx(min_idx[n], max_idx[n])
         cut_dim[n] = dim
         cut_val[n] = mean(p[dim, p_idx[cut_idx[n]:cut_idx[n]+1]])
