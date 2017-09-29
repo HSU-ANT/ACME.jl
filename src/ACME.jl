@@ -289,7 +289,7 @@ function connect!(c::Circuit, pins::Union{Pin,Symbol}...)
     nets = unique([netfor!(c, pin) for pin in pins])
     for net in nets[2:end]
         append!(nets[1], net)
-        deleteat!(c.nets, findfirst(c.nets, net))
+        deleteat!(c.nets, findfirst(n -> n == net, c.nets))
         for (name, named_net) in c.net_names
             if named_net == net
                 c.net_names[name] = nets[1]
@@ -309,7 +309,7 @@ end
 
     row = 1;
     for col = 1:size(incidence)[2]
-        rows = filter(r -> r ≥ row, find(incidence[:, col]))
+        rows = filter(r -> r ≥ row, find(!iszero, incidence[:, col]))
         @assert length(rows) ≤ 2
 
         isempty(rows) && continue
@@ -323,7 +323,7 @@ end
             incidence[rows[2],:] = incidence[rows[2],:] + incidence[row,:]
         end
         if incidence[row, col] < 0
-            cols = find(incidence[row, :])
+            cols = find(!iszero, incidence[row, :])
             incidence[row,cols] = -incidence[row,cols]
         end
         rows = find(incidence[1:row-1, col] .== 1)
