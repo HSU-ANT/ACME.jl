@@ -546,7 +546,7 @@ function model_matrices(circ::Circuit, t::Rational{BigInt})
     rhs = convert(SparseMatrixCSC{Rational{BigInt},Int},
                   sparse([u0(circ) mu(circ) mxd(circ)//t-mx(circ)//2;
                           spzeros(nb(circ), 1+nu(circ)+nx(circ))]))
-    x, f = map(full, gensolve(lhs, rhs))
+    x, f = map(Matrix, gensolve(lhs, rhs))
 
     rowsizes = [nb(circ); nb(circ); nx(circ); nq(circ)]
     res = Dict{Symbol,Array}(zip([:fv; :fi; :c; :fq], matsplit(f, rowsizes)))
