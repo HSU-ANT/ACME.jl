@@ -95,20 +95,28 @@ function nonlinear_eq(c::Circuit, elem_idxs=1:length(c.elements))
 end
 
 function add!(c::Circuit, elem::Element)
-    elem ∈ c.elements && return
-    b_offset = nb(c)
-    push!(c.elements, elem)
-    for branch_pols in values(elem.pins)
-        push!(c.nets, [(b_offset + b, pol) for (b, pol) in branch_pols])
+    for (k, v) in c.element_names
+        if c.elements[v] == elem
+            return k
+        end
     end
-    nothing
+    designator = gensym()
+    add!(c, designator, elem)
+    return designator
 end
 
-add!(c::Circuit, elems::Element...) = for elem in elems add!(c, elem) end
+add!(c::Circuit, elems::Element...) = ([add!(c, elem) for elem in elems]...,)
 
 function add!(c::Circuit, designator::Symbol, elem::Element)
-    add!(c, elem)
-    c.element_names[designator] = length(c.elements)
+    idx = findfirst(e -> e == elem, c.elements)
+    if idx == 0
+        push!(c.elements, elem)
+        for branch_pols in values(elem.pins)
+            push!(c.nets, [(b_offset + b, pol) for (b, pol) in branch_pols])
+        end
+        idx = length(c.elements)
+    end
+    c.element_names[designator] = idx
 end
 
 function delete!(c::Circuit, designator::Symbol)

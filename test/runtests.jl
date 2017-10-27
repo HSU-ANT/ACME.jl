@@ -72,9 +72,9 @@ let circ = Circuit(), r1 = resistor(10), r2 = resistor(100), r3 = resistor(470),
     add!(circ, :r1, r1)
     add!(circ, src)
     add!(circ, probe)
-    add!(circ, :r2, r2)
+    r2_des = add!(circ, r2)
     add!(circ, :r3, r3)
-    add!(circ, :r4, r4)
+    r4_des = add!(circ, r4)
     connect!(circ, src[:+], probe[:+])
     connect!(circ, probe[:-], r1[1], r2[1], r3[1], r4[1])
     connect!(circ, src[:-], r1[2], r2[2], r3[2], r4[2])
@@ -83,13 +83,13 @@ let circ = Circuit(), r1 = resistor(10), r2 = resistor(100), r3 = resistor(470),
     delete!(circ, :r1)
     model = DiscreteModel(circ, 1)
     @test run!(model, zeros(0, 1))[1,1] ≈ 1/100 + 1/470 + 1/1000
-    delete!(circ, :r4)
+    delete!(circ, r4_des)
     model = DiscreteModel(circ, 1)
     @test run!(model, zeros(0, 1))[1,1] ≈ 1/100 + 1/470
     delete!(circ, :r3)
     model = DiscreteModel(circ, 1)
     @test run!(model, zeros(0, 1))[1,1] ≈ 1/100
-    delete!(circ, :r2)
+    delete!(circ, r2_des)
     model = DiscreteModel(circ, 1)
     @test run!(model, zeros(0, 1))[1,1] ≈ 0
 end
