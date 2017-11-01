@@ -5,7 +5,7 @@ export Circuit, add!, connect!, disconnect!
 
 import Base: delete!
 
-const Net = Vector{Tuple{Int,Int}} # each net is a list of branch/polarity pairs
+const Net = Vector{Tuple{Symbol,Symbol}} # pairs of element designator and pin name
 
 #struct Circuit
 @struct Circuit begin
@@ -38,10 +38,15 @@ function incidence(c::Circuit)
     i = sizehint!(Int[], 2nb(c))
     j = sizehint!(Int[], 2nb(c))
     v = sizehint!(Int[], 2nb(c))
-    for (row, pins) in enumerate(c.nets), (branch, polarity) in pins
-        push!(i, row)
-        push!(j, branch)
-        push!(v, polarity)
+    for (row, pins) in enumerate(c.nets), (elemname, pinname) in pins
+        elem = c.elements[c.element_names[elemname]]
+        offset = branch_offset(c, elem)
+        bps = elem.pins[pinname]
+        for (branch, polarity) in bps
+            push!(i, row)
+            push!(j, offset + branch)
+            push!(v, polarity)
+        end
     end
     # ensure zeros due to short-circuited branches are removed, hence the
     # additional sparse(findnz(...))
@@ -111,8 +116,8 @@ function add!(c::Circuit, designator::Symbol, elem::Element)
     idx = findfirst(e -> e == elem, c.elements)
     if idx == 0
         push!(c.elements, elem)
-        for branch_pols in values(elem.pins)
-            push!(c.nets, [(b_offset + b, pol) for (b, pol) in branch_pols])
+        for pin in keys(elem.pins)
+            push!(c.nets, [(designator, pin)])
         end
         idx = length(c.elements)
     end
@@ -122,10 +127,8 @@ end
 function delete!(c::Circuit, designator::Symbol)
     idx = c.element_names[designator]
     elem = c.elements[idx]
-    b_offset = branch_offset(c, elem)
     for net in c.nets
-        filter!(bp -> !(b_offset < bp[1] ≤ b_offset + nb(elem)), net)
-        map!(bp -> (bp[1] ≤ b_offset ? bp[1] : bp[1] - nb(elem), bp[2]), net, net)
+        filter!(elempin -> elempin[1] != designator, net)
     end
     delete!(c.element_names, designator)
     deleteat!(c.elements, idx)
@@ -147,10 +150,16 @@ end
 
 function netfor!(c::Circuit, p::Pin)
     element = p[1]
-    add!(c, element)
-    b_offset = branch_offset(c, element)
-    for (branch, pol) in p[2], net in c.nets
-        (branch + b_offset, pol) ∈ net && return net
+    designator = add!(c, element)
+    local pinname
+    for (pname, pbps) in element.pins
+        if pbps == p[2]
+            pinname = pname
+            break
+        end
+    end
+    for net in c.nets
+        (designator, pinname) ∈ net && return net
     end
 end
 
@@ -174,12 +183,17 @@ end
 
 function disconnect!(c::Circuit, pin::Pin)
     element = pin[1]
-    b_offset = branch_offset(c, element)
     net = netfor!(c, pin)
-    for (branch, pol) in pin[2]
-        filter!(bp -> bp != (branch + b_offset, pol), net)
-        push!(c.nets, [(b_offset + branch, pol)])
+    designator = add!(c, element)
+    local pinname
+    for (pname, pbps) in element.pins
+        if pbps == pin[2]
+            pinname = pname
+            break
+        end
     end
+    filter!(p -> p != (designator, pinname), net)
+    push!(c.nets, [(designator, pinname)])
 end
 
 # lines marked with !SV avoid creation of SparseVector by indexing with Ranges
