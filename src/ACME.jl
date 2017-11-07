@@ -47,10 +47,10 @@ end
 
 if VERSION ≥ v"0.6.0"
     @eval macro $(:struct)(head, body)
-        Expr(parse("struct Foo end").head, false, esc(head), Expr(:block, [esc(a) for a in body.args]...))
+        Expr(Meta.parse("struct Foo end").head, false, esc(head), Expr(:block, [esc(a) for a in body.args]...))
     end
     macro mutable_struct(head, body)
-        Expr(parse("struct Foo end").head, true, esc(head), Expr(:block, [esc(a) for a in body.args]...))
+        Expr(Meta.parse("struct Foo end").head, true, esc(head), Expr(:block, [esc(a) for a in body.args]...))
     end
 else
     @eval macro $(:struct)(head, body)
