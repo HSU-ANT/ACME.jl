@@ -199,6 +199,11 @@ let circ = Circuit()
     connect!(circ, src2[:+], d3[:+])
     connect!(circ, d3[:-], probe2[:+])
     connect!(circ, probe2[:-], src2[:-])
+    model = DiscreteModel(circ, 1, decompose_nonlinearity=false)
+    y = run!(model, hcat([2.0; 1.0]))
+    @test ACME.nn(model, 1) == 3
+    @test y[1] ≈ 1e-12*(exp(1/25e-3)-1)
+    @test y[2] ≈ 1e-12*(exp(1/25e-3)-1)
     model = DiscreteModel(circ, 1)
     y = run!(model, hcat([2.0; 1.0]))
     # single diode is extracted first, although it was added last
