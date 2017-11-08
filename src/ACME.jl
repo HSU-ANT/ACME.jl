@@ -10,6 +10,7 @@ export DiscreteModel, run!, steadystate, steadystate!, linearize, ModelRunner
 using ProgressMeter
 using Compat
 using IterTools
+using DataStructures
 
 import Base.getindex
 
@@ -211,12 +212,12 @@ end
                          decompose_nonlinearity=true) [Solver] begin
     mats = model_matrices(circ, t)
 
-    nns = Int[nn(e) for e in circ.elements]
-    nqs = Int[nq(e) for e in circ.elements]
+    nns = Int[nn(e) for e in elements(circ)]
+    nqs = Int[nq(e) for e in elements(circ)]
     if decompose_nonlinearity
         nl_elems = nldecompose!(mats, nns, nqs)
     else
-        nl_elems = Vector{Int}[filter(e -> nn(circ.elements[e]) > 0, eachindex(circ.elements))]
+        nl_elems = Vector{Int}[find(nn -> nn > 0, nns)]
     end
 
     model_nns = Int[sum(nns[nles]) for nles in nl_elems]

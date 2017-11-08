@@ -9,37 +9,38 @@ const Net = Vector{Tuple{Symbol,Symbol}} # pairs of element designator and pin n
 
 #struct Circuit
 @struct Circuit begin
-    elements :: Vector{Element}
-    element_names :: Dict{Symbol, Int} # map name to offset in elements
+    elements::OrderedDict{Symbol, Element}
     nets :: Vector{Net}
     net_names :: Dict{Symbol, Net}
-    Circuit() = new([], Dict{Symbol, Int}(), [], Dict{Symbol, Net}())
+    Circuit() = new(OrderedDict{Symbol, Element}(), [], Dict{Symbol, Net}())
 end
 
+elements(c::Circuit) = values(c.elements)
+
 for n in [:nb; :nx; :nq; :nu; :nl; :ny; :nn]
-    @eval ($n)(c::Circuit) = sum([$n(elem) for elem in c.elements])
+    @eval ($n)(c::Circuit) = sum([$n(elem) for elem in elements(c)])
 end
 
 for mat in [:mv; :mi; :mx; :mxd; :mq; :mu; :pv; :pi; :px; :pxd; :pq]
     # blkdiag() does not work, so include an empty matrix of desired type in
-    # case c.elements is empty
+    # case elements(c) is empty
     # as blkdiag for unknown number of arguments cannot be inferred properly,
     # add type-assertion
     @eval ($mat)(c::Circuit) =
          blkdiag(spzeros(Rational{BigInt}, 0, 0),
                  [convert(SparseMatrixCSC{Rational{BigInt}}, elem.$mat)
-                  for elem in c.elements]...
+                  for elem in elements(c)]...
                 )::SparseMatrixCSC{Rational{BigInt},Int}
 end
 
-u0(c::Circuit) = vcat([elem.u0 for elem in c.elements]...)
+u0(c::Circuit) = vcat([elem.u0 for elem in elements(c)]...)
 
 function incidence(c::Circuit)
     i = sizehint!(Int[], 2nb(c))
     j = sizehint!(Int[], 2nb(c))
     v = sizehint!(Int[], 2nb(c))
     for (row, pins) in enumerate(c.nets), (elemname, pinname) in pins
-        elem = c.elements[c.element_names[elemname]]
+        elem = c.elements[elemname]
         offset = branch_offset(c, elem)
         bps = elem.pins[pinname]
         for (branch, polarity) in bps
@@ -53,14 +54,14 @@ function incidence(c::Circuit)
     sparse(findnz(sparse(i,j,v))..., length(c.nets), nb(c))
 end
 
-function nonlinear_eq(c::Circuit, elem_idxs=1:length(c.elements))
+function nonlinear_eq(c::Circuit, elem_idxs=1:length(elements(c)))
     # construct a block expression containing all element's expressions after
     # offsetting their indexes into q, J and res
 
     row_offset = 0
     col_offset = 0
     nl_expr = Expr(:block)
-    for elem in c.elements[elem_idxs]
+    for elem in collect(elements(c))[elem_idxs]
         index_offsets = Dict( :q => (col_offset,),
                               :J => (row_offset, col_offset),
                               :res => (row_offset,) )
@@ -100,8 +101,8 @@ function nonlinear_eq(c::Circuit, elem_idxs=1:length(c.elements))
 end
 
 function add!(c::Circuit, elem::Element)
-    for (k, v) in c.element_names
-        if c.elements[v] == elem
+    for (k, v) in c.elements
+        if v == elem
             return k
         end
     end
@@ -113,35 +114,25 @@ end
 add!(c::Circuit, elems::Element...) = ([add!(c, elem) for elem in elems]...,)
 
 function add!(c::Circuit, designator::Symbol, elem::Element)
-    idx = findfirst(e -> e == elem, c.elements)
-    if idx == 0
-        push!(c.elements, elem)
-        for pin in keys(elem.pins)
-            push!(c.nets, [(designator, pin)])
-        end
-        idx = length(c.elements)
+    if haskey(c.elements, designator)
+        delete!(c, designator)
     end
-    c.element_names[designator] = idx
+    for pin in keys(elem.pins)
+        push!(c.nets, [(designator, pin)])
+    end
+    c.elements[designator] = elem
 end
 
 function delete!(c::Circuit, designator::Symbol)
-    idx = c.element_names[designator]
-    elem = c.elements[idx]
     for net in c.nets
         filter!(elempin -> elempin[1] != designator, net)
     end
-    delete!(c.element_names, designator)
-    deleteat!(c.elements, idx)
-    for (des, i) in c.element_names
-        if i > idx
-            c.element_names[des] = i - 1
-        end
-    end
+    delete!(c.elements, designator)
 end
 
 function branch_offset(c::Circuit, elem::Element)
     offset = 0
-    for el in c.elements
+    for el in elements(c)
         el == elem && return offset
         offset += nb(el)
     end
