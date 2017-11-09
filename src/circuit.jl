@@ -1,7 +1,7 @@
 # Copyright 2015, 2016, 2017 Martin Holters
 # See accompanying license file.
 
-export Circuit, add!, connect!, disconnect!
+export Circuit, add!, connect!, disconnect!, @circuit
 
 import Base: delete!
 
@@ -247,3 +247,85 @@ end
     topomat!(copy(incidence))
  end
 topomat(c::Circuit) = topomat!(incidence(c))
+
+macro circuit(cdef)
+    is_conn_spec(expr::Expr) =
+        (expr.head === :call && (expr.args[1] === :(⟷) || expr.args[1] === :(↔) || expr.args[1] === :(==))) ||
+        (expr.head === :comparison && all(c -> c === :(==), expr.args[2:2:end]))
+    is_conn_spec(::Any) = false
+
+    function elem_spec(expr)
+        if !isa(expr, Expr) || expr.head !== :(=)
+            error("invalid element specification$locinfo: $(expr)")
+        end
+        if !isa(expr.args[1], Symbol)
+            error("invalid element identifier$locinfo: $(expr.args[1])")
+        end
+        if isa(expr.args[2], Expr) && expr.args[2].head === :tuple
+            if isempty(expr.args[2].args)
+                error("invalid element specification$locinfo: $(expr.args[2])")
+            end
+            elemspec = expr.args[2].args[1]
+            conn_exprs = expr.args[2].args[2:end]
+        else
+            elemspec = expr.args[2]
+            conn_exprs = []
+        end
+        push!(ccode.args, :(add!(circ, $(QuoteNode(expr.args[1])), $(esc(elemspec)))))
+        for conn_expr in conn_exprs
+            if !is_conn_spec(conn_expr)
+                error("invalid connection specification$locinfo: $conn_expr")
+            end
+            push!(ccode.args, Expr(:call, :connect!, :circ, extractpins(conn_expr, expr.args[1])...))
+        end
+    end
+
+    function extractpins(expr::Expr, default_element=nothing)
+        if expr.head === :call && (expr.args[1] === :(⟷) || expr.args[1] === :(↔) || expr.args[1] === :(==))
+            return vcat([extractpins(a, default_element) for a in expr.args[2:end]]...)
+        elseif expr.head === :comparison && all(c -> c === :(==), expr.args[2:2:end])
+            return vcat([extractpins(a, default_element) for a in expr.args[1:2:end]]...)
+        elseif expr.head === :ref
+            return [:(($(QuoteNode(expr.args[1])), $(QuoteNode(expr.args[2]))))]
+        elseif expr.head === :vect && length(expr.args) == 1
+            if default_element === nothing
+                error("missing element$(locinfo): $expr")
+            end
+            return [:(($(QuoteNode(default_element)), $(QuoteNode(expr.args[1]))))]
+        else
+            error("invalid pin specification$(locinfo): $expr")
+        end
+    end
+
+    function extractpins(netname::Symbol, default_element=nothing)
+        return [QuoteNode(netname)]
+    end
+
+    if !isa(cdef, Expr) || cdef.head !== :block
+        error("@circuit must be followed by a begin/end block")
+    end
+    ccode = Expr(:block)
+    push!(ccode.args, :(circ = Circuit()))
+    locinfo = ""
+    for expr in cdef.args
+        if isa(expr, LineNumberNode)
+            locinfo = " at $(expr.file):$(expr.line)"
+            continue
+        end
+        if !isa(expr, Expr)
+            error("invalid statement in circuit definition$locinfo: $expr")
+        end
+        if expr.head === :line
+            locinfo = " at $(expr.args[2]):$(expr.args[1])"
+        elseif expr.head === :(=)
+            elem_spec(expr)
+        elseif is_conn_spec(expr)
+            push!(ccode.args, Expr(:call, :connect!, :circ, extractpins(expr)...))
+        else
+            error("invalid statement in circuit definition$locinfo: $expr")
+        end
+    end
+
+    push!(ccode.args, :(circ))
+    return ccode
+end

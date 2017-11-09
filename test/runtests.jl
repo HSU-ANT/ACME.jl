@@ -38,26 +38,25 @@ let solver = ACME.LinearSolver(3)
     @test !ACME.setlhs!(solver, zeros(3,3))
 end
 
-let circ = Circuit()
+let circ = @circuit begin end
     model=DiscreteModel(circ, 1)
     @test run!(model, zeros(0, 20)) == zeros(0, 20)
 end
 
-let circ = Circuit()
-    add!(circ, :r, resistor(0))
-    connect!(circ, (:r, 1), (:r, 2))
+let circ = @circuit begin
+        r = resistor(0), [1] ⟷ [2]
+    end
     model = DiscreteModel(circ, 1)
     @test run!(model, zeros(0, 20)) == zeros(0, 20)
 end
 
-let circ = Circuit()
-    add!(circ, :r1, resistor(10))
-    add!(circ, :r2, resistor(100))
-    add!(circ, :src, voltagesource(1))
-    add!(circ, :probe, currentprobe())
-    connect!(circ, (:src, :+), (:probe, :+))
-    connect!(circ, (:probe, :-), (:r1, 1), (:r2, 1))
-    connect!(circ, (:src, :-), (:r1, 2), (:r2, 2))
+let circ = @circuit begin
+        r1 = resistor(10)
+        r2 = resistor(100), [1] ⟷ r1[1], [2] ⟷ r1[2]
+        src = voltagesource(1), [-] ⟷ r1[2]
+        probe = currentprobe(), [+] ⟷ src[+],
+                                [-] ⟷ r1[1]
+    end
     model = DiscreteModel(circ, 1)
     @test run!(model, zeros(0, 1))[1,1] ≈ 1/10 + 1/100
     disconnect!(circ, (:r2, 1))
@@ -71,8 +70,9 @@ let circ = Circuit()
     @test run!(model, zeros(0, 1))[1,1] ≈ 1/(10+100)
 end
 
-let circ = Circuit()
-    add!(circ, :r1, resistor(10))
+let circ = @circuit begin
+        r1 = resistor(10)
+    end
     r2_des = add!(circ, resistor(100))
     add!(circ, :r3, resistor(470))
     r4_des = add!(circ, resistor(1000))
@@ -97,11 +97,10 @@ let circ = Circuit()
     @test run!(model, zeros(0, 1))[1,1] ≈ 0
 end
 
-let circ = Circuit()
-    add!(circ, :r, resistor(0))
-    add!(circ, :probe, currentprobe())
-    connect!(circ, (:r, 1), (:probe, :+))
-    connect!(circ, (:r, 2), (:probe, :-))
+let circ = @circuit begin
+        r = resistor(0)
+        probe = currentprobe(), [+] ⟷ r[1], [-] ⟷ r[2]
+    end
     orig_stderr = STDERR
     rd, wr = redirect_stderr()
     model = DiscreteModel(circ, 1)
@@ -110,14 +109,11 @@ let circ = Circuit()
     redirect_stderr(orig_stderr)
 end
 
-let circ = Circuit()
-    add!(circ, :d, diode())
-    add!(circ, :src, currentsource())
-    add!(circ, :probe, voltageprobe())
-    connect!(circ, (:d, :+), (:src, :+))
-    connect!(circ, (:d, :-), (:src, :-))
-    connect!(circ, (:d, :+), (:probe, :+))
-    connect!(circ, (:d, :-), (:probe, :-))
+let circ = @circuit begin
+        d = diode()
+        src = currentsource(), [+] ↔ d[+], [-] ↔ d[-]
+        probe = voltageprobe(), [+] == d[+], [-] == d[-]
+    end
     model = DiscreteModel(circ, 1)
     @test ACME.nn(model) == 1
     y = run!(model, [1.0 1.0])
@@ -192,15 +188,13 @@ let a = Rational{BigInt}[1 1 1; 1 1 2; 1 2 1; 1 2 2; 2 1 1; 2 1 2],
     @test size(mats[:pexps][1], 2) == 3
 end
 
-let circ = Circuit()
-    add!(circ, :src1, voltagesource())
-    add!(circ, :probe1, currentprobe())
-    add!(circ, :d1, diode())
-    add!(circ, :d2, diode())
-    connect!(circ, (:src1, :+), (:d1, :+))
-    connect!(circ, (:d1, :-), (:d2, :+))
-    connect!(circ, (:d2, :-), (:probe1, :+))
-    connect!(circ, (:probe1, :-), (:src1, :-))
+let circ = @circuit begin
+        src1 = voltagesource()
+        probe1 = currentprobe()
+        d1 = diode(), [+] ⟷ src1[+]
+        d2 = diode(), [+] ⟷ d1[-], [-] ⟷ probe1[+]
+        probe1[-] ⟷ src1[-]
+    end
     add!(circ, :src2, voltagesource())
     add!(circ, :probe2, currentprobe())
     add!(circ, :d3, diode())
@@ -221,51 +215,45 @@ let circ = Circuit()
 end
 
 # sources and probes with internal resistance/conductance
-let circ = Circuit()
-    add!(circ, :src, currentsource(100e-3, gp=1//100000))
-    add!(circ, :probe, voltageprobe())
-    connect!(circ, (:src, :+), (:probe, :+))
-    connect!(circ, (:src, :-), (:probe, :-))
+let circ = @circuit begin
+        src = currentsource(100e-3, gp=1//100000)
+        probe = voltageprobe(), [+] ⟷ src[+], [-] ⟷ src[-]
+    end
     model = DiscreteModel(circ, 1)
     @test run!(model, zeros(0,1)) ≈ [100000*100e-3]
 end
-let circ = Circuit()
-    add!(circ, :src, currentsource(gp=1//100000))
-    add!(circ, :probe, voltageprobe())
-    connect!(circ, (:src, :+), (:probe, :+))
-    connect!(circ, (:src, :-), (:probe, :-))
+let circ = @circuit begin
+        src = currentsource(gp=1//100000)
+        probe = voltageprobe(), [+] ⟷ src[+], [-] ⟷ src[-]
+    end
     model = DiscreteModel(circ, 1)
     @test run!(model, hcat([100e-3])) ≈ [100000*100e-3]
 end
-let circ = Circuit()
-    add!(circ, :src, currentsource(100e-3))
-    add!(circ, :probe, voltageprobe(gp=1//100000))
-    connect!(circ, (:src, :+), (:probe, :+))
-    connect!(circ, (:src, :-), (:probe, :-))
+let circ = @circuit begin
+        src = currentsource(100e-3)
+        probe = voltageprobe(gp=1//100000), [+] ⟷ src[+], [-] ⟷ src[-]
+    end
     model = DiscreteModel(circ, 1)
     @test run!(model, zeros(0,1)) ≈ [100000*100e-3]
 end
-let circ = Circuit()
-    add!(circ, :src, voltagesource(10, rs=100000))
-    add!(circ, :probe, currentprobe())
-    connect!(circ, (:src, :+), (:probe, :+))
-    connect!(circ, (:src, :-), (:probe, :-))
+let circ = @circuit begin
+        src = voltagesource(10, rs=100000)
+        probe = currentprobe(), [+] ⟷ src[+], [-] ⟷ src[-]
+    end
     model = DiscreteModel(circ, 1)
     @test run!(model, zeros(0,1)) ≈ [10/100000]
 end
-let circ = Circuit()
-    add!(circ, :src, voltagesource(rs=100000))
-    add!(circ, :probe, currentprobe())
-    connect!(circ, (:src, :+), (:probe, :+))
-    connect!(circ, (:src, :-), (:probe, :-))
+let circ = @circuit begin
+        src = voltagesource(rs=100000)
+        probe = currentprobe(), [+] ⟷ src[+], [-] ⟷ src[-]
+    end
     model = DiscreteModel(circ, 1)
     @test run!(model, hcat([10.0])) ≈ [10/100000]
 end
-let circ = Circuit()
-    add!(circ, :src, voltagesource(10))
-    add!(circ, :probe, currentprobe(rs=100000))
-    connect!(circ, (:src, :+), (:probe, :+))
-    connect!(circ, (:src, :-), (:probe, :-))
+let circ = @circuit begin
+        src = voltagesource(10)
+        probe = currentprobe(rs=100000), [+] ⟷ src[+], [-] ⟷ src[-]
+    end
     model = DiscreteModel(circ, 1)
     @test run!(model, zeros(0,1)) ≈ [10/100000]
 end
@@ -273,19 +261,15 @@ end
 # BJT Ebers-Moll model
 let isc=1e-6, ise=2e-6, ηc=1.1, ηe=1.0, βf=100, βr=10
     for (typ, ib) in ((:npn, 1e-3), (:pnp, -1e-3))
-        circ = Circuit()
-        add!(circ, :t, bjt(typ, isc=isc, ise=ise, ηc=ηc, ηe=ηe, βf=βf, βr=βr))
-        add!(circ, :isrc, currentsource())
-        add!(circ, :vsrc, voltagesource())
-        add!(circ, :veprobe, voltageprobe())
-        add!(circ, :vcprobe, voltageprobe())
-        add!(circ, :ieprobe, currentprobe())
-        add!(circ, :icprobe, currentprobe())
-        connect!(circ, (:t, :base), (:isrc, :+), (:veprobe, :+), (:vcprobe, :+))
-        connect!(circ, (:t, :collector), (:icprobe, :+))
-        connect!(circ, (:vcprobe, :-), (:icprobe, :-), (:vsrc, :+))
-        connect!(circ, (:t, :emitter), (:ieprobe, :+))
-        connect!(circ, (:veprobe, :-), (:ieprobe, :-), (:vsrc, :-), (:isrc, :-))
+        circ = @circuit begin
+            t = bjt(typ, isc=isc, ise=ise, ηc=ηc, ηe=ηe, βf=βf, βr=βr)
+            isrc = currentsource(), [+] ⟷ t[base]
+            vsrc = voltagesource(), [-] ⟷ isrc[-]
+            veprobe = voltageprobe(), [+] ⟷ t[base], [-] ⟷ isrc[-]
+            vcprobe = voltageprobe(), [+] ⟷ t[base], [-] ⟷ vsrc[+]
+            ieprobe = currentprobe(), [+] ⟷ t[emitter], [-] ⟷ isrc[-]
+            icprobe = currentprobe(), [+] ⟷ t[collector], [-] ⟷ vsrc[+]
+        end
         model = DiscreteModel(circ, 1)
         N = 100
         output = run!(model, [linspace(0, ib, N).'; linspace(1, -1, N÷2).' linspace(-1, 1, N÷2).'])
@@ -307,20 +291,16 @@ let isc=1e-6, ise=2e-6, ηc=1.1, ηe=1.0, βf=100, βr=10, ηcl=1.2, ηel=1.3
             vaf in (Inf, 10), var in (Inf, 50),
             ikf in (Inf, 50e-3), ikr in (Inf, 500e-3),
             (typ, ib) in ((:npn, 1e-3), (:pnp, -1e-3))
-        circ = Circuit()
-        add!(circ, :t, bjt(typ, isc=isc, ise=ise, ηc=ηc, ηe=ηe, βf=βf, βr=βr, ile=ile,
-                ilc=ilc, ηcl=ηcl, ηel=ηel, vaf=vaf, var=var, ikf=ikf, ikr=ikr))
-        add!(circ, :isrc, currentsource())
-        add!(circ, :vsrc, voltagesource())
-        add!(circ, :veprobe, voltageprobe())
-        add!(circ, :vcprobe, voltageprobe())
-        add!(circ, :ieprobe, currentprobe())
-        add!(circ, :icprobe, currentprobe())
-        connect!(circ, (:t, :base), (:isrc, :+), (:veprobe, :+), (:vcprobe, :+))
-        connect!(circ, (:t, :collector), (:icprobe, :+))
-        connect!(circ, (:vcprobe, :-), (:icprobe, :-), (:vsrc, :+))
-        connect!(circ, (:t, :emitter), (:ieprobe, :+))
-        connect!(circ, (:veprobe, :-), (:ieprobe, :-), (:vsrc, :-), (:isrc, :-))
+        circ = @circuit begin
+            t = bjt(typ, isc=isc, ise=ise, ηc=ηc, ηe=ηe, βf=βf, βr=βr, ile=ile,
+                    ilc=ilc, ηcl=ηcl, ηel=ηel, vaf=vaf, var=var, ikf=ikf, ikr=ikr)
+            isrc = currentsource(), [+] ⟷ t[base]
+            vsrc = voltagesource(), [-] ⟷ isrc[-]
+            veprobe = voltageprobe(), [+] ⟷ t[base], [-] ⟷ isrc[-]
+            vcprobe = voltageprobe(), [+] ⟷ t[base], [-] ⟷ vsrc[+]
+            ieprobe = currentprobe(), [+] ⟷ t[emitter], [-] ⟷ isrc[-]
+            icprobe = currentprobe(), [+] ⟷ t[collector], [-] ⟷ vsrc[+]
+        end
         model = DiscreteModel(circ, 1)
         N = 100
         output = run!(model, [linspace(0, ib, N).'; linspace(1, -1, N÷2).' linspace(-1, 1, N÷2).'])
@@ -343,37 +323,38 @@ end
 # compare internal to external terminal resistances
 let rb=100, re=10, rc=20
     for (typ, ib, vce) in ((:npn, 1e-3, 1), (:pnp, -1e-3, -1))
-        circ = Circuit()
-        add!(circ, :t1, bjt(typ))
-        add!(circ, :rbref, resistor(rb))
-        add!(circ, :rcref, resistor(rc))
-        add!(circ, :reref, resistor(re))
-        add!(circ, :isrc1, currentsource(ib))
-        add!(circ, :vscr1, voltagesource(vce))
-        add!(circ, :veprobe1, voltageprobe())
-        add!(circ, :vcprobe1, voltageprobe())
-        add!(circ, :ieprobe1, currentprobe())
-        add!(circ, :icprobe1, currentprobe())
-        connect!(circ, (:t1, :base), (:rbref, 1))
-        connect!(circ, (:rbref, 2), (:isrc1, :+), (:veprobe1, :+), (:vcprobe1, :+))
-        connect!(circ, (:t1, :collector), (:rcref, 1))
-        connect!(circ, (:rcref, 2), (:icprobe1, :+))
-        connect!(circ, (:vcprobe1, :-), (:icprobe1, :-), (:vscr1, :+))
-        connect!(circ, (:t1, :emitter), (:reref, 1))
-        connect!(circ, (:reref, 2), (:ieprobe1, :+))
-        connect!(circ, (:veprobe1, :-), (:ieprobe1, :-), (:vscr1, :-), (:isrc1, :-))
-        add!(circ, :t2, bjt(typ, rb=rb, re=re, rc=rc))
-        add!(circ, :isrc2, currentsource(ib))
-        add!(circ, :vscr2, voltagesource(vce))
-        add!(circ, :veprobe2, voltageprobe())
-        add!(circ, :vcprobe2, voltageprobe())
-        add!(circ, :ieprobe2, currentprobe())
-        add!(circ, :icprobe2, currentprobe())
-        connect!(circ, (:t2, :base), (:isrc2, :+), (:veprobe2, :+), (:vcprobe2, :+))
-        connect!(circ, (:t2, :collector), (:icprobe2, :+))
-        connect!(circ, (:vcprobe2, :-), (:icprobe2, :-), (:vscr2, :+))
-        connect!(circ, (:t2, :emitter), (:ieprobe2, :+))
-        connect!(circ, (:veprobe2, :-), (:ieprobe2, :-), (:vscr2, :-), (:isrc2, :-))
+        circ = @circuit begin
+            t1 = bjt(typ)
+            rbref = resistor(rb)
+            rcref = resistor(rc)
+            reref = resistor(re)
+            isrc1 = currentsource(ib)
+            vscr1 = voltagesource(vce)
+            veprobe1 = voltageprobe()
+            vcprobe1 = voltageprobe()
+            ieprobe1 = currentprobe()
+            icprobe1 = currentprobe()
+            t1[base] ⟷ rbref[1]
+            rbref[2] ⟷ isrc1[+] ⟷ veprobe1[+] ⟷ vcprobe1[+]
+            t1[collector] ⟷ rcref[1]
+            rcref[2] ⟷ icprobe1[+]
+            vcprobe1[-] ⟷ icprobe1[-] ⟷ vscr1[+]
+            t1[emitter] ⟷ reref[1]
+            reref[2] ⟷ ieprobe1[+]
+            veprobe1[-] ⟷ ieprobe1[-] ⟷ vscr1[-] ⟷ isrc1[-]
+            t2 = bjt(typ, rb=rb, re=re, rc=rc)
+            isrc2 = currentsource(ib)
+            vscr2 = voltagesource(vce)
+            veprobe2 = voltageprobe()
+            vcprobe2 = voltageprobe()
+            ieprobe2 = currentprobe()
+            icprobe2 = currentprobe()
+            t2[base] ⟷ isrc2[+] ⟷ veprobe2[+] ⟷ vcprobe2[+]
+            t2[collector] ⟷ icprobe2[+]
+            vcprobe2[-] ⟷ icprobe2[-] ⟷ vscr2[+]
+            t2[emitter] ⟷ ieprobe2[+]
+            veprobe2[-] ⟷ ieprobe2[-] ⟷ vscr2[-] ⟷ isrc2[-]
+        end
         model = DiscreteModel(circ, 1)
         output = run!(model, zeros(0,1))
         @test output[1:4,:] ≈ output[5:8,:]
@@ -385,16 +366,13 @@ end
 let i = 1e-3, r=10e3, is=1e-12
     v_r = i*r
     v_d = 25e-3 * log(i/is+1)
-    circ = Circuit()
-    add!(circ, :vsrc, voltagesource(v_r + v_d))
-    add!(circ, :r1, resistor(r))
-    add!(circ, :d, diode(is=is))
-    add!(circ, :vprobe, voltageprobe())
-    connect!(circ, (:vsrc, :+), :vcc)
-    connect!(circ, (:vsrc, :-), :gnd)
-    connect!(circ, (:r1, 1), :vcc)
-    connect!(circ, (:d, :-), (:vprobe, :-), :gnd)
-    connect!(circ, (:r1, 2), (:d, :+), (:vprobe, :+))
+    circ = @circuit begin
+        vsrc = voltagesource(v_r + v_d), [+] ⟷ vcc,[-] ⟷ gnd
+        r1 = resistor(r)
+        d = diode(is=is), [-] ⟷ gnd, [+] ⟷ r1[2]
+        vprobe = voltageprobe(), [-] ⟷ gnd, [+] ⟷ r1[2]
+        r1[1] ⟷ vcc
+    end
     model = DiscreteModel(circ, 1)
     y = run!(model, zeros(0, 1))
     @test y[1] ≈ v_d
