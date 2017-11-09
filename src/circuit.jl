@@ -139,6 +139,14 @@ function branch_offset(c::Circuit, elem::Element)
     throw(ArgumentError("Element not found in circuit"))
 end
 
+function netfor!(c::Circuit, p::Tuple{Symbol,Symbol})
+    for net in c.nets
+        p ∈ net && return net
+    end
+    throw(ArgumentError("Unknown pin $p"))
+end
+netfor!(c::Circuit, p::Tuple{Symbol,Any}) = netfor!(c, (p[1], Symbol(p[2])))
+
 function netfor!(c::Circuit, p::Pin)
     element = p[1]
     designator = add!(c, element)
@@ -149,9 +157,7 @@ function netfor!(c::Circuit, p::Pin)
             break
         end
     end
-    for net in c.nets
-        (designator, pinname) ∈ net && return net
-    end
+    return netfor!(c, (designator, pinname))
 end
 
 function netfor!(c::Circuit, name::Symbol)
@@ -159,7 +165,7 @@ function netfor!(c::Circuit, name::Symbol)
     c.net_names[name]
 end
 
-function connect!(c::Circuit, pins::Union{Pin,Symbol}...)
+function connect!(c::Circuit, pins::Union{Pin,Symbol,Tuple{Symbol,Any}}...)
     nets = unique([netfor!(c, pin) for pin in pins])
     for net in nets[2:end]
         append!(nets[1], net)
@@ -172,9 +178,15 @@ function connect!(c::Circuit, pins::Union{Pin,Symbol}...)
     end
 end
 
+function disconnect!(c::Circuit, pin::Tuple{Symbol,Symbol})
+    net = netfor!(c, pin)
+    filter!(p -> p != pin, net)
+    push!(c.nets, [pin])
+end
+disconnect!(c::Circuit, p::Tuple{Symbol,Any}) = disconnect!(c, (p[1], Symbol(p[2])))
+
 function disconnect!(c::Circuit, pin::Pin)
     element = pin[1]
-    net = netfor!(c, pin)
     designator = add!(c, element)
     local pinname
     for (pname, pbps) in element.pins
@@ -183,8 +195,7 @@ function disconnect!(c::Circuit, pin::Pin)
             break
         end
     end
-    filter!(p -> p != (designator, pinname), net)
-    push!(c.nets, [(designator, pinname)])
+    disconnect!(c, (designator, pinname))
 end
 
 # lines marked with !SV avoid creation of SparseVector by indexing with Ranges
