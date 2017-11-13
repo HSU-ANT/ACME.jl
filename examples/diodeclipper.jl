@@ -1,24 +1,17 @@
-# Copyright 2015, 2016 Martin Holters
+# Copyright 2015, 2016, 2017 Martin Holters
 # See accompanying license file.
 
 using ACME
 
 function diodeclipper(::Type{Circuit})
-    j_in = voltagesource()
-    r1 = resistor(1e3)
-    c1 = capacitor(47e-9)
-    d1 = diode(is=1e-15)
-    d2 = diode(is=1.8e-15)
-    j_out = voltageprobe()
-
-    circ = Circuit()
-
-    connect!(circ, j_in[:+], r1[1])
-    connect!(circ, j_in[:-], :gnd)
-    connect!(circ, r1[2], c1[1], d1[:+], d2[:-], j_out[:+])
-    connect!(circ, :gnd, c1[2], d1[:-], d2[:+], j_out[:-])
-
-    return circ
+    @circuit begin
+        j_in = voltagesource(), [-] ⟷ gnd
+        r1 = resistor(1e3), [1] ⟷ j_in[+]
+        c1 = capacitor(47e-9), [1] ⟷ r1[2], [2] ⟷ gnd
+        d1 = diode(is=1e-15), [-] ⟷ gnd, [+] ⟷ r1[2]
+        d2 = diode(is=1.8e-15), [-] ⟷ r1[2], [+] ⟷ gnd
+        j_out = voltageprobe(), [-] ⟷ gnd, [+] ⟷ r1[2]
+    end
 end
 
 diodeclipper{T<:DiscreteModel}(::Type{T}=DiscreteModel; fs=44100) =

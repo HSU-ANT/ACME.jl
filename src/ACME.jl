@@ -158,7 +158,10 @@ nn(e::Element) = nb(e) + nx(e) + nq(e) - nl(e)
 const Pin = Tuple{Element, Vector{Tuple{Int,Int}}}
 
 # allow elem[:pin] notation to get an elements pin
-getindex(e::Element, p) = (e, e.pins[Symbol(p)])
+function getindex(e::Element, p)
+    Base.depwarn("element[$(repr(p))] is deprecated. When connecting pins, use (designator, $(repr(p))) instead", :getindex)
+    return (e, e.pins[Symbol(p)])
+end
 
 include("elements.jl")
 

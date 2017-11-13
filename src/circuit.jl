@@ -100,6 +100,12 @@ function nonlinear_eq(c::Circuit, elem_idxs=1:length(elements(c)))
     nl_expr
 end
 
+"""
+    add!(c::Circuit, elem::Element)
+
+Adds the element `elem` to the circuit `c`, creating and returning a new, unique
+reference designator, leaving its pins unconnected.
+"""
 function add!(c::Circuit, elem::Element)
     for (k, v) in c.elements
         if v == elem
@@ -113,6 +119,13 @@ end
 
 add!(c::Circuit, elems::Element...) = ([add!(c, elem) for elem in elems]...,)
 
+"""
+    add!(c::Circuit, designator::Symbol, elem::Element)
+
+Adds the element `elem` to the circuit `c` with the reference designator
+`designator`, leaving its pins unconnected. If the circuit already contained
+an element named `designator`, it is removed first.
+"""
 function add!(c::Circuit, designator::Symbol, elem::Element)
     if haskey(c.elements, designator)
         delete!(c, designator)
@@ -123,6 +136,12 @@ function add!(c::Circuit, designator::Symbol, elem::Element)
     c.elements[designator] = elem
 end
 
+"""
+    delete!(c::Circuit, designator::Symbol)
+
+Deletes the element named `designator` from the circuit `c` (disconnecting all
+its pins).
+"""
 function delete!(c::Circuit, designator::Symbol)
     for net in c.nets
         filter!(elempin -> elempin[1] != designator, net)
@@ -148,6 +167,7 @@ end
 netfor!(c::Circuit, p::Tuple{Symbol,Any}) = netfor!(c, (p[1], Symbol(p[2])))
 
 function netfor!(c::Circuit, p::Pin)
+    Base.depwarn("pin specification $p is deprecated, use (refdes, pinname) instead", :netfor!)
     element = p[1]
     designator = add!(c, element)
     local pinname
@@ -165,6 +185,24 @@ function netfor!(c::Circuit, name::Symbol)
     c.net_names[name]
 end
 
+"""
+    connect!(c::Circuit, pins::Union{Symbol,Tuple{Symbol,Any}}...)
+
+Connects the given pins (or named nets) to each other in the circuit `c`. Named
+nets are given as `Symbol`s, pins are given as `Tuple{Symbols,Any}`s, where the
+first entry is the reference designator of an element in `c`, and the second
+entry is the pin name. For convenience, the latter is automatically converted to
+a `Symbol` as needed.
+
+# Example
+
+```julia
+circ = Circuit()
+add!(circ, :r, resistor(1e3))
+add!(circ, :src, voltages(5))
+connect!(circ, (:src, -), (:r, 2), :gnd) # connect to gnd net
+```
+"""
 function connect!(c::Circuit, pins::Union{Pin,Symbol,Tuple{Symbol,Any}}...)
     nets = unique([netfor!(c, pin) for pin in pins])
     for net in nets[2:end]
@@ -183,9 +221,21 @@ function disconnect!(c::Circuit, pin::Tuple{Symbol,Symbol})
     filter!(p -> p != pin, net)
     push!(c.nets, [pin])
 end
+"""
+    disconnect!(c::Circuit, p::Tuple{Symbol,Any})
+
+Disconnects the given pin `p` from anything else in the circuit `c`. The pin is
+given as a`Tuple{Symbols,Any}`, where the first entry is the reference
+designator of an element in `c`, and the second entry is the pin name. For
+convenience, the latter is automatically converted to a `Symbol` as needed. Note
+that if e.g. three pin `p1`, `p2`, and `p3` are connected then
+`disconnect!(c, p1)` will disconnect `p1` from `p2` and `p3`, but leave `p2` and
+`p3` connected to each other.
+"""
 disconnect!(c::Circuit, p::Tuple{Symbol,Any}) = disconnect!(c, (p[1], Symbol(p[2])))
 
 function disconnect!(c::Circuit, pin::Pin)
+    Base.depwarn("disconnect!(::Circuit, $p) is deprecated, use (refdes, pinname) to specify the the pin", :disconnect!)
     element = pin[1]
     designator = add!(c, element)
     local pinname
@@ -248,6 +298,53 @@ end
  end
 topomat(c::Circuit) = topomat!(incidence(c))
 
+"""
+    @circuit begin #= ... =# end
+
+Provides a simple domain-specific language to decribe circuits. The
+`begin`/`end` block can hold element definitions of the form
+`refdes = elementfunc(params)` and connection specifications of the form
+`refdes1[pin1] ⟷ refdes2[pin2]`.
+
+# Example
+
+To create a circuit with a voltage source connected to a resistor:
+```julia
+@circuit begin
+    src = voltagesource(5)
+    r = resistor(1000)
+    src[+] ⟷ r[1]
+    src[-] ⟷ r[2]
+end
+```
+
+Alternatively, connection specifications can be given after an element
+specification, separated by commas. In that case, the `refdes` may be omitted,
+defaulting to the current element.
+
+# Example
+
+```julia
+@circuit begin
+    src = voltagesource(5)
+    r = resistor(1000), src[+] ⟷ [1], src[-] ⟷ [2]
+end
+```
+
+Finally, a connection endpoint may simply be of the form `netname`, to connect
+to a named net. (Such named nets are created as needed.)
+
+# Example
+
+```julia
+@circuit begin
+    src = voltagesource(5), [-] ⟷ gnd
+    r = resistor(1000), [1] ⟷ src[+], [2] ⟷ gnd
+end
+```
+!!! note
+    Instead of `⟷` (`\\longleftrightarrow`), one can also use `==`.
+"""
 macro circuit(cdef)
     is_conn_spec(expr::Expr) =
         (expr.head === :call && (expr.args[1] === :(⟷) || expr.args[1] === :(↔) || expr.args[1] === :(==))) ||

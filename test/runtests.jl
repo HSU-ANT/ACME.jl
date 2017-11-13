@@ -474,9 +474,9 @@ let model=superover(drive=1.0, tone=1.0, level=1.0)
 end
 let circ=superover(Circuit, drive=1.0, tone=1.0, level=1.0)
     println("Running simplified superover with fixed potentiometer values")
-    vbsrc = voltagesource(4.5)
-    connect!(circ, vbsrc[:+], :vb)
-    connect!(circ, vbsrc[:-], :gnd)
+    add!(circ, :vbsrc, voltagesource(4.5))
+    connect!(circ, (:vbsrc, :+), :vb)
+    connect!(circ, (:vbsrc, :-), :gnd)
     model = DiscreteModel(circ, 1/44100)
     @test ACME.np(model, 1) == 2
     @test ACME.np(model, 2) == 1
@@ -521,9 +521,9 @@ let model=superover()
 end
 let circ=superover(Circuit)
     println("Running simplified superover with varying potentiometer values")
-    vbsrc = voltagesource(4.5)
-    connect!(circ, vbsrc[:+], :vb)
-    connect!(circ, vbsrc[:-], :gnd)
+    add!(circ, :vbsrc, voltagesource(4.5))
+    connect!(circ, (:vbsrc, :+), :vb)
+    connect!(circ, (:vbsrc, :-), :gnd)
     model = DiscreteModel(circ, 1/44100)
     @test ACME.np(model, 1) == 2
     @test ACME.np(model, 2) == 2
