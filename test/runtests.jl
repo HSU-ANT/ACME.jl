@@ -351,9 +351,7 @@ let model=sallenkey()
     y = run!(model, map(sin, 2π*1000/44100*(0:44099)'); showprogress=false)
     @test size(y) == (1,44100)
     # TODO: further validate y
-
-    # cannot check steady state: steadystate() does not work for matrix A having
-    # eigenvalue 1
+    checksteady!(model)
 end
 
 include("../examples/diodeclipper.jl")

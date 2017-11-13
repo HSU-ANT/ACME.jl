@@ -19,7 +19,7 @@ function sallenkey(::Type{Circuit})
     connect!(circ, r1[2], r2[1], c1[1])
     connect!(circ, r2[2], c2[1], u1["in+"])
     connect!(circ, c2[2], u1["out-"], j_out[:-], :gnd)
-    connect!(circ, u1["in-"], u1["out+"], j_out[:+])
+    connect!(circ, u1["in-"], u1["out+"], c1[2], j_out[:+])
 
     return circ
 end
