@@ -73,11 +73,51 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
+    "location": "ug.html#ACME.@circuit",
+    "page": "User Guide",
+    "title": "ACME.@circuit",
+    "category": "Macro",
+    "text": "@circuit begin #= ... =# end\n\nProvides a simple domain-specific language to decribe circuits. The begin/end block can hold element definitions of the form refdes = elementfunc(params) and connection specifications of the form refdes1[pin1] ⟷ refdes2[pin2].\n\nExample\n\nTo create a circuit with a voltage source connected to a resistor:\n\n@circuit begin\n    src = voltagesource(5)\n    r = resistor(1000)\n    src[+] ⟷ r[1]\n    src[-] ⟷ r[2]\nend\n\nAlternatively, connection specifications can be given after an element specification, separated by commas. In that case, the refdes may be omitted, defaulting to the current element.\n\nExample\n\n@circuit begin\n    src = voltagesource(5)\n    r = resistor(1000), src[+] ⟷ [1], src[-] ⟷ [2]\nend\n\nFinally, a connection endpoint may simply be of the form netname, to connect to a named net. (Such named nets are created as needed.)\n\nExample\n\n@circuit begin\n    src = voltagesource(5), [-] ⟷ gnd\n    r = resistor(1000), [1] ⟷ src[+], [2] ⟷ gnd\nend\n\nnote: Note\nInstead of ⟷ (\\longleftrightarrow), one can also use ==.\n\n\n\n"
+},
+
+{
+    "location": "ug.html#ACME.add!",
+    "page": "User Guide",
+    "title": "ACME.add!",
+    "category": "Function",
+    "text": "add!(c::Circuit, elem::Element)\n\nAdds the element elem to the circuit c, creating and returning a new, unique reference designator, leaving its pins unconnected.\n\n\n\nadd!(c::Circuit, designator::Symbol, elem::Element)\n\nAdds the element elem to the circuit c with the reference designator designator, leaving its pins unconnected. If the circuit already contained an element named designator, it is removed first.\n\n\n\n"
+},
+
+{
+    "location": "ug.html#Base.delete!",
+    "page": "User Guide",
+    "title": "Base.delete!",
+    "category": "Function",
+    "text": "delete!(c::Circuit, designator::Symbol)\n\nDeletes the element named designator from the circuit c (disconnecting all its pins).\n\n\n\n"
+},
+
+{
+    "location": "ug.html#ACME.connect!",
+    "page": "User Guide",
+    "title": "ACME.connect!",
+    "category": "Function",
+    "text": "connect!(c::Circuit, pins::Union{Symbol,Tuple{Symbol,Any}}...)\n\nConnects the given pins (or named nets) to each other in the circuit c. Named nets are given as Symbols, pins are given as Tuple{Symbols,Any}s, where the first entry is the reference designator of an element in c, and the second entry is the pin name. For convenience, the latter is automatically converted to a Symbol as needed.\n\nExample\n\ncirc = Circuit()\nadd!(circ, :r, resistor(1e3))\nadd!(circ, :src, voltages(5))\nconnect!(circ, (:src, -), (:r, 2), :gnd) # connect to gnd net\n\n\n\n"
+},
+
+{
+    "location": "ug.html#ACME.disconnect!",
+    "page": "User Guide",
+    "title": "ACME.disconnect!",
+    "category": "Function",
+    "text": "disconnect!(c::Circuit, p::Tuple{Symbol,Any})\n\nDisconnects the given pin p from anything else in the circuit c. The pin is given as aTuple{Symbols,Any}, where the first entry is the reference designator of an element in c, and the second entry is the pin name. For convenience, the latter is automatically converted to a Symbol as needed. Note that if e.g. three pin p1, p2, and p3 are connected then disconnect!(c, p1) will disconnect p1 from p2 and p3, but leave p2 and p3 connected to each other.\n\n\n\n"
+},
+
+{
     "location": "ug.html#Circuit-Description-1",
     "page": "User Guide",
     "title": "Circuit Description",
     "category": "section",
-    "text": "Circuits are described using Circuit instances, created with Circuit(). Once a Circuit and elements have been created, the elements can be added to the circuit using the add! method:r = resistor(1e3);\nc = capacitor(22e-9);\ncirc = Circuit();\nadd!(circ, r)\nadd!(circ, c)Multiple elements can be added also be at once; the last two lines could have been replaced with add!(circ, r, c).In many cases, however, explicitly calling add! is not necessary. All that is needed is connect!, which connects two (or more) element pins. The elements to which these pins belong are automatically added to the circuit if needed. The only reason to explicitly call add! is to control the insertion order of sources or sinks, which determines the order in which inputs have to be provided and outputs are obtained.Pins are obtained from elements using []-style indexing, i.e. r[1] gives the first pin of the resistor defined above. So this connects the first pin of the resistor with the first pin of the capacitor:connect!(circ, r[1], c[1])Further connections involving the same pins are possible and will not replace existing ones. So this will effectively shorten the resistor, because now both of its pins are connected to c[1]:connect!(circ, r[2], c[1])Note that not all elements have numbered pins. For elements with polarity, they may be called + and -, while a bipolar transistor has pins base, collector, and emitter. The pins provided by each type of element are described in the Element Reference. Internally, the pin designators are Symbols. However, not all symbols are conveniently entered in Julia: :base is nice, symbol(\"1\") less so. Therefore, the [] operation on elements also accepts integers and strings and converts them to the respective Symbols. So r[symbol(\"1\")] is equivalent to r[1] and (assuming d to be a diode) d[:+] is equivalent to d[\"+\"] (but d[+] does not work).In addition to pins, connect! also accepts Symbols as input. This creates named nets which may improve readability for nets with many conneted pins:connect!(c[2], :gnd)\nconnect!(r[2], :gnd)Again, this only adds connections, keeping existing ones, so together with the above snippets, now all pins are connected to each other and to net a named gnd. It is even possible to connect multiple named nets to each other, though this will only rarely be useful."
+    "text": "Circuits are described using Circuit instances, which are most easily created using the @circuit macro:@circuitThe pins provided by each type of element are described in the Element Reference.Instead of or in addition to using the @circuit macro, Circuit instances can also be populated and modified programmatically using the following functions:add!\ndelete!\nconnect!\ndisconnect!For example, a cascade of 20 RC-lowpasses could be generated by:circ = @circuit begin\n    src = voltagesource(), [-] ⟷ gnd\n    output = voltageprobe(), [-] ⟷ gnd\nend\npin = (:src, +)\nfor i in 1:20\n    resrefdes = add!(circ, resistor(1000))\n    caprefdes = add!(circ, capacitor(10e-9))\n    connect!(circ, (resrefdes, 1), pin)\n    connect!(circ, (resrefdes, 2), (caprefdes, 1))\n    connect!(circ, (caprefdes, 2), :gnd)\n    pin = (resrefdes, 2)\nend\nconnect!(circ, pin, (:output, +))"
 },
 
 {
