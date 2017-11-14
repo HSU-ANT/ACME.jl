@@ -3,7 +3,6 @@
 [![Join the chat at https://gitter.im/HSU-ANT/ACME.jl](https://badges.gitter.im/HSU-ANT/ACME.jl.svg)](https://gitter.im/HSU-ANT/ACME.jl?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 [![Documentation](https://img.shields.io/badge/docs-latest-blue.svg)](https://hsu-ant.github.io/ACME.jl/latest)
 
-[![ACME](http://pkg.julialang.org/badges/ACME_0.4.svg)](http://pkg.julialang.org/?pkg=ACME)
 [![ACME](http://pkg.julialang.org/badges/ACME_0.5.svg)](http://pkg.julialang.org/?pkg=ACME)
 [![ACME](http://pkg.julialang.org/badges/ACME_0.6.svg)](http://pkg.julialang.org/?pkg=ACME)
 
@@ -25,10 +24,10 @@ Schematics"](http://www.eurasip.org/Proceedings/Eusipco/Eusipco2015/papers/15701
 ## Installation
 
 If you have not done so already, [download and install
-Julia](http://julialang.org/downloads/). (Any version starting with 0.4 should
-be fine; [earlier ACME
-versions](https://github.com/HSU-ANT/ACME.jl/tree/v0.1.2) also support Julia
-0.3.)
+Julia](http://julialang.org/downloads/). (Any version starting with 0.5 should
+be fine; [ACME 0.1.2](https://github.com/HSU-ANT/ACME.jl/tree/v0.1.2) also
+supports Julia 0.3, [ACME 0.4.2](https://github.com/HSU-ANT/ACME.jl/tree/v0.4.2) also
+supports Julia 0.4.)
 
 To install ACME, start Julia and run:
 
