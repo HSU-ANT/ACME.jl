@@ -1,27 +1,19 @@
-# Copyright 2015 Martin Holters
+# Copyright 2015, 2017 Martin Holters
 # See accompanying license file.
 
 using ACME
 
 function sallenkey(::Type{Circuit})
-    r1 = resistor(10e3)
-    r2 = resistor(10e3)
-    c1 = capacitor(10e-9)
-    c2 = capacitor(10e-9)
-    j_in = voltagesource()
-    u1 = opamp()
-    #u1 = opamp(Val{:macak}, 1000, -4, 4)
-    j_out = voltageprobe()
-
-    circ = Circuit()
-    connect!(circ, j_in[:-], :gnd)
-    connect!(circ, j_in[:+], r1[1])
-    connect!(circ, r1[2], r2[1], c1[1])
-    connect!(circ, r2[2], c2[1], u1["in+"])
-    connect!(circ, c2[2], u1["out-"], j_out[:-], :gnd)
-    connect!(circ, u1["in-"], u1["out+"], j_out[:+])
-
-    return circ
+    @circuit begin
+        j_in = voltagesource(), [-] ⟷ gnd
+        r1 = resistor(10e3), [1] ⟷ j_in[+]
+        r2 = resistor(10e3), [1] ⟷ r1[2]
+        c1 = capacitor(10e-9), [1] ⟷ r1[2]
+        u1 = opamp(), ["in+"] ⟷ r2[2], ["in-"] ⟷ ["out+"] ⟷ c1[2], ["out-"] ⟷ gnd
+        #u1 = opamp(Val{:macak}, 1000, -4, 4)
+        c2 = capacitor(10e-9), [1] ⟷ u1["in+"], [2] ⟷ gnd
+        j_out = voltageprobe(), [-] ⟷ gnd, [+] ⟷ u1["out+"]
+    end
 end
 
 sallenkey{T<:DiscreteModel}(::Type{T}=DiscreteModel; fs=44100) =

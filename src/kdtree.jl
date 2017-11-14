@@ -6,12 +6,12 @@ import Base.isless
 import Base.isempty
 
 #mutable struct KDTree{Tcv<:AbstractVector,Tp<:AbstractMatrix}
-eval(Expr(:type, true, :(KDTree{Tcv<:AbstractVector,Tp<:AbstractMatrix}), quote
+@mutable_struct KDTree{Tcv<:AbstractVector,Tp<:AbstractMatrix} begin
     cut_dim::Vector{Int}
     cut_val::Tcv
     ps_idx::Vector{Int}
     ps::Tp
-end))
+end
 
 function KDTree(p::AbstractMatrix, Np=size(p,2))
     function calc_cut_idx(min_idx, max_idx)
@@ -38,7 +38,7 @@ function KDTree(p::AbstractMatrix, Np=size(p,2))
         return KDTree{typeof(cut_val),typeof(p)}(cut_dim, cut_val, [1], p)
     end
 
-    dim = indmax(var(p[:,1:Np],2))
+    dim = indmax(vec(var(p[:,1:Np],2)))
     p_idx = sortperm(vec(p[dim,:]))
 
     min_idx[1] = 1
@@ -56,9 +56,9 @@ function KDTree(p::AbstractMatrix, Np=size(p,2))
             min_idx[n] = cut_idx[parent_n]+1
             max_idx[n] = max_idx[parent_n]
         end
-        dim = indmax(var(p[:,p_idx[min_idx[n]:max_idx[n]]],2))
+        dim = indmax(vec(var(p[:,p_idx[min_idx[n]:max_idx[n]]],2)))
         idx = sortperm(vec(p[dim,p_idx[min_idx[n]:max_idx[n]]]))
-        p_idx[min_idx[n]:max_idx[n]] = p_idx[idx + min_idx[n] - 1]
+        p_idx[min_idx[n]:max_idx[n]] = p_idx[idx .+ min_idx[n] .- 1]
         cut_idx[n] = calc_cut_idx(min_idx[n], max_idx[n])
         cut_dim[n] = dim
         cut_val[n] = mean(p[dim, p_idx[cut_idx[n]:cut_idx[n]+1]])
@@ -78,25 +78,27 @@ function KDTree(p::AbstractMatrix, Np=size(p,2))
 end
 
 #mutable struct AltEntry{T}
-eval(Expr(:type, true, :(AltEntry{T}), quote
+@mutable_struct AltEntry{T} begin
     idx::Int
     delta::Vector{T}
     delta_norm::T
-end))
+end
 
 isless(e1::AltEntry, e2::AltEntry) = isless(e1.delta_norm, e2.delta_norm)
 
 #mutable struct Alts{T}
-eval(Expr(:type, true, :(Alts{T}), quote
+@mutable_struct Alts{T} begin
     entries::Vector{AltEntry{T}}
     best_dist::T
     best_pidx::Int
     number_valid::Int
-end))
+end
 
-Alts{T}(p::Vector{T}) = Alts([AltEntry(1, zeros(p), zero(T))], typemax(T), 0, 1)
+@pfunction Alts(p::Vector{T}) [T] begin
+     Alts([AltEntry(1, zeros(p), zero(T))], typemax(T), 0, 1)
+ end
 
-function init!{T}(alts::Alts{T}, best_dist, best_pidx)
+@pfunction init!(alts::Alts{T}, best_dist, best_pidx) [T] begin
     alts.number_valid = 1
     alts.entries[1].idx = 1
     fill!(alts.entries[1].delta, zero(T))
@@ -161,7 +163,9 @@ function dequeue!(alts::Alts)
     return e
 end
 
-function enqueue!{T}(alts::Alts{T}, new_idx::Int, ref_delta::Vector{T}, delta_update_dim::Int, delta_update_val::T, new_delta_norm::T)
+@pfunction enqueue!(alts::Alts{T}, new_idx::Int, ref_delta::Vector{T},
+                    delta_update_dim::Int, delta_update_val::T,
+                    new_delta_norm::T) [T] begin
     if alts.number_valid == length(alts.entries)
         delta = copy(ref_delta)
         delta[delta_update_dim] = delta_update_val

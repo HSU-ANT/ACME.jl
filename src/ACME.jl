@@ -5,21 +5,77 @@ __precompile__()
 
 module ACME
 
-export Circuit, add!, connect!, DiscreteModel, run!, steadystate, steadystate!,
-    ModelRunner
+export DiscreteModel, run!, steadystate, steadystate!, linearize, ModelRunner
 
 using ProgressMeter
 using Compat
 using IterTools
+using DataStructures
 
 import Base.getindex
+
+if VERSION ≥ v"0.6.0"
+    macro pfunction(sig, params, body)
+        esc(Expr(:function, Expr(:where, sig, params.args...), body))
+    end
+else
+    macro pfunction(sig, params, body)
+        ts = copy(params.args)
+        if VERSION < v"0.5.0"
+            for i in eachindex(ts)
+                if isa(ts[i], Expr) && ts[i].head === :comparison && ts[i].args[2] === :<:
+                    ts[i] = Expr(:<:, ts[i].args[1], ts[i].args[3])
+                end
+            end
+        end
+        esc(Expr(:function,
+                 Expr(:call, Expr(:curly, sig.args[1], ts...),
+                      sig.args[2:end]...),
+                 body))
+    end
+end
+
+macro expandafter(mc)
+    args = copy(mc.args)
+    for i in eachindex(args)
+        if isa(args[i], Expr) && args[i].head === :macrocall
+            args[i] = macroexpand(Compat.@__MODULE__, args[i])
+        end
+    end
+    esc(Expr(:macrocall, args...))
+end
+
+if VERSION ≥ v"0.6.0"
+    @eval macro $(:struct)(head, body)
+        Expr(Meta.parse("struct Foo end").head, false, esc(head), Expr(:block, [esc(a) for a in body.args]...))
+    end
+    macro mutable_struct(head, body)
+        Expr(Meta.parse("struct Foo end").head, true, esc(head), Expr(:block, [esc(a) for a in body.args]...))
+    end
+else
+    @eval macro $(:struct)(head, body)
+        Expr(:type, false, esc(head), Expr(:block, [esc(a) for a in body.args]...))
+    end
+    macro mutable_struct(head, body)
+        Expr(:type, true, esc(head), Expr(:block, [esc(a) for a in body.args]...))
+    end
+end
+
+function _indmax(a::AbstractMatrix)
+    ind = indmax(a)
+    if isa(ind, CartesianIndex) # since 0.7.0-DEV.1660
+        return (ind[1], ind[2])
+    else
+        return ind2sub(size(a), ind)
+    end
+end
 
 include("kdtree.jl")
 include("solvers.jl")
 
 
 #mutable struct Element
-eval(Expr(:type, true, :Element, quote
+@mutable_struct Element begin
   mv :: SparseMatrixCSC{Real,Int}
   mi :: SparseMatrixCSC{Real,Int}
   mx :: SparseMatrixCSC{Real,Int}
@@ -59,7 +115,7 @@ eval(Expr(:type, true, :Element, quote
     end
     make_pin_dict(dict::Dict) = dict
 
-    const mat_dims =
+    mat_dims =
         Dict( :mv => (:nl,:nb), :mi => (:nl,:nb), :mx => (:nl,:nx),
               :mxd => (:nl,:nx), :mq => (:nl,:nq), :mu => (:nl,:nu),
               :u0 => (:nl, :n0),
@@ -89,7 +145,7 @@ eval(Expr(:type, true, :Element, quote
     end
     elem
   end
-end))
+end
 
 for (n,m) in Dict(:nb => :mv, :nx => :mx, :nq => :mq, :nu => :mu)
   @eval ($n)(e::Element) = size(e.$m, 2)
@@ -102,198 +158,17 @@ nn(e::Element) = nb(e) + nx(e) + nq(e) - nl(e)
 const Pin = Tuple{Element, Vector{Tuple{Int,Int}}}
 
 # allow elem[:pin] notation to get an elements pin
-getindex(e::Element, p) = (e, e.pins[Symbol(p)])
+function getindex(e::Element, p)
+    Base.depwarn("element[$(repr(p))] is deprecated. When connecting pins, use (designator, $(repr(p))) instead", :getindex)
+    return (e, e.pins[Symbol(p)])
+end
 
 include("elements.jl")
 
-const Net = Vector{Tuple{Int,Int}} # each net is a list of branch/polarity pairs
-
-#struct Circuit
-eval(Expr(:type, false, :Circuit, quote
-    elements :: Vector{Element}
-    nets :: Vector{Net}
-    net_names :: Dict{Symbol, Net}
-    Circuit() = new([], [], Dict{Symbol, Net}())
-end))
-
-for n in [:nb; :nx; :nq; :nu; :nl; :ny; :nn]
-    @eval ($n)(c::Circuit) = sum([$n(elem) for elem in c.elements])
-end
-
-for mat in [:mv; :mi; :mx; :mxd; :mq; :mu; :pv; :pi; :px; :pxd; :pq]
-    # blkdiag() does not work, so include an empty matrix of desired type in
-    # case c.elements is empty
-    # as blkdiag for unknown numbner of arguments cannot be inferred properly,
-    # add type-assertion
-    @eval ($mat)(c::Circuit) =
-         blkdiag(spzeros(Rational{BigInt}, 0, 0),
-                 [convert(SparseMatrixCSC{Rational{BigInt}}, elem.$mat)
-                  for elem in c.elements]...
-                )::SparseMatrixCSC{Rational{BigInt},Int}
-end
-
-u0(c::Circuit) = vcat([elem.u0 for elem in c.elements]...)
-
-function incidence(c::Circuit)
-    i = sizehint!(Int[], 2nb(c))
-    j = sizehint!(Int[], 2nb(c))
-    v = sizehint!(Int[], 2nb(c))
-    for (row, pins) in enumerate(c.nets), (branch, polarity) in pins
-        push!(i, row)
-        push!(j, branch)
-        push!(v, polarity)
-    end
-    # ensure zeros due to short-circuited branches are removed, hence the
-    # additional sparse(findnz(...))
-    sparse(findnz(sparse(i,j,v))..., length(c.nets), nb(c))
-end
-
-function nonlinear_eq(c::Circuit, elem_idxs=1:length(c.elements))
-    # construct a block expression containing all element's expressions after
-    # offsetting their indexes into q, J and res
-
-    row_offset = 0
-    col_offset = 0
-    nl_expr = Expr(:block)
-    for elem in c.elements[elem_idxs]
-        index_offsets = Dict( :q => (col_offset,),
-                              :J => (row_offset, col_offset),
-                              :res => (row_offset,) )
-
-        function offset_indexes(expr::Expr)
-            ret = Expr(expr.head)
-            ret.typ = expr.typ
-            if expr.head == :ref && haskey(index_offsets, expr.args[1])
-                push!(ret.args, expr.args[1])
-                offsets = index_offsets[expr.args[1]]
-                length(expr.args) == length(offsets) + 1 ||
-                    throw(ArgumentError(string(expr.args[1], " must be indexed with exactly ", length(offsets), " index(es)")))
-                for i in 1:length(offsets)
-                    push!(ret.args,
-                          :($(offsets[i]) + $(offset_indexes(expr.args[i+1]))))
-                end
-            else
-                append!(ret.args, map(offset_indexes, expr.args))
-            end
-            ret
-        end
-
-        function offset_indexes(s::Symbol)
-            haskey(index_offsets, s) && throw(ArgumentError(string(s, " used without indexing expression")))
-            s
-        end
-
-        offset_indexes(x::Any) = x
-
-        # wrap into a let to keep variables local
-        push!(nl_expr.args, :( let; $(offset_indexes(elem.nonlinear_eq)) end))
-
-        row_offset += nn(elem)
-        col_offset += nq(elem)
-    end
-    nl_expr
-end
-
-function add!(c::Circuit, elem::Element)
-    elem ∈ c.elements && return
-    b_offset = nb(c)
-    push!(c.elements, elem)
-    for branch_pols in values(elem.pins)
-        push!(c.nets, [(b_offset + b, pol) for (b, pol) in branch_pols])
-    end
-    nothing
-end
-
-add!(c::Circuit, elems::Element...) = for elem in elems add!(c, elem) end
-
-function branch_offset(c::Circuit, elem::Element)
-    offset = 0
-    for el in c.elements
-        el == elem && return offset
-        offset += nb(el)
-    end
-    throw(ArgumentError("Element not found in circuit"))
-end
-
-function netfor!(c::Circuit, p::Pin)
-    element = p[1]
-    add!(c, element)
-    b_offset = branch_offset(c, element)
-    local net
-    for (branch, pol) in p[2], net in c.nets
-        (branch + b_offset, pol) ∈ net && break
-    end
-    net
-end
-
-function netfor!(c::Circuit, name::Symbol)
-    haskey(c.net_names, name) || push!(c.nets, get!(c.net_names, name, []))
-    c.net_names[name]
-end
-
-function connect!(c::Circuit, pins::Union{Pin,Symbol}...)
-    nets = unique([netfor!(c, pin) for pin in pins])
-    for net in nets[2:end]
-        append!(nets[1], net)
-        deleteat!(c.nets, findfirst(c.nets, net))
-        for (name, named_net) in c.net_names
-            if named_net == net
-                c.net_names[name] = nets[1]
-            end
-        end
-    end
-end
-
-# lines marked with !SV avoid creation of SparseVector by indexing with Ranges
-# instead of Ints; a better way for cross-julia-version compatibilty would be
-# nice; maybe Compat helps in the future...
-function topomat!{T<:Integer}(incidence::SparseMatrixCSC{T})
-    @assert all(x -> abs(x) == 1, nonzeros(incidence))
-    @assert all(sum(incidence, 1) .== 0)
-
-    t = falses(size(incidence)[2]);
-
-    row = 1;
-    for col = 1:size(incidence)[2]
-        rows = filter(r -> r ≥ row, find(incidence[:, col]))
-        @assert length(rows) ≤ 2
-
-        isempty(rows) && continue
-        t[col] = true;
-
-        if rows[1] ≠ row
-            incidence[[rows[1], row], :] = incidence[[row, rows[1]], :]
-        end
-        if length(rows) == 2
-            @assert incidence[row, col] + incidence[rows[2], col] == 0
-            incidence[rows[2],:] = incidence[rows[2],:] + incidence[row,:]
-        end
-        if incidence[row, col] < 0
-            cols = find(incidence[row, :])
-            incidence[row,cols] = -incidence[row,cols]
-        end
-        rows = find(incidence[1:row-1, col] .== 1)
-        incidence[rows, :] .-= incidence[row:row, :] # !SV
-        rows = find(incidence[1:row-1, col] .== -1)
-        incidence[rows, :] .+= incidence[row:row, :] # !SV
-        row += 1
-    end
-
-    ti = incidence[1:row-1, :]
-
-    dl = ti[:, broadcast(!, t)]
-    tv = spzeros(T, size(dl, 2), size(incidence, 2))
-    tv[:, t] = -dl.'
-    tv[:, broadcast(!, t)] = speye(T, size(dl, 2))
-
-    tv, ti
-end
-
-topomat{T<:Integer}(incidence::SparseMatrixCSC{T}) = topomat!(copy(incidence))
-topomat(c::Circuit) = topomat!(incidence(c))
+include("circuit.jl")
 
 #mutable struct DiscreteModel{Solvers}
-eval(Expr(:type, true, :(DiscreteModel{Solvers}), quote
+@mutable_struct DiscreteModel{Solvers} begin
     a::Matrix{Float64}
     b::Matrix{Float64}
     c::Matrix{Float64}
@@ -314,13 +189,15 @@ eval(Expr(:type, true, :(DiscreteModel{Solvers}), quote
     solvers::Solvers
     x::Vector{Float64}
 
-    @compat function (::Type{DiscreteModel{Solver}}){Solver}(circ::Circuit, t::Float64)
+    @expandafter @compat @pfunction (::Type{DiscreteModel{Solver}})(circ::Circuit,
+            t::Float64) [Solver] begin
         Base.depwarn("DiscreteModel{Solver}(circ, t) is deprecated, use DiscreteModel(circ, t, Solver) instead.",
                      :DiscreteModel)
         DiscreteModel(circ, t, Solver)
     end
 
-    @compat function (::Type{DiscreteModel{Solvers}}){Solvers}(mats::Dict{Symbol}, nonlinear_eqs::Vector{Expr}, solvers::Solvers)
+    @expandafter @compat @pfunction (::Type{DiscreteModel{Solvers}})(mats::Dict{Symbol},
+            nonlinear_eqs::Vector{Expr}, solvers::Solvers) [Solvers] begin
         model = new{Solvers}()
 
         for mat in (:a, :b, :c, :pexps, :dqs, :eqs, :fqprevs, :fqs, :dy, :ey, :fy, :x0, :q0s, :y0)
@@ -332,18 +209,18 @@ eval(Expr(:type, true, :(DiscreteModel{Solvers}), quote
         model.x = zeros(nx(model))
         return model
     end
-end))
+end
 
-function DiscreteModel{Solver}(circ::Circuit, t::Real, ::Type{Solver}=HomotopySolver{CachingSolver{SimpleSolver}};
-                               decompose_nonlinearity=true)
+@pfunction DiscreteModel(circ::Circuit, t::Real, ::Type{Solver}=HomotopySolver{CachingSolver{SimpleSolver}};
+                         decompose_nonlinearity=true) [Solver] begin
     mats = model_matrices(circ, t)
 
-    nns = Int[nn(e) for e in circ.elements]
-    nqs = Int[nq(e) for e in circ.elements]
+    nns = Int[nn(e) for e in elements(circ)]
+    nqs = Int[nq(e) for e in elements(circ)]
     if decompose_nonlinearity
         nl_elems = nldecompose!(mats, nns, nqs)
     else
-        nl_elems = Vector{Int}[filter(e -> nn(circ.elements[e]) > 0, eachindex(circ.elements))]
+        nl_elems = Vector{Int}[find(nn -> nn > 0, nns)]
     end
 
     model_nns = Int[sum(nns[nles]) for nles in nl_elems]
@@ -488,7 +365,7 @@ function model_matrices(circ::Circuit, t::Rational{BigInt})
     rhs = convert(SparseMatrixCSC{Rational{BigInt},Int},
                   sparse([u0(circ) mu(circ) mxd(circ)//t-mx(circ)//2;
                           spzeros(nb(circ), 1+nu(circ)+nx(circ))]))
-    x, f = map(full, gensolve(lhs, rhs))
+    x, f = map(Matrix, gensolve(lhs, rhs))
 
     rowsizes = [nb(circ); nb(circ); nx(circ); nq(circ)]
     res = Dict{Symbol,Array}(zip([:fv; :fi; :c; :fq], matsplit(f, rowsizes)))
@@ -501,7 +378,7 @@ function model_matrices(circ::Circuit, t::Rational{BigInt})
         warn("State update depends on indeterminate quantity")
     end
     while size(nullspace, 2) > 0
-        i, j = ind2sub(size(nullspace), indmax(map(abs, nullspace)))
+        i, j = _indmax(map(abs, nullspace))
         nullspace = nullspace[[1:i-1; i+1:end], [1:j-1; j+1:end]]
         f = f[:, [1:j-1; j+1:end]]
         for k in [:fv; :fi; :c; :fq]
@@ -538,7 +415,7 @@ function tryextract(fq, numcols)
     for colcnt in 1:numcols
         # determine element with maximum absolute value in unprocessed columns
         # to use as pivot
-        i, j = ind2sub(size(fq), indmax(map(abs, fq[:,colcnt:end])))
+        i, j = _indmax(map(abs, fq[:,colcnt:end]))
         j += colcnt-1
 
         # swap pivot to first (unprocessed) column
@@ -553,7 +430,7 @@ function tryextract(fq, numcols)
         # ignore i-th row in following processing steps
         fq = fq[[1:i-1; i+1:end],:]
 
-        if countnz(fq[:,colcnt+1:end]) == 0
+        if all(iszero, fq[:,colcnt+1:end])
             return Nullable(a)
         end
     end
@@ -698,6 +575,54 @@ function steadystate!(model::DiscreteModel, u=zeros(nu(model)))
     return x_steady
 end
 
+function linearize(model::DiscreteModel, usteady::AbstractVector{Float64}=zeros(nu(model)))
+    xsteady = steadystate(model, usteady)
+    zranges = Vector{UnitRange{Int64}}(length(model.solvers))
+    dzdps = Vector{Matrix{Float64}}(length(model.solvers))
+    dqlins = Vector{Matrix{Float64}}(length(model.solvers))
+    eqlins = Vector{Matrix{Float64}}(length(model.solvers))
+    zsteady = zeros(nn(model))
+    zoff = 1
+    x0 = copy(model.x0)
+    a = copy(model.a)
+    b = copy(model.b)
+    c = copy(model.c)
+    y0 = copy(model.y0)
+    dy = copy(model.dy)
+    ey = copy(model.ey)
+    fy = copy(model.fy)
+
+    for idx in 1:length(model.solvers)
+        psteady = model.dqs[idx] * xsteady + model.eqs[idx] * usteady +
+                  model.fqprevs[idx] * zsteady
+        zsub, dzdps[idx] =
+            Compat.invokelatest(linearize, model.solvers[idx], psteady)
+        copy!(zsteady, zoff, zsub, 1, length(zsub))
+
+        zranges[idx] = zoff:zoff+length(zsub)-1
+        fqdzdps = [model.fqprevs[idx][:,zranges[n]] * dzdps[n] for n in 1:idx-1]
+        dqlins[idx] = reduce(+, model.dqs[idx], fqdzdps .* dqlins[1:idx-1])
+        eqlins[idx] = reduce(+, model.eqs[idx], fqdzdps .* eqlins[1:idx-1])
+
+        x0 += model.c[:,zranges[idx]] * (zsub - dzdps[idx]*psteady)
+        a += model.c[:,zranges[idx]] * dzdps[idx] * dqlins[idx]
+        b += model.c[:,zranges[idx]] * dzdps[idx] * eqlins[idx]
+
+        y0 += model.fy[:,zranges[idx]] * (zsub - dzdps[idx]*psteady)
+        dy += model.fy[:,zranges[idx]] * dzdps[idx] * dqlins[idx]
+        ey += model.fy[:,zranges[idx]] * dzdps[idx] * eqlins[idx]
+
+        zoff += length(zsub)
+    end
+
+    mats = Dict(:a => a, :b => b, :c => zeros(nx(model), 0),
+        :pexps => Matrix{Float64}[], :dqs => Matrix{Float64}[],
+        :eqs => Matrix{Float64}[], :fqprevs => Matrix{Float64}[],
+        :fqs => Matrix{Float64}[], :q0s => Vector{Float64}[],
+        :dy => dy, :ey => ey, :fy => zeros(ny(model), 0), :x0 => x0, :y0 => y0)
+    return DiscreteModel{Tuple{}}(mats, Expr[], ())
+end
+
 """
     run!(model::DiscreteModel, u::AbstractMatrix{Float64}; showprogress=true)
 
@@ -717,14 +642,15 @@ run!(model::DiscreteModel, u::AbstractMatrix{Float64}; showprogress=true) =
     return run!(ModelRunner(model, showprogress), u)
 
 #struct ModelRunner{Model<:DiscreteModel,ShowProgress}
-eval(Expr(:type, false, :(ModelRunner{Model<:DiscreteModel,ShowProgress}), quote
+@struct ModelRunner{Model<:DiscreteModel,ShowProgress} begin
     model::Model
     ucur::Vector{Float64}
     ps::Vector{Vector{Float64}}
     ycur::Vector{Float64}
     xnew::Vector{Float64}
     z::Vector{Float64}
-    @compat function (::Type{ModelRunner{Model,ShowProgress}}){Model<:DiscreteModel,ShowProgress}(model::Model)
+    @expandafter @compat @pfunction (::Type{ModelRunner{Model,ShowProgress}})(
+            model::Model) [Model<:DiscreteModel,ShowProgress] begin
         ucur = Array{Float64,1}(nu(model))
         ps = Vector{Float64}[Vector{Float64}(np(model, idx)) for idx in 1:length(model.solvers)]
         ycur = Array{Float64,1}(ny(model))
@@ -732,11 +658,14 @@ eval(Expr(:type, false, :(ModelRunner{Model<:DiscreteModel,ShowProgress}), quote
         z = Array{Float64,1}(nn(model))
         return new{Model,ShowProgress}(model, ucur, ps, ycur, xnew, z)
     end
-end))
+end
 
-ModelRunner{Model<:DiscreteModel}(model::Model) = ModelRunner{Model,true}(model)
-ModelRunner{Model<:DiscreteModel,ShowProgress}(model::Model, ::Val{ShowProgress}) =
+@pfunction ModelRunner(model::Model) [Model<:DiscreteModel] begin
+     ModelRunner{Model,true}(model)
+ end
+@pfunction ModelRunner(model::Model, ::Val{ShowProgress}) [Model<:DiscreteModel,ShowProgress] begin
     ModelRunner{Model,ShowProgress}(model)
+end
 
 """
     ModelRunner(model::DiscreteModel, showprogress::Bool = true)
@@ -750,8 +679,9 @@ By default `run!` for the constructed `ModelRunner` will show a progress bar to
 report its progress. This can be disabled by passing `false` as second
 parameter.
 """
-ModelRunner{Model<:DiscreteModel}(model::Model, showprogress::Bool) =
+@pfunction ModelRunner(model::Model, showprogress::Bool) [Model<:DiscreteModel] begin
     ModelRunner{Model,showprogress}(model)
+end
 
 """
     run!(runner::ModelRunner, u::AbstractMatrix{Float64})
@@ -797,18 +727,16 @@ To simulate a circuit without inputs, a matrix with zero rows may be passed.
 The internal state of the  underlying `DiscreteModel` (e.g. capacitor charges)
 is preserved accross calls to `run!`.
 """
-function run!{Model<:DiscreteModel}(runner::ModelRunner{Model,true},
-                                    y::AbstractMatrix{Float64},
-                                    u::AbstractMatrix{Float64})
+@pfunction run!(runner::ModelRunner{Model,true}, y::AbstractMatrix{Float64},
+                u::AbstractMatrix{Float64}) [Model<:DiscreteModel] begin
     checkiosizes(runner, u, y)
     @showprogress "Running model: " for n = 1:size(u, 2)
         step!(runner, y, u, n)
     end
 end
 
-function run!{Model<:DiscreteModel}(runner::ModelRunner{Model,false},
-                                    y::AbstractMatrix{Float64},
-                                    u::AbstractMatrix{Float64})
+@pfunction run!(runner::ModelRunner{Model,false}, y::AbstractMatrix{Float64},
+                u::AbstractMatrix{Float64}) [Model<:DiscreteModel] begin
     checkiosizes(runner, u, y)
     for n = 1:size(u, 2)
         step!(runner, y, u, n)
@@ -900,7 +828,7 @@ function rank_factorize(a::SparseMatrixCSC)
     nullspace = gensolve(a', spzeros(size(a, 2), 0))[2]
     c = eye(eltype(a), size(a, 1))
     while size(nullspace, 2) > 0
-        i, j = ind2sub(size(nullspace), indmax(map(abs, nullspace)))
+        i, j = _indmax(map(abs, nullspace))
         c -= c[:, i] * nullspace[:, j]' / nullspace[i, j]
         c = c[:, [1:i-1; i+1:end]]
         nullspace -= nullspace[:, j] * vec(nullspace[i, :])' / nullspace[i, j]
