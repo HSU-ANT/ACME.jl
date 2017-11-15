@@ -2,11 +2,8 @@
 # See accompanying license file.
 
 using ACME
-if VERSION < v"0.7.0-DEV.2005"
-    using Base.Test
-else
-    using Test
-end
+using Compat
+using Compat.Test
 using ProgressMeter
 
 tv, ti = ACME.topomat(sparse([1 -1 1; -1 1 -1]))

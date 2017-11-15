@@ -389,7 +389,7 @@ function nldecompose!(mats, nns, nqs)
     sub_ranges = consecranges(nqs)
     extracted_subs = Vector{Int}[]
     rem_cols = 1:size(fq, 2)
-    rem_nles = IntSet(filter!(e -> nqs[e] > 0, collect(eachindex(nqs))))
+    rem_nles = Compat.BitSet(filter!(e -> nqs[e] > 0, collect(eachindex(nqs))))
 
     while !isempty(rem_nles)
         for sz in 1:length(rem_nles), sub in subsets(collect(rem_nles), sz)
