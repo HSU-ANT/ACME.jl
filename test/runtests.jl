@@ -137,7 +137,7 @@ end
 let ps = rand(6, 10000)
     t = ACME.KDTree(ps)
     p = rand(6)
-    best_p = ps[:,indmin(vec(sum(abs2, broadcast(-, ps, p),1)))]
+    best_p = ps[:,indmin(vec(sum(abs2, ps .- p, 1)))]
     idx = ACME.indnearest(t, p)
     @test sum(abs2, p - best_p) ≈ sum(abs2, p - ps[:, idx])
 end
@@ -386,7 +386,7 @@ end
 include("../examples/sallenkey.jl")
 let model=sallenkey()
     println("Running sallenkey")
-    y = run!(model, map(sin, 2π*1000/44100*(0:44099)'); showprogress=false)
+    y = run!(model, sin.(2π*1000/44100*(0:44099)'); showprogress=false)
     @test size(y) == (1,44100)
     # TODO: further validate y
     checksteady!(model)
@@ -396,7 +396,7 @@ include("../examples/diodeclipper.jl")
 let model=diodeclipper()
     println("Running diodeclipper")
     @test ACME.np(model, 1) == 1
-    y = run!(model, map(sin, 2π*1000/44100*(0:44099)'); showprogress=false)
+    y = run!(model, sin.(2π*1000/44100*(0:44099)'); showprogress=false)
     @test size(y) == (1,44100)
     # TODO: further validate y
     checksteady!(model)
@@ -413,7 +413,7 @@ end
 let circ = diodeclipper(Circuit)
     model = DiscreteModel(circ, 44100, ACME.HomotopySolver{ACME.SimpleSolver})
     runner = ModelRunner(model, false)
-    u = map(sin, 2π*1000/44100*(0:44099)')
+    u = sin.(2π*1000/44100*(0:44099)')
     y = run!(runner, u)
     run!(runner, y, u)
     alloc = @allocated run!(runner, y, u)
@@ -428,7 +428,7 @@ let model=birdie(vol=0.8)
     @assert all(ACME.hasconverged, model.solvers)
     println("Running birdie with fixed vol")
     @test ACME.np(model, 1) == 2
-    y = run!(model, map(sin, 2π*1000/44100*(0:44099)'); showprogress=false)
+    y = run!(model, sin.(2π*1000/44100*(0:44099)'); showprogress=false)
     @test size(y) == (1,44100)
     # TODO: further validate y
     checksteady!(model)
@@ -445,7 +445,7 @@ end
 let model=birdie()
     println("Running birdie with varying vol")
     @test ACME.np(model, 1) == 3
-    y = run!(model, [map(sin, 2π*1000/44100*(0:44099).'); linspace(1,0,44100).']; showprogress=false)
+    y = run!(model, [sin.(2π*1000/44100*(0:44099).'); linspace(1,0,44100).']; showprogress=false)
     @test size(y) == (1,44100)
     # TODO: further validate y
 end
@@ -454,7 +454,7 @@ include("../examples/superover.jl")
 let model=superover(drive=1.0, tone=1.0, level=1.0)
     println("Running superover with fixed potentiometer values")
     @test ACME.np(model, 1) == 5
-    y = run!(model, map(sin, 2π*1000/44100*(0:44099)'); showprogress=false)
+    y = run!(model, sin.(2π*1000/44100*(0:44099)'); showprogress=false)
     @test size(y) == (1,44100)
     # TODO: further validate y
     checksteady!(model)
@@ -477,7 +477,7 @@ let circ=superover(Circuit, drive=1.0, tone=1.0, level=1.0)
     @test ACME.np(model, 1) == 2
     @test ACME.np(model, 2) == 1
     @test ACME.np(model, 3) == 2
-    y = run!(model, map(sin, 2π*1000/44100*(0:44099)'); showprogress=false)
+    y = run!(model, sin.(2π*1000/44100*(0:44099)'); showprogress=false)
     @test size(y) == (1,44100)
     # TODO: further validate y
     checksteady!(model)
@@ -494,7 +494,7 @@ let circ=superover(Circuit, drive=1.0, tone=1.0, level=1.0)
     println("Running simplified, non-decomposed superover with fixed potentiometer values")
     model = DiscreteModel(circ, 1/44100, decompose_nonlinearity=false)
     @test ACME.np(model, 1) == 5
-    y = run!(model, map(sin, 2π*1000/44100*(0:44099)'); showprogress=false)
+    y = run!(model, sin.(2π*1000/44100*(0:44099)'); showprogress=false)
     @test size(y) == (1,44100)
     # TODO: further validate y
     checksteady!(model)
@@ -511,7 +511,7 @@ end
 let model=superover()
     println("Running superover with varying potentiometer values")
     @test ACME.np(model, 1) == 11
-    y = run!(model, [map(sin, 2π*1000/44100*(0:999)'); linspace(1,0,1000).'; linspace(0,1,1000).'; linspace(1,0,1000).']; showprogress=false)
+    y = run!(model, [sin.(2π*1000/44100*(0:999)'); linspace(1,0,1000).'; linspace(0,1,1000).'; linspace(1,0,1000).']; showprogress=false)
     @test size(y) == (1,1000)
     # TODO: further validate y
 end
@@ -525,7 +525,7 @@ let circ=superover(Circuit)
     @test ACME.np(model, 2) == 2
     @test ACME.np(model, 3) == 2
     @test ACME.np(model, 4) == 4
-    y = run!(model, [map(sin, 2π*1000/44100*(0:999)'); linspace(1,0,1000).'; linspace(0,1,1000).'; linspace(1,0,1000).']; showprogress=false)
+    y = run!(model, [sin.(2π*1000/44100*(0:999)'); linspace(1,0,1000).'; linspace(0,1,1000).'; linspace(1,0,1000).']; showprogress=false)
     @test size(y) == (1,1000)
     # TODO: further validate y
 end

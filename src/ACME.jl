@@ -29,17 +29,17 @@ end
 
 if VERSION ≥ v"0.6.0"
     @eval macro $(:struct)(head, body)
-        Expr(Meta.parse("struct Foo end").head, false, esc(head), Expr(:block, [esc(a) for a in body.args]...))
+        Expr(Meta.parse("struct Foo end").head, false, esc(head), Expr(:block, esc.(body.args)...))
     end
     macro mutable_struct(head, body)
-        Expr(Meta.parse("struct Foo end").head, true, esc(head), Expr(:block, [esc(a) for a in body.args]...))
+        Expr(Meta.parse("struct Foo end").head, true, esc(head), Expr(:block, esc.(body.args)...))
     end
 else
     @eval macro $(:struct)(head, body)
-        Expr(:type, false, esc(head), Expr(:block, [esc(a) for a in body.args]...))
+        Expr(:type, false, esc(head), Expr(:block, esc.(body.args)...))
     end
     macro mutable_struct(head, body)
-        Expr(:type, true, esc(head), Expr(:block, [esc(a) for a in body.args]...))
+        Expr(:type, true, esc(head), Expr(:block, esc.(body.args)...))
     end
 end
 
@@ -222,14 +222,14 @@ end
         BLAS.gemm!('N', 'N', 1., Jq, fq, 0., J)
     end for nles in nl_elems]
 
-    model_nps = map(dq -> size(dq, 1), mats[:dqs])
-    model_nqs = map(pexp -> size(pexp, 1), mats[:pexps])
+    model_nps = size.(mats[:dqs], 1)
+    model_nqs = size.(mats[:pexps], 1)
 
     @assert nn(circ) == sum(model_nns)
 
-    q0s = map(m -> convert(Array{Float64}, m), mats[:q0s])
-    fqs = map(m -> convert(Array{Float64}, m), mats[:fqs])
-    fqprev_fulls = map(m -> convert(Array{Float64}, m), mats[:fqprev_fulls])
+    q0s = Vector{Float64}.(mats[:q0s])
+    fqs = Matrix{Float64}.(mats[:fqs])
+    fqprev_fulls = Matrix{Float64}.(mats[:fqprev_fulls])
 
     init_zs = [zeros(nn) for nn in model_nns]
     for idx in eachindex(model_nonlinear_eqs)
@@ -260,13 +260,13 @@ end
         mats[:fy] = mats[:fy][:,varying_zidxs]
         mats[:c] = mats[:c][:,varying_zidxs]
         reduce_pdims!(mats)
-        model_nps = map(dq -> size(dq, 1), mats[:dqs])
+        model_nps = size.(mats[:dqs], 1)
     end
 
-    q0s = map(m -> convert(Array{Float64}, m), mats[:q0s])
-    fqs = map(m -> convert(Array{Float64}, m), mats[:fqs])
-    fqprev_fulls = map(m -> convert(Array{Float64}, m), mats[:fqprev_fulls])
-    pexps = map(m -> convert(Array{Float64}, m), mats[:pexps])
+    q0s = Array{Float64}.(mats[:q0s])
+    fqs = Array{Float64}.(mats[:fqs])
+    fqprev_fulls = Array{Float64}.(mats[:fqprev_fulls])
+    pexps = Array{Float64}.(mats[:pexps])
 
     nonlinear_eq_funcs = [eval(quote
         (res, J, scratch, z) ->
@@ -294,13 +294,13 @@ end
                 return nothing
             end
     end) for pexp in pexps]
-    solvers = ([eval(:($Solver(ParametricNonLinEq($nonlinear_eq_funcs[$idx],
+    solvers = ((eval(:($Solver(ParametricNonLinEq($nonlinear_eq_funcs[$idx],
                                           $nonlinear_eq_set_ps[$idx],
                                           $nonlinear_eq_calc_Jps[$idx],
                                           (zeros($model_nqs[$idx]), zeros($model_nns[$idx], $model_nqs[$idx])),
                                           $model_nns[$idx], $model_nps[$idx]),
                        zeros($model_nps[$idx]), $init_zs[$idx])))
-                for idx in eachindex(model_nonlinear_eqs)]...)
+                for idx in eachindex(model_nonlinear_eqs))...,)
     return DiscreteModel{typeof(solvers)}(mats, model_nonlinear_eqs, solvers)
 end
 
@@ -311,7 +311,7 @@ function model_matrices(circ::Circuit, t::Rational{BigInt})
     rhs = convert(SparseMatrixCSC{Rational{BigInt},Int},
                   sparse([u0(circ) mu(circ) mxd(circ)//t-mx(circ)//2;
                           spzeros(nb(circ), 1+nu(circ)+nx(circ))]))
-    x, f = map(Matrix, gensolve(lhs, rhs))
+    x, f = Matrix.(gensolve(lhs, rhs))
 
     rowsizes = [nb(circ); nb(circ); nx(circ); nq(circ)]
     res = Dict{Symbol,Array}(zip([:fv; :fi; :c; :fq], matsplit(f, rowsizes)))
@@ -324,7 +324,7 @@ function model_matrices(circ::Circuit, t::Rational{BigInt})
         warn("State update depends on indeterminate quantity")
     end
     while size(nullspace, 2) > 0
-        i, j = _indmax(map(abs, nullspace))
+        i, j = _indmax(abs.(nullspace))
         nullspace = nullspace[[1:i-1; i+1:end], [1:j-1; j+1:end]]
         f = f[:, [1:j-1; j+1:end]]
         for k in [:fv; :fi; :c; :fq]
@@ -361,7 +361,7 @@ function tryextract(fq, numcols)
     for colcnt in 1:numcols
         # determine element with maximum absolute value in unprocessed columns
         # to use as pivot
-        i, j = _indmax(map(abs, fq[:,colcnt:end]))
+        i, j = _indmax(abs.(fq[:,colcnt:end]))
         j += colcnt-1
 
         # swap pivot to first (unprocessed) column
@@ -418,7 +418,7 @@ end
 function split_nl_model_matrices!(mats, model_qidxs, model_nns)
     mats[:dq_fulls] = Matrix[mats[:dq_full][qidxs,:] for qidxs in model_qidxs]
     mats[:eq_fulls] = Matrix[mats[:eq_full][qidxs,:] for qidxs in model_qidxs]
-    let fqsplit = vcat([matsplit(mats[:fq][qidxs,:], [length(qidxs)], model_nns) for qidxs in model_qidxs]...)
+    let fqsplit = vcat((matsplit(mats[:fq][qidxs,:], [length(qidxs)], model_nns) for qidxs in model_qidxs)...)
         mats[:fqs] = Matrix[fqsplit[i,i] for i in 1:length(model_qidxs)]
         mats[:fqprev_fulls] = Matrix[[fqsplit[i, 1:i-1]... zeros(eltype(mats[:fq]), length(model_qidxs[i]), sum(model_nns[i:end]))]
                                      for i in 1:length(model_qidxs)]
@@ -747,7 +747,7 @@ function gensolve(a::SparseMatrixCSC, b, x, h, thresh=0.1)
         ait = a[t[i:i],:] # ait is a row of the a matrix # !SV
         s = ait * h;
         inz, jnz, nz_vals = findnz(s)
-        nz_abs_vals = map(abs, nz_vals)
+        nz_abs_vals = abs.(nz_vals)
         max_abs_val = reduce(max, zero(eltype(s)), nz_abs_vals)
         if max_abs_val ≤ tol # cosidered numerical zero
             continue
@@ -774,7 +774,7 @@ function rank_factorize(a::SparseMatrixCSC)
     nullspace = gensolve(a', spzeros(size(a, 2), 0))[2]
     c = eye(eltype(a), size(a, 1))
     while size(nullspace, 2) > 0
-        i, j = _indmax(map(abs, nullspace))
+        i, j = _indmax(abs.(nullspace))
         c -= c[:, i] * nullspace[:, j]' / nullspace[i, j]
         c = c[:, [1:i-1; i+1:end]]
         nullspace -= nullspace[:, j] * vec(nullspace[i, :])' / nullspace[i, j]
@@ -784,7 +784,7 @@ function rank_factorize(a::SparseMatrixCSC)
     return c, f
 end
 
-consecranges(lengths) = isempty(lengths) ? [] : map(range, cumsum([1; lengths[1:end-1]]), lengths)
+consecranges(lengths) = isempty(lengths) ? [] : range.(cumsum([1; lengths[1:end-1]]), lengths)
 
 matsplit(v::AbstractVector, rowsizes) = [v[rs] for rs in consecranges(rowsizes)]
 matsplit(m::AbstractMatrix, rowsizes, colsizes=[size(m,2)]) =

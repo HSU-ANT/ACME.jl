@@ -28,12 +28,12 @@ for mat in [:mv; :mi; :mx; :mxd; :mq; :mu; :pv; :pi; :px; :pxd; :pq]
     # add type-assertion
     @eval ($mat)(c::Circuit) =
          blkdiag(spzeros(Rational{BigInt}, 0, 0),
-                 [convert(SparseMatrixCSC{Rational{BigInt}}, elem.$mat)
-                  for elem in elements(c)]...
+                 (convert(SparseMatrixCSC{Rational{BigInt}}, elem.$mat)
+                  for elem in elements(c))...
                 )::SparseMatrixCSC{Rational{BigInt},Int}
 end
 
-u0(c::Circuit) = vcat([elem.u0 for elem in elements(c)]...)
+u0(c::Circuit) = vcat((elem.u0 for elem in elements(c))...)
 
 function incidence(c::Circuit)
     i = sizehint!(Int[], 2nb(c))
@@ -79,7 +79,7 @@ function nonlinear_eq(c::Circuit, elem_idxs=1:length(elements(c)))
                           :($(offsets[i]) + $(offset_indexes(expr.args[i+1]))))
                 end
             else
-                append!(ret.args, map(offset_indexes, expr.args))
+                append!(ret.args, offset_indexes.(expr.args))
             end
             ret
         end
@@ -117,7 +117,7 @@ function add!(c::Circuit, elem::Element)
     return designator
 end
 
-add!(c::Circuit, elems::Element...) = ([add!(c, elem) for elem in elems]...,)
+add!(c::Circuit, elems::Element...) = ((add!(c, elem) for elem in elems)...,)
 
 """
     add!(c::Circuit, designator::Symbol, elem::Element)
@@ -285,10 +285,10 @@ end
 
     ti = incidence[1:row-1, :]
 
-    dl = ti[:, broadcast(!, t)]
+    dl = ti[:, (!).(t)]
     tv = spzeros(T, size(dl, 2), size(incidence, 2))
     tv[:, t] = -dl.'
-    tv[:, broadcast(!, t)] = speye(T, size(dl, 2))
+    tv[:, (!).(t)] = speye(T, size(dl, 2))
 
     tv, ti
 end
@@ -379,9 +379,9 @@ macro circuit(cdef)
 
     function extractpins(expr::Expr, default_element=nothing)
         if expr.head === :call && (expr.args[1] === :(⟷) || expr.args[1] === :(↔) || expr.args[1] === :(==))
-            return vcat([extractpins(a, default_element) for a in expr.args[2:end]]...)
+            return vcat((extractpins(a, default_element) for a in expr.args[2:end])...)
         elseif expr.head === :comparison && all(c -> c === :(==), expr.args[2:2:end])
-            return vcat([extractpins(a, default_element) for a in expr.args[1:2:end]]...)
+            return vcat((extractpins(a, default_element) for a in expr.args[1:2:end])...)
         elseif expr.head === :ref
             return [:(($(QuoteNode(expr.args[1])), $(QuoteNode(expr.args[2]))))]
         elseif expr.head === :vect && length(expr.args) == 1
