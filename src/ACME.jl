@@ -20,29 +20,11 @@ if VERSION ≥ v"0.6.0"
     end
 else
     macro pfunction(sig, params, body)
-        ts = copy(params.args)
-        if VERSION < v"0.5.0"
-            for i in eachindex(ts)
-                if isa(ts[i], Expr) && ts[i].head === :comparison && ts[i].args[2] === :<:
-                    ts[i] = Expr(:<:, ts[i].args[1], ts[i].args[3])
-                end
-            end
-        end
         esc(Expr(:function,
-                 Expr(:call, Expr(:curly, sig.args[1], ts...),
+                 Expr(:call, Expr(:curly, sig.args[1], params.args...),
                       sig.args[2:end]...),
                  body))
     end
-end
-
-macro expandafter(mc)
-    args = copy(mc.args)
-    for i in eachindex(args)
-        if isa(args[i], Expr) && args[i].head === :macrocall
-            args[i] = macroexpand(Compat.@__MODULE__, args[i])
-        end
-    end
-    esc(Expr(:macrocall, args...))
 end
 
 if VERSION ≥ v"0.6.0"
@@ -189,14 +171,14 @@ include("circuit.jl")
     solvers::Solvers
     x::Vector{Float64}
 
-    @expandafter @compat @pfunction (::Type{DiscreteModel{Solver}})(circ::Circuit,
+    @pfunction (::Type{DiscreteModel{Solver}})(circ::Circuit,
             t::Float64) [Solver] begin
         Base.depwarn("DiscreteModel{Solver}(circ, t) is deprecated, use DiscreteModel(circ, t, Solver) instead.",
                      :DiscreteModel)
         DiscreteModel(circ, t, Solver)
     end
 
-    @expandafter @compat @pfunction (::Type{DiscreteModel{Solvers}})(mats::Dict{Symbol},
+    @pfunction (::Type{DiscreteModel{Solvers}})(mats::Dict{Symbol},
             nonlinear_eqs::Vector{Expr}, solvers::Solvers) [Solvers] begin
         model = new{Solvers}()
 
@@ -287,66 +269,30 @@ end
     pexps = map(m -> convert(Array{Float64}, m), mats[:pexps])
 
     nonlinear_eq_funcs = [eval(quote
-        if VERSION < v"0.5.0-dev+2396"
-            # wrap up in named function because anonymous functions are slow
-            # in old Julia versions
-            function $(gensym())(res, J, scratch, z)
-                pfull=scratch[1]
-                Jq=scratch[2]
-                q=$(zeros(nq))
-                fq=$fq
+        (res, J, scratch, z) ->
+            let pfull=scratch[1], Jq=scratch[2], q=$(zeros(nq)), fq=$fq
                 $(nonlinear_eq)
                 return nothing
             end
-        else
-            (res, J, scratch, z) ->
-                let pfull=scratch[1], Jq=scratch[2], q=$(zeros(nq)), fq=$fq
-                    $(nonlinear_eq)
-                    return nothing
-                end
-        end
     end) for (nonlinear_eq, fq, nq) in zip(model_nonlinear_eqs, fqs, model_nqs)]
     nonlinear_eq_set_ps = [eval(quote
-        if VERSION < v"0.5.0-dev+2396"
-            # wrap up in named function because anonymous functions are slow
-            # in old Julia versions
-            function $(gensym())(scratch, p)
-                #copy!(pfull, q0 + pexp * p)
+        (scratch, p) ->
+            begin
                 pfull = scratch[1]
+                #copy!(pfull, q0 + pexp * p)
                 copy!(pfull, $q0)
                 BLAS.gemv!('N', 1., $pexp, p, 1., pfull)
                 return nothing
             end
-        else
-            (scratch, p) ->
-                begin
-                    pfull = scratch[1]
-                    #copy!(pfull, q0 + pexp * p)
-                    copy!(pfull, $q0)
-                    BLAS.gemv!('N', 1., $pexp, p, 1., pfull)
-                    return nothing
-                end
-        end
     end) for (pexp, q0) in zip(pexps, q0s)]
     nonlinear_eq_calc_Jps = [eval(quote
-        if VERSION < v"0.5.0-dev+2396"
-            # wrap up in named function because anonymous functions are slow
-            # in old Julia versions
-            function $(gensym())(scratch, Jp)
+        (scratch, Jp) ->
+            begin
                 Jq = scratch[2]
                 #copy!(Jp, Jq*pexp)
                 BLAS.gemm!('N', 'N', 1., Jq, $pexp, 0., Jp)
                 return nothing
             end
-        else
-            (scratch, Jp) ->
-                begin
-                    Jq = scratch[2]
-                    #copy!(Jp, Jq*pexp)
-                    BLAS.gemm!('N', 'N', 1., Jq, $pexp, 0., Jp)
-                    return nothing
-                end
-        end
     end) for pexp in pexps]
     solvers = ([eval(:($Solver(ParametricNonLinEq($nonlinear_eq_funcs[$idx],
                                           $nonlinear_eq_set_ps[$idx],
@@ -374,7 +320,7 @@ function model_matrices(circ::Circuit, t::Rational{BigInt})
                          spzeros(Rational{BigInt}, size(res[:fq],1), 0))[2]
     indeterminates = f * nullspace
 
-    if normsquared(res[:c] * nullspace) > 1e-20
+    if sum(abs2, res[:c] * nullspace) > 1e-20
         warn("State update depends on indeterminate quantity")
     end
     while size(nullspace, 2) > 0
@@ -393,7 +339,7 @@ function model_matrices(circ::Circuit, t::Rational{BigInt})
     end
 
     p = [pv(circ) pi(circ) px(circ)//2+pxd(circ)//t pq(circ)]
-    if normsquared(p * indeterminates) > 1e-20
+    if sum(abs2, p * indeterminates) > 1e-20
         warn("Model output depends on indeterminate quantity")
     end
     res[:dy] = p * x[:,2+nu(circ):end] + px(circ)//2-pxd(circ)//t
@@ -649,7 +595,7 @@ run!(model::DiscreteModel, u::AbstractMatrix{Float64}; showprogress=true) =
     ycur::Vector{Float64}
     xnew::Vector{Float64}
     z::Vector{Float64}
-    @expandafter @compat @pfunction (::Type{ModelRunner{Model,ShowProgress}})(
+    @pfunction (::Type{ModelRunner{Model,ShowProgress}})(
             model::Model) [Model<:DiscreteModel,ShowProgress] begin
         ucur = Array{Float64,1}(nu(model))
         ps = Vector{Float64}[Vector{Float64}(np(model, idx)) for idx in 1:length(model.solvers)]
@@ -843,13 +789,5 @@ consecranges(lengths) = isempty(lengths) ? [] : map(range, cumsum([1; lengths[1:
 matsplit(v::AbstractVector, rowsizes) = [v[rs] for rs in consecranges(rowsizes)]
 matsplit(m::AbstractMatrix, rowsizes, colsizes=[size(m,2)]) =
     [m[rs, cs] for rs in consecranges(rowsizes), cs in consecranges(colsizes)]
-
-    if VERSION < v"0.5.0"
-        # this is deprecated starting in Julia 0.6
-        normsquared(x) = sumabs2(x)
-    else
-        # prior to Julia 0.5, this fails for empty x and is slow
-        normsquared(x) = sum(abs2, x)
-    end
 
 end # module

@@ -7,7 +7,6 @@ if VERSION < v"0.7.0-DEV.2005"
 else
     using Test
 end
-using Compat
 using ProgressMeter
 
 tv, ti = ACME.topomat(sparse([1 -1 1; -1 1 -1]))
@@ -105,7 +104,7 @@ let circ = @circuit begin
     rd, wr = redirect_stderr()
     model = DiscreteModel(circ, 1)
     # should warn because output is indeterminate
-    @test !isempty(search(convert(Compat.ASCIIString, readavailable(rd)), "WARNING"))
+    @test !isempty(search(convert(String, readavailable(rd)), "WARNING"))
     redirect_stderr(orig_stderr)
 end
 
@@ -124,7 +123,7 @@ let circ = @circuit begin
     rd, wr = redirect_stderr()
     @test size(run!(model, hcat([-1.0]))) == (1, 1)
     # should warn because solution exists as diode cannot reach reverse current of 1A
-    @test !isempty(search(convert(Compat.ASCIIString, readavailable(rd)), "WARNING"))
+    @test !isempty(search(convert(String, readavailable(rd)), "WARNING"))
     redirect_stderr(orig_stderr)
 end
 
