@@ -736,15 +736,12 @@ function step!(runner::ModelRunner, y::AbstractMatrix{Float64}, u::AbstractMatri
     copy!(model.x, xnew)
 end
 
-# lines marked with !SV avoid creation of SparseVector by indexing with Ranges
-# instead of Ints; a better way for cross-julia-version compatibilty would be
-# nice; maybe Compat helps in the future...
 function gensolve(a::SparseMatrixCSC, b, x, h, thresh=0.1)
     m = size(a)[1]
     t = sortperm(vec(sum(spones(a),2))) # row indexes in ascending order of nnz
     tol = 3 * max(eps(float(eltype(a))), eps(float(eltype(h)))) * size(a, 2)
     for i in 1:m
-        ait = a[t[i:i],:] # ait is a row of the a matrix # !SV
+        ait = a[t[i],:]' # ait is a row of the a matrix
         s = ait * h;
         inz, jnz, nz_vals = findnz(s)
         nz_abs_vals = abs.(nz_vals)
@@ -754,11 +751,11 @@ function gensolve(a::SparseMatrixCSC, b, x, h, thresh=0.1)
         end
         jat = jnz[nz_abs_vals .≥ thresh*max_abs_val] # cols above threshold
         j = jat[indmin(sum(spones(h[:,jat])))]
-        q = h[:,j:j] # !SV
-        # ait*q only has a single element!
-        x = x + convert(typeof(x), q * ((b[t[i:i],:] - ait*x) * (1 / (ait*q)[1]))); # !SV
+        q = h[:,j]
+        # ait*q is a scalar in Julia 0.6+, but a single element matrix before!
+        x = x + convert(typeof(x), q * ((b[t[i],:]' - ait*x) * (1 / (ait*q)[1])))
         if size(h)[2] > 1
-            h = h[:,[1:j-1;j+1:end]] - convert(typeof(h), q * s[1:1,[1:j-1;j+1:end]]*(1/s[1,j])) # !SV
+            h = h[:,[1:j-1;j+1:end]] - convert(typeof(h), q * s[1,[1:j-1;j+1:end]]'*(1/s[1,j]))
         else
             h = similar(h, eltype(h), (size(h)[1], 0))
         end

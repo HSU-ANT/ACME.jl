@@ -248,9 +248,6 @@ function disconnect!(c::Circuit, pin::Pin)
     disconnect!(c, (designator, pinname))
 end
 
-# lines marked with !SV avoid creation of SparseVector by indexing with Ranges
-# instead of Ints; a better way for cross-julia-version compatibilty would be
-# nice; maybe Compat helps in the future...
 @pfunction topomat!(incidence::SparseMatrixCSC{T}) [T<:Integer] begin
     @assert all(x -> abs(x) == 1, nonzeros(incidence))
     @assert all(sum(incidence, 1) .== 0)
@@ -277,9 +274,9 @@ end
             incidence[row,cols] = -incidence[row,cols]
         end
         rows = find(incidence[1:row-1, col] .== 1)
-        incidence[rows, :] .-= incidence[row:row, :] # !SV
+        incidence[rows, :] .-= incidence[row, :]'
         rows = find(incidence[1:row-1, col] .== -1)
-        incidence[rows, :] .+= incidence[row:row, :] # !SV
+        incidence[rows, :] .+= incidence[row, :]'
         row += 1
     end
 
