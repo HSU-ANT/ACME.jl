@@ -275,25 +275,23 @@ end
                 return nothing
             end
     end) for (nonlinear_eq, fq, nq) in zip(model_nonlinear_eqs, fqs, model_nqs)]
-    nonlinear_eq_set_ps = [eval(quote
-        (scratch, p) ->
-            begin
-                pfull = scratch[1]
-                #copy!(pfull, q0 + pexp * p)
-                copy!(pfull, $q0)
-                BLAS.gemv!('N', 1., $pexp, p, 1., pfull)
-                return nothing
-            end
-    end) for (pexp, q0) in zip(pexps, q0s)]
-    nonlinear_eq_calc_Jps = [eval(quote
-        (scratch, Jp) ->
-            begin
-                Jq = scratch[2]
-                #copy!(Jp, Jq*pexp)
-                BLAS.gemm!('N', 'N', 1., Jq, $pexp, 0., Jp)
-                return nothing
-            end
-    end) for pexp in pexps]
+    nonlinear_eq_set_ps = [
+        function(scratch, p)
+            pfull = scratch[1]
+            #copy!(pfull, q0 + pexp * p)
+            copy!(pfull, q0)
+            BLAS.gemv!('N', 1., pexp, p, 1., pfull)
+            return nothing
+        end
+        for (pexp, q0) in zip(pexps, q0s)]
+    nonlinear_eq_calc_Jps = [
+        function (scratch, Jp)
+            Jq = scratch[2]
+            #copy!(Jp, Jq*pexp)
+            BLAS.gemm!('N', 'N', 1., Jq, pexp, 0., Jp)
+            return nothing
+        end
+        for pexp in pexps]
     solvers = ((eval(:($Solver(ParametricNonLinEq($nonlinear_eq_funcs[$idx],
                                           $nonlinear_eq_set_ps[$idx],
                                           $nonlinear_eq_calc_Jps[$idx],
