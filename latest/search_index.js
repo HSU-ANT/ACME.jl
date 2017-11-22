@@ -37,7 +37,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Getting Started",
     "title": "Installation",
     "category": "section",
-    "text": "If you have not done so already, download and install Julia. (Any version starting with 0.4 should be fine; earlier ACME versions also support Julia 0.3.)To install ACME, start Julia and run:Pkg.add(\"ACME\")This will download ACME and all of its dependencies."
+    "text": "If you have not done so already, download and install Julia. (Any version starting with 0.5 should be fine; earlier ACME versions also support Julia 0.3 and 0.4.)To install ACME, start Julia and run:Pkg.add(\"ACME\")This will download ACME and all of its dependencies."
 },
 
 {
@@ -132,7 +132,7 @@ var documenterSearchIndex = {"docs": [
     "location": "ug.html#ACME.SimpleSolver",
     "page": "User Guide",
     "title": "ACME.SimpleSolver",
-    "category": "Constant",
+    "category": "Type",
     "text": "SimpleSolver\n\nThe SimpleSolver is the simplest available solver. It uses Newton iteration which features fast local convergence, but makes no guarantees about global convergence. The initial solution of the iteration is obtained by extrapolating the last solution found (or another solution provided externally) using the available Jacobians. Due to the missing global convergence, the SimpleSolver is rarely useful as such.\n\n\n\n"
 },
 
@@ -140,7 +140,7 @@ var documenterSearchIndex = {"docs": [
     "location": "ug.html#ACME.HomotopySolver",
     "page": "User Guide",
     "title": "ACME.HomotopySolver",
-    "category": "Constant",
+    "category": "Type",
     "text": "HomotopySolver{BaseSolver}\n\nThe HomotopySolver extends an existing solver (provided as the type parameter) by applying homotopy to (at least theoretically) ensure global convergence. It can be combined with the SimpleSolver as HomotopySolver{SimpleSolver} to obtain a useful Newton homtopy solver with generally good convergence properties.\n\n\n\n"
 },
 
@@ -148,7 +148,7 @@ var documenterSearchIndex = {"docs": [
     "location": "ug.html#ACME.CachingSolver",
     "page": "User Guide",
     "title": "ACME.CachingSolver",
-    "category": "Constant",
+    "category": "Type",
     "text": "CachingSolver{BaseSolver}\n\nThe CachingSolver extends an existing solver (provided as the type parameter) by storing found solutions in a k-d tree to use as initial solutions in the future. Whenever the underlying solver needs more than a preset number of iterations (defaults to five), the solution will be stored. Storing new solutions is a relatively expensive operation, so until the stored solutions suffice to ensure convergence in few iterations throughout, use of a CachingSolver may actually slow things down.\n\nSee M. Holters, U. Zölzer, \"A k-d Tree Based Solution Cache for the Non-linear Equation of Circuit Simulations\" for a more detailed discussion.\n\n\n\n"
 },
 
