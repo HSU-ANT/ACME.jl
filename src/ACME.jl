@@ -352,7 +352,7 @@ end
 model_matrices(circ::Circuit, t) = model_matrices(circ, Rational{BigInt}(t))
 
 function tryextract(fq, numcols)
-    a = eye(eltype(fq), size(fq,2))
+    a = Matrix{eltype(fq)}(I, size(fq, 2), size(fq, 2))
     if numcols ≥ size(fq,2)
         return Nullable(a)
     end
@@ -383,7 +383,7 @@ end
 
 function nldecompose!(mats, nns, nqs)
     fq = mats[:fq]
-    a = eye(eltype(fq), size(fq,2))
+    a = Matrix{eltype(fq)}(I, size(fq, 2), size(fq, 2))
     sub_ranges = consecranges(nqs)
     extracted_subs = Vector{Int}[]
     rem_cols = 1:size(fq, 2)
@@ -483,7 +483,7 @@ nn(model::DiscreteModel, subidx) = size(model.fqs[subidx], 2)
 nn(model::DiscreteModel) = sum([size(fq, 2) for fq in model.fqs])
 
 function steadystate(model::DiscreteModel, u=zeros(nu(model)))
-    IA_LU = lufact(eye(nx(model))-model.a)
+    IA_LU = lufact(I-model.a)
     steady_z = zeros(nn(model))
     zoff = 1
     for idx in 1:length(model.solvers)
@@ -762,12 +762,12 @@ function gensolve(a::SparseMatrixCSC, b, x, h, thresh=0.1)
 end
 
 gensolve(a, b, thresh=0.1) =
-    gensolve(a, b, spzeros(promote_type(eltype(a), eltype(b)), size(a)[2], size(b)[2]), speye(eltype(a), size(a)[2]), thresh)
+    gensolve(a, b, spzeros(promote_type(eltype(a), eltype(b)), size(a, 2), size(b, 2)), SparseMatrixCSC{eltype(a)}(I, size(a,2), size(a,2)), thresh)
 
 function rank_factorize(a::SparseMatrixCSC)
     f = a
     nullspace = gensolve(a', spzeros(size(a, 2), 0))[2]
-    c = eye(eltype(a), size(a, 1))
+    c = Matrix{eltype(a)}(I, size(a, 1), size(a, 1))
     while size(nullspace, 2) > 0
         i, j = _indmax(abs.(nullspace))
         c -= c[:, i] * nullspace[:, j]' / nullspace[i, j]

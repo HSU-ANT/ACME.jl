@@ -95,7 +95,7 @@ isless(e1::AltEntry, e2::AltEntry) = isless(e1.delta_norm, e2.delta_norm)
 end
 
 @pfunction Alts(p::Vector{T}) [T] begin
-     Alts([AltEntry(1, zeros(p), zero(T))], typemax(T), 0, 1)
+     Alts([AltEntry(1, Vector{T}(length(p)), zero(T))], typemax(T), 0, 1)
  end
 
 @pfunction init!(alts::Alts{T}, best_dist, best_pidx) [T] begin
