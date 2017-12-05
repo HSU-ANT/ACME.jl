@@ -49,9 +49,8 @@ function incidence(c::Circuit)
             push!(v, polarity)
         end
     end
-    # ensure zeros due to short-circuited branches are removed, hence the
-    # additional sparse(findnz(...))
-    sparse(findnz(sparse(i,j,v))..., length(c.nets), nb(c))
+    # ensure zeros due to short-circuited branches are removed with dropzeros!
+    dropzeros!(sparse(i, j, v, length(c.nets), nb(c)))
 end
 
 function nonlinear_eq(c::Circuit, elem_idxs=1:length(elements(c)))
