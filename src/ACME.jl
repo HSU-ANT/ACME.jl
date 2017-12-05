@@ -52,6 +52,11 @@ function _indmax(a::AbstractMatrix)
     end
 end
 
+if isdefined(Base, :NamedTuple)
+    kwargs_pairs(kwargs::NamedTuple) = pairs(kwargs)
+end
+kwargs_pairs(kwargs::Vector) = kwargs
+
 include("kdtree.jl")
 include("solvers.jl")
 
@@ -105,7 +110,7 @@ include("solvers.jl")
               :pxd => (:ny,:nx), :pq => (:ny,:nq) )
 
     elem = new()
-    for (key, val) in args
+    for (key, val) in kwargs_pairs(args)
       if haskey(mat_dims, key)
         val = convert(SparseMatrixCSC{Real}, sparse(hcat(val))) # turn val into a sparse matrix whatever it is
         update_sizes(val, mat_dims[key])
