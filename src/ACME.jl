@@ -19,6 +19,7 @@ end
 using ProgressMeter
 using IterTools
 using DataStructures
+using StaticArrays
 
 import Base.getindex
 
@@ -122,21 +123,21 @@ include("elements.jl")
 include("circuit.jl")
 
 #mutable struct DiscreteModel{Solvers}
-@mutable_struct DiscreteModel{Solvers} begin
-    a::Matrix{Float64}
-    b::Matrix{Float64}
-    c::Matrix{Float64}
-    x0::Vector{Float64}
+@mutable_struct DiscreteModel{Nx,Nu,Nn,Ny,Solvers,NxNx,NxNu,NxNn,NyNx,NyNu,NyNn} begin
+    a::SMatrix{Nx,Nx,Float64,NxNx}
+    b::SMatrix{Nx,Nu,Float64,NxNu}
+    c::SMatrix{Nx,Nn,Float64,NxNn}
+    x0::SVector{Nx,Float64}
     pexps::Vector{Matrix{Float64}}
     dqs::Vector{Matrix{Float64}}
     eqs::Vector{Matrix{Float64}}
     fqprevs::Vector{Matrix{Float64}}
     fqs::Vector{Matrix{Float64}}
     q0s::Vector{Vector{Float64}}
-    dy::Matrix{Float64}
-    ey::Matrix{Float64}
-    fy::Matrix{Float64}
-    y0::Vector{Float64}
+    dy::SMatrix{Ny,Nx,Float64,NyNx}
+    ey::SMatrix{Ny,Nu,Float64,NyNu}
+    fy::SMatrix{Ny,Nn,Float64,NyNn}
+    y0::SVector{Ny,Float64}
 
     nonlinear_eqs::Vector{Expr}
 
@@ -150,9 +151,9 @@ include("circuit.jl")
         DiscreteModel(circ, t, Solver)
     end
 
-    @pfunction (::Type{DiscreteModel{Solvers}})(mats::Dict{Symbol},
-            nonlinear_eqs::Vector{Expr}, solvers::Solvers) [Solvers] begin
-        model = new{Solvers}()
+    @pfunction (::Type{DiscreteModel{Nx,Nu,Nn,Ny,Solvers}})(mats::Dict{Symbol},
+            nonlinear_eqs::Vector{Expr}, solvers::Solvers) [Nx,Nu,Nn,Ny,Solvers] begin
+        model = new{Nx,Nu,Nn,Ny,Solvers,Nx*Nx,Nx*Nu,Nx*Nn,Ny*Nx,Ny*Nu,Ny*Nn}()
 
         for mat in (:a, :b, :c, :pexps, :dqs, :eqs, :fqprevs, :fqs, :dy, :ey, :fy, :x0, :q0s, :y0)
             setfield!(model, mat, convert(fieldtype(typeof(model), mat), mats[mat]))
@@ -271,7 +272,7 @@ end
                                           $model_nns[$idx], $model_nps[$idx]),
                        zeros($model_nps[$idx]), $init_zs[$idx])))
                 for idx in eachindex(model_nonlinear_eqs))...,)
-    return DiscreteModel{typeof(solvers)}(mats, model_nonlinear_eqs, solvers)
+    return DiscreteModel{size(mats[:a],2),size(mats[:b],2),size(mats[:c],2),length(mats[:y0]),typeof(solvers)}(mats, model_nonlinear_eqs, solvers)
 end
 
 function model_matrices(circ::Circuit, t::Rational{BigInt})
@@ -470,7 +471,7 @@ nn(model::DiscreteModel, subidx) = size(model.fqs[subidx], 2)
 nn(model::DiscreteModel) = sum([size(fq, 2) for fq in model.fqs])
 
 function steadystate(model::DiscreteModel, u=zeros(nu(model)))
-    IA_LU = lufact(I-model.a)
+    IA_LU = lufact(I-Matrix(model.a))
     steady_z = zeros(nn(model))
     zoff = 1
     for idx in 1:length(model.solvers)
@@ -550,7 +551,7 @@ function linearize(model::DiscreteModel, usteady::AbstractVector{Float64}=zeros(
         :eqs => Matrix{Float64}[], :fqprevs => Matrix{Float64}[],
         :fqs => Matrix{Float64}[], :q0s => Vector{Float64}[],
         :dy => dy, :ey => ey, :fy => zeros(ny(model), 0), :x0 => x0, :y0 => y0)
-    return DiscreteModel{Tuple{}}(mats, Expr[], ())
+    return DiscreteModel{size(a,2),size(b,2),0,length(y0),Tuple{}}(mats, Expr[], ())
 end
 
 """
@@ -576,17 +577,13 @@ run!(model::DiscreteModel, u::AbstractMatrix{Float64}; showprogress=true) =
     model::Model
     ucur::Vector{Float64}
     ps::Vector{Vector{Float64}}
-    ycur::Vector{Float64}
-    xnew::Vector{Float64}
     z::Vector{Float64}
     @pfunction (::Type{ModelRunner{Model,ShowProgress}})(
             model::Model) [Model<:DiscreteModel,ShowProgress] begin
         ucur = Vector{Float64}(uninitialized, nu(model))
         ps = Vector{Float64}[Vector{Float64}(uninitialized, np(model, idx)) for idx in 1:length(model.solvers)]
-        ycur = Vector{Float64}(uninitialized, ny(model))
-        xnew = Vector{Float64}(uninitialized, nx(model))
         z = Vector{Float64}(uninitialized, nn(model))
-        return new{Model,ShowProgress}(model, ucur, ps, ycur, xnew, z)
+        return new{Model,ShowProgress}(model, ucur, ps, z)
     end
 end
 
@@ -676,8 +673,6 @@ end
 function step!(runner::ModelRunner, y::AbstractMatrix{Float64}, u::AbstractMatrix{Float64}, n)
     model = runner.model
     ucur = runner.ucur
-    ycur = runner.ycur
-    xnew = runner.xnew
     z = runner.z
     copyto!(ucur, 1, u, (n-1)*nu(model)+1, nu(model))
     zoff = 1
@@ -706,18 +701,9 @@ function step!(runner::ModelRunner, y::AbstractMatrix{Float64}, u::AbstractMatri
         zoff += length(zsub)
     end
     #y[:,n] = model.dy * model.x + model.ey * u[:,n] + model.fy * z + model.y0
-    copyto!(ycur, model.y0)
-    BLAS.gemv!('N', 1., model.dy, model.x, 1., ycur)
-    BLAS.gemv!('N', 1., model.ey, ucur, 1., ycur)
-    BLAS.gemv!('N', 1., model.fy, z, 1., ycur)
-    #y[:,n] = ycur
-    copyto!(y, (n-1)*ny(model)+1, ycur, 1, ny(model))
+    copyto!(y, (n-1)*ny(model)+1, model.dy * model.x + model.ey * ucur + model.fy * z + model.y0, 1, ny(model))
     #model.x = model.a * model.x + model.b * u[:,n] + model.c * z + model.x0
-    copyto!(xnew, model.x0)
-    BLAS.gemv!('N', 1., model.a, model.x, 1., xnew)
-    BLAS.gemv!('N', 1., model.b, ucur, 1.,xnew)
-    BLAS.gemv!('N', 1., model.c, z, 1., xnew)
-    copyto!(model.x, xnew)
+    copyto!(model.x, model.x0 + model.a*model.x + model.b * ucur + model.c * z)
 end
 
 function gensolve(a, b, x, h, thresh=0.1)
