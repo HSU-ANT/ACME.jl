@@ -5,6 +5,7 @@ using ACME
 using Compat
 using Compat.Test
 using ProgressMeter
+using StaticArrays
 
 if VERSION ≥ v"0.7.0-DEV.3389"
     using SparseArrays
@@ -212,9 +213,9 @@ end
         Jp[1,1] = 1
     end, 1, 1)
     solver = ACME.HomotopySolver{ACME.SimpleSolver}(nleq, [0.0], [1.0])
-    ACME.solve(solver, [-0.5 + rand()])
+    ACME.solve(solver, @SVector [-0.5 + rand()])
     @test ACME.hasconverged(solver)
-    ACME.solve(solver, [1.5 + rand()])
+    ACME.solve(solver, @SVector [1.5 + rand()])
     @test !ACME.hasconverged(solver)
 end
 
@@ -503,7 +504,7 @@ end
     @testset "birdie" begin
         include("../examples/birdie.jl")
         model=birdie(vol=0.8)
-        ACME.solve(model.solvers[1], [0.003, -0.0002])
+        ACME.solve(model.solvers[1], @SVector [0.003, -0.0002])
         @assert all(ACME.hasconverged, model.solvers)
         println("Running birdie with fixed vol")
         @test ACME.np(model, 1) == 2

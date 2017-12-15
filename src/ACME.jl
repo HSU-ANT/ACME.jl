@@ -122,6 +122,11 @@ include("elements.jl")
 
 include("circuit.jl")
 
+@mutable_struct Scratch{PFULL,JQ} begin
+    pfull::PFULL
+    Jq::JQ
+end
+
 #mutable struct DiscreteModel{Solvers}
 @mutable_struct DiscreteModel{Nx,Nu,Nn,Ny,Solvers,NxNx,NxNu,NxNn,NyNx,NyNu,NyNn} begin
     a::SMatrix{Nx,Nx,Float64,NxNx}
@@ -185,9 +190,7 @@ end
     reduce_pdims!(mats)
 
     model_nonlinear_eqs = [quote
-        #copyto!(q, pfull + fq * z)
-        copyto!(q, pfull)
-        BLAS.gemv!('N',1.,fq,z,1.,q)
+        copyto!(q, pfull + fq * z)
         let J=Jq
             $(nonlinear_eq(circ, nles))
         end
@@ -207,7 +210,7 @@ end
     init_zs = [zeros(nn) for nn in model_nns]
     for idx in eachindex(model_nonlinear_eqs)
         q = q0s[idx] + fqprev_fulls[idx] * vcat(init_zs...)
-        init_zs[idx] = initial_solution(model_nonlinear_eqs[idx], q, fqs[idx])
+        init_zs[idx] = initial_solution(model_nonlinear_eqs[idx], SVector{length(q)}(q), fqs[idx])
     end
 
     while any(np -> np == 0, model_nps)
@@ -243,23 +246,26 @@ end
 
     nonlinear_eq_funcs = [eval(quote
         (res, J, scratch, z) ->
-            let pfull=scratch[1], Jq=scratch[2], q=$(zeros(nq)), fq=$fq
+            let pfull=scratch.pfull, Jq=scratch.Jq, q=$(zeros(nq)), fq=$fq
                 $(nonlinear_eq)
                 return nothing
             end
     end) for (nonlinear_eq, fq, nq) in zip(model_nonlinear_eqs, fqs, model_nqs)]
     nonlinear_eq_set_ps = [
-        function(scratch, p)
-            pfull = scratch[1]
-            #copyto!(pfull, q0 + pexp * p)
-            copyto!(pfull, q0)
-            BLAS.gemv!('N', 1., pexp, p, 1., pfull)
-            return nothing
+        let pexp = SMatrix{size(pexp)...}(pexp), q0 = SVector{length(q0)}(q0)
+            function(scratch, p)
+                #pfull = scratch[1]
+                #copyto!(pfull, q0 + pexp * p)
+                scratch.pfull = q0 + pexp * p
+                #copyto!(pfull, q0)
+                #BLAS.gemv!('N', 1., pexp, p, 1., pfull)
+                return nothing
+            end
         end
         for (pexp, q0) in zip(pexps, q0s)]
     nonlinear_eq_calc_Jps = [
         function (scratch, Jp)
-            Jq = scratch[2]
+            Jq = scratch.Jq
             #copyto!(Jp, Jq*pexp)
             BLAS.gemm!('N', 'N', 1., Jq, pexp, 0., Jp)
             return nothing
@@ -268,7 +274,8 @@ end
     solvers = ((eval(:($Solver(ParametricNonLinEq($nonlinear_eq_funcs[$idx],
                                           $nonlinear_eq_set_ps[$idx],
                                           $nonlinear_eq_calc_Jps[$idx],
-                                          (zeros($model_nqs[$idx]), zeros($model_nns[$idx], $model_nqs[$idx])),
+                                          Scratch(SVector{$model_nqs[$idx]}(zeros($model_nqs[$idx])),
+                                                  zeros($model_nns[$idx], $model_nqs[$idx])),
                                           $model_nns[$idx], $model_nps[$idx]),
                        zeros($model_nps[$idx]), $init_zs[$idx])))
                 for idx in eachindex(model_nonlinear_eqs))...,)
@@ -489,7 +496,7 @@ function steadystate(model::DiscreteModel, u=zeros(nu(model)))
             steady_solver = HomotopySolver{SimpleSolver}(steady_nleq, zeros(nq($model, $idx)),
                                                          zeros(nn($model, $idx)))
             set_resabstol!(steady_solver, 1e-15)
-            steady_z = solve(steady_solver, $steady_q0)
+            steady_z = solve(steady_solver, $(SVector{length(steady_q0)}(steady_q0)))
             if !hasconverged(steady_solver)
                 error("Failed to find steady state solution")
             end
@@ -526,6 +533,7 @@ function linearize(model::DiscreteModel, usteady::AbstractVector{Float64}=zeros(
     for idx in 1:length(model.solvers)
         psteady = model.dqs[idx] * xsteady + model.eqs[idx] * usteady +
                   model.fqprevs[idx] * zsteady
+        psteady = SVector{length(psteady)}(psteady)
         zsub, dzdps[idx] =
             Compat.invokelatest(linearize, model.solvers[idx], psteady)
         copyto!(zsteady, zoff, zsub, 1, length(zsub))
@@ -689,7 +697,7 @@ function step!(runner::ModelRunner, y::AbstractMatrix{Float64}, u::AbstractMatri
         if idx > 1
             BLAS.gemv!('N', 1., model.fqprevs[idx], z, 1., p)
         end
-        zsub = solve(model.solvers[idx], p)
+        zsub = solve(model.solvers[idx], SVector{length(p)}(p))
         if !hasconverged(model.solvers[idx])
             if all(isfinite, zsub)
                 @warn "Failed to converge while solving non-linear equation."

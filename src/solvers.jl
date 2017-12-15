@@ -4,8 +4,8 @@
 export SimpleSolver, HomotopySolver, CachingSolver
 import Base.copy!
 
-#struct ParametricNonLinEq{F_eval<:Function,F_setp<:Function,F_calcjp<:Function,Scratch}
-@struct ParametricNonLinEq{F_eval<:Function,F_setp<:Function,F_calcjp<:Function,Scratch} begin
+#struct ParametricNonLinEq{F_eval<:Function,F_setp<:Function,F_calcjp<:Function,Scratch,Nn,Np}
+@struct ParametricNonLinEq{Nn,Np,NnNp,F_eval<:Function,F_setp<:Function,F_calcjp<:Function,Scratch} begin
     func::F_eval
     set_p::F_setp
     calc_Jp::F_calcjp
@@ -13,20 +13,20 @@ import Base.copy!
     Jp::Matrix{Float64}
     J::Matrix{Float64}
     scratch::Scratch
-    @pfunction (::Type{ParametricNonLinEq{F_eval,F_setp,F_calcjp,Scratch}})(
+    @pfunction (::Type{ParametricNonLinEq{Nn,Np,NnNp,F_eval,F_setp,F_calcjp,Scratch}})(
             func::F_eval, set_p::F_setp, calc_Jp::F_calcjp, scratch::Scratch,
             nn::Integer, np::Integer
-        ) [F_eval<:Function,F_setp<:Function,F_calcjp<:Function,Scratch] begin
+        ) [Nn,Np,NnNp,F_eval<:Function,F_setp<:Function,F_calcjp<:Function,Scratch] begin
         res = zeros(nn)
         Jp = zeros(nn, np)
         J = zeros(nn, nn)
-        return new{F_eval,F_setp,F_calcjp,Scratch}(func, set_p, calc_Jp, res, Jp, J, scratch)
+        return new{Nn,Np,NnNp,F_eval,F_setp,F_calcjp,Scratch}(func, set_p, calc_Jp, res, Jp, J, scratch)
     end
 end
 @pfunction ParametricNonLinEq(func::F_eval, set_p::F_setp, calc_Jp::F_calcjp,
         scratch::Scratch, nn::Integer, np::Integer) [F_eval<:Function,
         F_setp<:Function,F_calcjp<:Function,Scratch] begin
-    ParametricNonLinEq{F_eval,F_setp,F_calcjp,Scratch}(func, set_p, calc_Jp, scratch, nn, np)
+    ParametricNonLinEq{nn,np,nn*np,F_eval,F_setp,F_calcjp,Scratch}(func, set_p, calc_Jp, scratch, nn, np)
 end
 ParametricNonLinEq(func::Function, nn::Integer, np::Integer) =
     ParametricNonLinEq(func, default_set_p, default_calc_Jp,
@@ -44,12 +44,15 @@ evaluate!(nleq::ParametricNonLinEq, z) =
     nleq.func(nleq.res, nleq.J, nleq.scratch, z)
 
 #struct LinearSolver
-@struct LinearSolver begin
+@struct LinearSolver{N} begin
     factors::Matrix{Float64}
     ipiv::Vector{Int}
-    function LinearSolver(n::Int)
-        new(zeros(n, n), zeros(Int, n))
+    @pfunction (::Type{LinearSolver{N}})() [N] begin
+        new{N}(zeros(N, N), zeros(Int, N))
     end
+end
+function LinearSolver(n::Int)
+    LinearSolver{n}()
 end
 
 function setlhs!(solver::LinearSolver, A::Matrix{Float64})
@@ -104,7 +107,7 @@ function setlhs!(solver::LinearSolver, A::Matrix{Float64})
     return true
 end
 
-function solve!(solver::LinearSolver, x::Vector{Float64}, b::Vector{Float64})
+function solve!(solver::LinearSolver, x::AbstractVector{Float64}, b::AbstractVector{Float64})
     n = size(solver.factors, 2)
     if n ≠ length(x)
         throw(DimensionMismatch("x has length $(length(x)), but needs $n"))
@@ -140,6 +143,37 @@ function solve!(solver::LinearSolver, x::Vector{Float64}, b::Vector{Float64})
     return nothing
 end
 
+function solve(solver::LinearSolver{N}, b::AbstractVector{Float64}) where N
+    x = MVector{N,Float64}(b)
+    n = size(solver.factors, 2)
+    if n ≠ length(x)
+        throw(DimensionMismatch("x has length $(length(x)), but needs $n"))
+    end
+
+    # native Julia implementation seems to be faster than dgetrs up to about
+    # n=45 (and not slower up to about n=70)
+    @inbounds for i in 1:n
+        x[i], x[solver.ipiv[i]] = x[solver.ipiv[i]], x[i]
+    end
+    # taken from Julia's naivesub!(::UnitLowerTriangular, ...)
+    @inbounds for j in 1:n
+        xj = x[j]
+        for i in j+1:n
+            x[i] -= solver.factors[i,j] * xj
+        end
+    end
+    # based on Julia's naivesub!(::UpperTriangular, ...), but with factors[j,j]
+    # holding inverses
+    @inbounds for j in n:-1:1
+        xj = x[j] = solver.factors[j,j] * x[j]
+        for i in 1:j-1
+            x[i] -= solver.factors[i,j] * xj
+        end
+    end
+
+    return SVector{N,Float64}(x)
+end
+
 function copy!(dest::LinearSolver, src::LinearSolver)
     copyto!(dest.factors, src.factors)
     copyto!(dest.ipiv, src.ipiv)
@@ -156,31 +190,27 @@ available Jacobians. Due to the missing global convergence, the `SimpleSolver`
 is rarely useful as such.
 """
 #mutable struct SimpleSolver{NLEQ<:ParametricNonLinEq}
-@mutable_struct SimpleSolver{NLEQ<:ParametricNonLinEq} begin
+@mutable_struct SimpleSolver{Nn,Np,NnNp,NLEQ<:ParametricNonLinEq{Nn,Np,NnNp}} begin
     nleq::NLEQ
-    z::Vector{Float64}
-    linsolver::LinearSolver
-    last_z::Vector{Float64}
-    last_p::Vector{Float64}
-    last_Jp::Matrix{Float64}
-    last_linsolver::LinearSolver
+    z::SVector{Nn,Float64}
+    linsolver::LinearSolver{Nn}
+    last_z::SVector{Nn,Float64}
+    last_p::SVector{Np,Float64}
+    last_Jp::SMatrix{Nn,Np,Float64,NnNp}
+    last_linsolver::LinearSolver{Nn}
     iters::Int
     resmaxabs::Float64
     tol::Float64
-    tmp_nn::Vector{Float64}
-    tmp_np::Vector{Float64}
-    @pfunction (::Type{SimpleSolver{NLEQ}})(
-            nleq::NLEQ, initial_p::Vector{Float64}, initial_z::Vector{Float64}) [NLEQ<:ParametricNonLinEq] begin
+    @pfunction (::Type{SimpleSolver{Nn,Np,NnNp,NLEQ}})(
+            nleq::NLEQ, initial_p::Vector{Float64}, initial_z::Vector{Float64}) [Nn,Np,NnNp,NLEQ<:ParametricNonLinEq] begin
         z = zeros(nn(nleq))
         linsolver = LinearSolver(nn(nleq))
         last_z = zeros(nn(nleq))
         last_p = zeros(np(nleq))
         last_Jp = zeros(nn(nleq), np(nleq))
         last_linsolver = LinearSolver(nn(nleq))
-        tmp_nn = zeros(nn(nleq))
-        tmp_np = zeros(np(nleq))
-        solver = new{NLEQ}(nleq, z, linsolver, last_z, last_p, last_Jp,
-            last_linsolver, 0, 0.0, 1e-10, tmp_nn, tmp_np)
+        solver = new{Nn,Np,NnNp,NLEQ}(nleq, z, linsolver, last_z, last_p, last_Jp,
+            last_linsolver, 0, 0.0, 1e-10)
         set_extrapolation_origin(solver, initial_p, initial_z)
         return solver
     end
@@ -188,7 +218,7 @@ end
 
 @pfunction SimpleSolver(nleq::NLEQ, initial_p::Vector{Float64},
                         initial_z::Vector{Float64}) [NLEQ<:ParametricNonLinEq] begin
-    SimpleSolver{NLEQ}(nleq, initial_p, initial_z)
+    SimpleSolver{length(initial_z),length(initial_p),length(initial_z)*length(initial_p),NLEQ}(nleq, initial_p, initial_z)
 end
 
 set_resabstol!(solver::SimpleSolver, tol) = solver.tol = tol
@@ -203,9 +233,12 @@ end
 
 function set_extrapolation_origin(solver::SimpleSolver, p, z, Jp, linsolver)
     copy!(solver.last_linsolver, linsolver)
-    copyto!(solver.last_Jp, Jp)
-    copyto!(solver.last_p, p)
-    copyto!(solver.last_z, z)
+    #copyto!(solver.last_Jp, Jp)
+    solver.last_Jp = Jp
+    #copyto!(solver.last_p, p)
+    solver.last_p = p
+    solver.last_z = z
+    #copyto!(solver.last_z, z)
 end
 
 get_extrapolation_origin(solver::SimpleSolver) = solver.last_p, solver.last_z
@@ -217,15 +250,21 @@ hasconverged(solver::SimpleSolver) = solver.resmaxabs < solver.tol
 
 needediterations(solver::SimpleSolver) = solver.iters
 
-function solve(solver::SimpleSolver, p::AbstractVector{Float64}, maxiter=500)
+function solve(solver::SimpleSolver, p::SVector{N,Float64}, maxiter=500) where N
     set_p!(solver.nleq, p)
     #solver.z = solver.last_z - solver.last_J\(solver.last_Jp * (p-solver.last_p))
-    copyto!(solver.tmp_np, p)
-    BLAS.axpy!(-1.0, solver.last_p, solver.tmp_np)
-    BLAS.gemv!('N', 1.,solver.last_Jp, solver.tmp_np, 0., solver.tmp_nn)
-    solve!(solver.last_linsolver, solver.tmp_nn, solver.tmp_nn)
-    copyto!(solver.z, solver.last_z)
-    BLAS.axpy!(-1.0, solver.tmp_nn, solver.z)
+    #copyto!(solver.tmp_np, p)
+    #BLAS.axpy!(-1.0, solver.last_p, solver.tmp_np)
+    #copyto!(solver.tmp_np, p - solver.last_p)
+    #solver.tmp_np = p - solver.last_p
+    #BLAS.gemv!('N', 1.,solver.last_Jp, solver.tmp_np, 0., solver.tmp_nn)
+    #solver.tmp_nn = solver.last_Jp * (p-solver.last_p)
+    #copyto!(solver.tmp_nn, solver.last_Jp * (p-solver.last_p))
+    #solve!(solver.last_linsolver, solver.tmp_nn, solver.tmp_nn)
+    tmp_nn = solve(solver.last_linsolver, solver.last_Jp * (p-solver.last_p))
+    #BLAS.axpy!(-1.0, solver.tmp_nn, solver.z)
+    #copyto!(solver.z, solver.last_z - tmp_nn)
+    solver.z = solver.last_z - tmp_nn
 
     for solver.iters=1:maxiter
         evaluate!(solver.nleq, solver.z)
@@ -238,8 +277,10 @@ function solve(solver::SimpleSolver, p::AbstractVector{Float64}, maxiter=500)
         end
         hasconverged(solver) && break
         #solver.z -= solver.nleq.J\solver.nleq.res
-        solve!(solver.linsolver, solver.tmp_nn, solver.nleq.res)
-        BLAS.axpy!(-1.0, solver.tmp_nn, solver.z)
+        #solve!(solver.linsolver, solver.tmp_nn, solver.nleq.res)
+        #solver.tmp_nn = solve(solver.linsolver, solver.nleq.res)
+        #BLAS.axpy!(-1.0, solver.tmp_nn, solver.z)
+        solver.z -= solve(solver.linsolver, solver.nleq.res)
     end
     if hasconverged(solver)
         calc_Jp!(solver.nleq)
@@ -289,11 +330,11 @@ function solve(solver::HomotopySolver, p)
         best_a = 0.0
         copyto!(solver.start_p, get_extrapolation_origin(solver.basesolver)[1])
         while best_a < 1
-            # copyto!(solver.pa, (1-a) * solver.start_p + a * p)
+            # copyto!(solver.pa = (1-a) * solver.start_p + a * p)
             copyto!(solver.pa, solver.start_p)
             rmul!(solver.pa, 1-a)
             axpy!(a, p, solver.pa)
-            z = solve(solver.basesolver, solver.pa)
+            z = solve(solver.basesolver, SVector{length(solver.pa)}(solver.pa))
             solver.iters += needediterations(solver.basesolver)
             if hasconverged(solver)
                 best_a = a
