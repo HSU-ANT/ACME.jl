@@ -190,12 +190,13 @@ end
     reduce_pdims!(mats)
 
     model_nonlinear_eqs = [quote
-        copyto!(q, pfull + fq * z)
+        q = pfull + fq * z
         let J=Jq
             $(nonlinear_eq(circ, nles))
+            Jq = J
         end
-        #copyto!(J, Jq*model.fq)
-        BLAS.gemm!('N', 'N', 1., Jq, fq, 0., J)
+        copyto!(J, Jq*fq)
+        #BLAS.gemm!('N', 'N', 1., Jq, fq, 0., J)
     end for nles in nl_elems]
 
     model_nps = size.(mats[:dqs], 1)
@@ -244,38 +245,34 @@ end
     fqprev_fulls = Array{Float64}.(mats[:fqprev_fulls])
     pexps = Array{Float64}.(mats[:pexps])
 
-    nonlinear_eq_funcs = [eval(quote
+    nonlinear_eq_funcs = [let fq = SMatrix{size(fq)...}(fq)
+    eval(quote
         (res, J, scratch, z) ->
-            let pfull=scratch.pfull, Jq=scratch.Jq, q=$(zeros(nq)), fq=$fq
+            let pfull=scratch.pfull, Jq=scratch.Jq, fq=$fq
                 $(nonlinear_eq)
                 return nothing
             end
-    end) for (nonlinear_eq, fq, nq) in zip(model_nonlinear_eqs, fqs, model_nqs)]
+    end) end for (nonlinear_eq, fq, nq) in zip(model_nonlinear_eqs, fqs, model_nqs)]
     nonlinear_eq_set_ps = [
         let pexp = SMatrix{size(pexp)...}(pexp), q0 = SVector{length(q0)}(q0)
             function(scratch, p)
-                #pfull = scratch[1]
-                #copyto!(pfull, q0 + pexp * p)
                 scratch.pfull = q0 + pexp * p
-                #copyto!(pfull, q0)
-                #BLAS.gemv!('N', 1., pexp, p, 1., pfull)
                 return nothing
             end
         end
         for (pexp, q0) in zip(pexps, q0s)]
     nonlinear_eq_calc_Jps = [
+        let pexp = SMatrix{size(pexp)...}(pexp)
         function (scratch, Jp)
-            Jq = scratch.Jq
-            #copyto!(Jp, Jq*pexp)
-            BLAS.gemm!('N', 'N', 1., Jq, pexp, 0., Jp)
+            copyto!(Jp, scratch.Jq*pexp)
             return nothing
-        end
+        end end
         for pexp in pexps]
     solvers = ((eval(:($Solver(ParametricNonLinEq($nonlinear_eq_funcs[$idx],
                                           $nonlinear_eq_set_ps[$idx],
                                           $nonlinear_eq_calc_Jps[$idx],
                                           Scratch(SVector{$model_nqs[$idx]}(zeros($model_nqs[$idx])),
-                                                  zeros($model_nns[$idx], $model_nqs[$idx])),
+                                                  MMatrix{$model_nns[$idx], $model_nqs[$idx]}(zeros($model_nns[$idx], $model_nqs[$idx]))),
                                           $model_nns[$idx], $model_nps[$idx]),
                        zeros($model_nps[$idx]), $init_zs[$idx])))
                 for idx in eachindex(model_nonlinear_eqs))...,)
