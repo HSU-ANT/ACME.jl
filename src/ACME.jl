@@ -780,11 +780,7 @@ function gensolve(a, b, x, h, thresh=0.1)
             continue
         end
         jat = jnz[nz_abs_vals .≥ thresh*max_abs_val] # cols above threshold
-        # TODO: Picking the correct index leads to problems (test failures),
-        # needs further investigation. A bug caused this to be jat[1] previously,
-        # so use that for the time being
-        j = jat[1]
-        #j = jat[indmin(vec(mapslices(hj -> count(!iszero, hj), h[:,jat], 1)))]
+        j = jat[indmin(vec(mapslices(hj -> count(!iszero, hj), h[:,jat], 1)))]
         q = h[:,j]
         # ait*q is a scalar in Julia 0.6+, but a single element matrix before!
         x = x + convert(typeof(x), q * ((b[t[i],:]' - ait*x) * (1 / (ait*q)[1])))
