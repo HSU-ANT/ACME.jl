@@ -134,7 +134,7 @@ end
         rd, wr = redirect_stderr()
         model = DiscreteModel(circ, 1)
         # should warn because output is indeterminate
-        @test !isempty(search(convert(String, readavailable(rd)), "WARNING"))
+        @test !isempty(search(String(readavailable(rd)), "WARNING"))
         redirect_stderr(orig_stderr)
     end
 
@@ -154,7 +154,7 @@ end
         rd, wr = redirect_stderr()
         @test size(run!(model, hcat([-1.0]))) == (1, 1)
         # should warn because solution exists as diode cannot reach reverse current of 1A
-        @test !isempty(search(convert(String, readavailable(rd)), "WARNING"))
+        @test !isempty(search(String(readavailable(rd)), "WARNING"))
         redirect_stderr(orig_stderr)
     end
 end
