@@ -43,6 +43,10 @@ else
     end
 end
 
+if !isdefined(@__MODULE__, :copyto!) # prior to 0.7.0-DEV.3057
+    global const copyto! = Base.copy!
+end
+
 function _indmax(a::AbstractMatrix)
     ind = indmax(a)
     if isa(ind, CartesianIndex) # since 0.7.0-DEV.1660
@@ -217,13 +221,13 @@ end
     reduce_pdims!(mats)
 
     model_nonlinear_eqs = [quote
-        #copy!(q, pfull + fq * z)
-        copy!(q, pfull)
+        #copyto!(q, pfull + fq * z)
+        copyto!(q, pfull)
         BLAS.gemv!('N',1.,fq,z,1.,q)
         let J=Jq
             $(nonlinear_eq(circ, nles))
         end
-        #copy!(J, Jq*model.fq)
+        #copyto!(J, Jq*model.fq)
         BLAS.gemm!('N', 'N', 1., Jq, fq, 0., J)
     end for nles in nl_elems]
 
@@ -283,8 +287,8 @@ end
     nonlinear_eq_set_ps = [
         function(scratch, p)
             pfull = scratch[1]
-            #copy!(pfull, q0 + pexp * p)
-            copy!(pfull, q0)
+            #copyto!(pfull, q0 + pexp * p)
+            copyto!(pfull, q0)
             BLAS.gemv!('N', 1., pexp, p, 1., pfull)
             return nothing
         end
@@ -292,7 +296,7 @@ end
     nonlinear_eq_calc_Jps = [
         function (scratch, Jp)
             Jq = scratch[2]
-            #copy!(Jp, Jq*pexp)
+            #copyto!(Jp, Jq*pexp)
             BLAS.gemm!('N', 'N', 1., Jq, pexp, 0., Jp)
             return nothing
         end
@@ -520,7 +524,7 @@ end
 
 function steadystate!(model::DiscreteModel, u=zeros(nu(model)))
     x_steady = steadystate(model, u)
-    copy!(model.x, x_steady)
+    copyto!(model.x, x_steady)
     return x_steady
 end
 
@@ -546,7 +550,7 @@ function linearize(model::DiscreteModel, usteady::AbstractVector{Float64}=zeros(
                   model.fqprevs[idx] * zsteady
         zsub, dzdps[idx] =
             Compat.invokelatest(linearize, model.solvers[idx], psteady)
-        copy!(zsteady, zoff, zsub, 1, length(zsub))
+        copyto!(zsteady, zoff, zsub, 1, length(zsub))
 
         zranges[idx] = zoff:zoff+length(zsub)-1
         fqdzdps = [model.fqprevs[idx][:,zranges[n]] * dzdps[n] for n in 1:idx-1]
@@ -698,12 +702,12 @@ function step!(runner::ModelRunner, y::AbstractMatrix{Float64}, u::AbstractMatri
     ycur = runner.ycur
     xnew = runner.xnew
     z = runner.z
-    copy!(ucur, 1, u, (n-1)*nu(model)+1, nu(model))
+    copyto!(ucur, 1, u, (n-1)*nu(model)+1, nu(model))
     zoff = 1
     fill!(z, 0.0)
     for idx in 1:length(model.solvers)
         p = runner.ps[idx]
-        # copy!(p, model.dqs[idx] * model.x + model.eqs[idx] * u[:,n]) + model.fqprevs[idx] * z
+        # copyto!(p, model.dqs[idx] * model.x + model.eqs[idx] * u[:,n]) + model.fqprevs[idx] * z
         if size(model.dqs[idx], 2) == 0
             fill!(p, 0.0)
         else
@@ -721,22 +725,22 @@ function step!(runner::ModelRunner, y::AbstractMatrix{Float64}, u::AbstractMatri
                 error("Failed to converge while solving non-linear equation, got non-finite result.")
             end
         end
-        copy!(z, zoff, zsub, 1, length(zsub))
+        copyto!(z, zoff, zsub, 1, length(zsub))
         zoff += length(zsub)
     end
     #y[:,n] = model.dy * model.x + model.ey * u[:,n] + model.fy * z + model.y0
-    copy!(ycur, model.y0)
+    copyto!(ycur, model.y0)
     BLAS.gemv!('N', 1., model.dy, model.x, 1., ycur)
     BLAS.gemv!('N', 1., model.ey, ucur, 1., ycur)
     BLAS.gemv!('N', 1., model.fy, z, 1., ycur)
     #y[:,n] = ycur
-    copy!(y, (n-1)*ny(model)+1, ycur, 1, ny(model))
+    copyto!(y, (n-1)*ny(model)+1, ycur, 1, ny(model))
     #model.x = model.a * model.x + model.b * u[:,n] + model.c * z + model.x0
-    copy!(xnew, model.x0)
+    copyto!(xnew, model.x0)
     BLAS.gemv!('N', 1., model.a, model.x, 1., xnew)
     BLAS.gemv!('N', 1., model.b, ucur, 1.,xnew)
     BLAS.gemv!('N', 1., model.c, z, 1., xnew)
-    copy!(model.x, xnew)
+    copyto!(model.x, xnew)
 end
 
 function gensolve(a, b, x, h, thresh=0.1)

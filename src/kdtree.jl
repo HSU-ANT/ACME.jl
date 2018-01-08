@@ -172,7 +172,7 @@ end
         push!(alts.entries, AltEntry(new_idx, delta, new_delta_norm))
     else
         alts.entries[alts.number_valid+1].idx = new_idx
-        copy!(alts.entries[alts.number_valid+1].delta, ref_delta)
+        copyto!(alts.entries[alts.number_valid+1].delta, ref_delta)
         alts.entries[alts.number_valid+1].delta[delta_update_dim] = delta_update_val
         alts.entries[alts.number_valid+1].delta_norm = new_delta_norm
     end

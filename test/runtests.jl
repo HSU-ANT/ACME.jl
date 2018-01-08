@@ -25,7 +25,7 @@ end
     y = similar(x)
     ACME.solve!(solver, y, x)
     @test A*y ≈ x
-    copy!(y, x)
+    y = copy(x)
     ACME.solve!(solver, y, y)
     @test A*y ≈ x
     @test_throws DimensionMismatch ACME.setlhs!(solver, zeros(2, 3))
