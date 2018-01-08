@@ -56,10 +56,10 @@ function _indmax(a::AbstractMatrix)
     end
 end
 
-if isdefined(Base, :NamedTuple)
+if isdefined(Base, :NamedTuple) # 0.7.0-DEV.2738 to 0.7.0-DEV.3226
     kwargs_pairs(kwargs::NamedTuple) = pairs(kwargs)
 end
-kwargs_pairs(kwargs::Vector) = kwargs
+kwargs_pairs(kwargs) = kwargs
 
 include("kdtree.jl")
 include("solvers.jl")
