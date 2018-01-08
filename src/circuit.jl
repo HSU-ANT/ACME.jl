@@ -283,7 +283,7 @@ end
 
     dl = ti[:, (!).(t)]
     tv = spzeros(T, size(dl, 2), size(incidence, 2))
-    tv[:, t] = -dl.'
+    tv[:, t] = -dl'
     tv[:, (!).(t)] = SparseMatrixCSC{T}(I, size(dl, 2), size(dl, 2))
 
     tv, ti

@@ -131,7 +131,7 @@ function transformer(::Type{Val{:JA}}; D=2.4e-2, A=4.54e-5, ns=[],
         J[1,4] = $(1e-4/Ms) * ($(c * Ms/a * α)*Ld_q1 - 1)
     end
     Element(mv=[speye(length(ns)); spzeros(5, length(ns))],
-            mi=[spzeros(length(ns), length(ns)); ns.'; spzeros(4, length(ns))],
+            mi=[spzeros(length(ns), length(ns)); ns'; spzeros(4, length(ns))],
             mx=[spzeros(length(ns), 2); -π*D 0; -1/a -α/a; 0 -1; 0 0; 0 0],
             mxd=[-μ0*A*ns -μ0*ns*A; 0 0; 0 0; 0 0; -1 0; 0 -1],
             mq=[zeros(length(ns)+1,4); eye(4)], nonlinear_eq = nonlinear_eq)

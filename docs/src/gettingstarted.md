@@ -89,7 +89,7 @@ row per input (just one in the example) and one column per sample. So for a
 sinusoid at 1 kHz lasting one second, we do::
 
 ```Julia
-y = run!(model, sin(2π*1000/44100*(0:44099).'))
+y = run!(model, sin(2π*1000/44100*(0:44099)'))
 ```
 
 The output `y` now likewise is a matrix with one row for the one probe we have
