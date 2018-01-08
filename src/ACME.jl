@@ -359,7 +359,7 @@ model_matrices(circ::Circuit, t) = model_matrices(circ, Rational{BigInt}(t))
 function tryextract(fq, numcols)
     a = Matrix{eltype(fq)}(I, size(fq, 2), size(fq, 2))
     if numcols ≥ size(fq,2)
-        return Nullable(a)
+        return a
     end
     for colcnt in 1:numcols
         # determine element with maximum absolute value in unprocessed columns
@@ -380,10 +380,10 @@ function tryextract(fq, numcols)
         fq = fq[[1:i-1; i+1:end],:]
 
         if all(iszero, fq[:,colcnt+1:end])
-            return Nullable(a)
+            return a
         end
     end
-    return Nullable{typeof(a)}()
+    return nothing
 end
 
 function nldecompose!(mats, nns, nqs)
@@ -397,10 +397,10 @@ function nldecompose!(mats, nns, nqs)
     while !isempty(rem_nles)
         for sz in 1:length(rem_nles), sub in subsets(collect(rem_nles), sz)
             nn_sub = sum(nns[sub])
-            maybe_a = tryextract(fq[[sub_ranges[sub]...;],rem_cols], nn_sub)
-            if !isnull(maybe_a)
-                fq[:,rem_cols] = fq[:,rem_cols] * get(maybe_a)
-                a[:,rem_cols] = a[:,rem_cols] * get(maybe_a)
+            a_update = tryextract(fq[[sub_ranges[sub]...;],rem_cols], nn_sub)
+            if a_update !== nothing
+                fq[:,rem_cols] = fq[:,rem_cols] * a_update
+                a[:,rem_cols] = a[:,rem_cols] * a_update
                 rem_cols = first(rem_cols)+nn_sub:size(fq, 2)
                 push!(extracted_subs, sub)
                 for nle in sub
