@@ -474,8 +474,7 @@ function initial_solution(nleq, q0, fq)
     nq, nn = size(fq)
     return eval(quote
         init_nl_eq_func = (res, J, scratch, z) ->
-            let pfull=scratch[1], Jp=scratch[2], q=$(zeros(nq)),
-                Jq=$(zeros(nn, nq)), fq=$(fq)
+            let pfull=scratch[1], Jq=scratch[2], q=$(zeros(nq)), fq=$(fq)
                 $(nleq)
                 return nothing
             end
@@ -507,8 +506,7 @@ function steadystate(model::DiscreteModel, u=zeros(nu(model)))
             model.pexps[idx]*model.dqs[idx]/IA_LU*model.x0
         steady_z[zoff:zoff_last] = eval(quote
             steady_nl_eq_func = (res, J, scratch, z) ->
-                let pfull=scratch[1], Jp=scratch[2],
-                    q=$(zeros(nq(model, idx))), Jq=$(zeros(nn(model, idx), nq(model, idx))),
+                let pfull=scratch[1], Jq=scratch[2], q=$(zeros(nq(model, idx))),
                     fq=$(model.pexps[idx]*model.dqs[idx]/IA_LU*model.c[:,zoff:zoff_last] + model.fqs[idx])
                     $(model.nonlinear_eqs[idx])
                     return nothing
