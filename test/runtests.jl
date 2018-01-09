@@ -130,12 +130,20 @@ end
             r = resistor(0)
             probe = currentprobe(), [+] ⟷ r[1], [-] ⟷ r[2]
         end
-        orig_stderr = STDERR
-        rd, wr = redirect_stderr()
-        model = DiscreteModel(circ, 1)
-        # should warn because output is indeterminate
-        @test !isempty(search(String(readavailable(rd)), "WARNING"))
-        redirect_stderr(orig_stderr)
+        @static if VERSION ≥ v"0.7.0-DEV.2988"
+            @test_logs (:warn, "Model output depends on indeterminate quantity") DiscreteModel(circ, 1)
+        else
+            @static if VERSION ≥ v"0.6.0"
+                @test_warn "output depends on indeterminate quantity" DiscreteModel(circ, 1)
+            else
+                orig_stderr = STDERR
+                rd, wr = redirect_stderr()
+                DiscreteModel(circ, 1)
+                # should warn because output is indeterminate
+                @test !isempty(search(String(readavailable(rd)), "WARNING"))
+                redirect_stderr(orig_stderr)
+            end
+        end
     end
 
     @testset "no solution" begin
@@ -150,12 +158,20 @@ end
         @test size(y) == (1, 2)
         @test y[1,1] == y[1,2]
         @test_throws ErrorException run!(model, hcat([Inf]))
-        orig_stderr = STDERR
-        rd, wr = redirect_stderr()
-        @test size(run!(model, hcat([-1.0]))) == (1, 1)
-        # should warn because solution exists as diode cannot reach reverse current of 1A
-        @test !isempty(search(String(readavailable(rd)), "WARNING"))
-        redirect_stderr(orig_stderr)
+        @static if VERSION ≥ v"0.7.0-DEV.2988"
+            @test(size(@test_logs((:warn, "Failed to converge while solving non-linear equation."), run!(model, hcat([-1.0])))) == (1, 1))
+        else
+            @static if VERSION ≥ v"0.6.0"
+                @test_warn("Failed to converge", @test size(run!(model, hcat([-1.0]))) == (1, 1))
+            else
+                orig_stderr = STDERR
+                rd, wr = redirect_stderr()
+                @test size(run!(model, hcat([-1.0]))) == (1, 1)
+                # should warn because solution exists as diode cannot reach reverse current of 1A
+                @test !isempty(search(String(readavailable(rd)), "WARNING"))
+                redirect_stderr(orig_stderr)
+            end
+        end
     end
 end
 

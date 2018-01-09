@@ -47,6 +47,12 @@ if !isdefined(@__MODULE__, :copyto!) # prior to 0.7.0-DEV.3057
     global const copyto! = Base.copy!
 end
 
+if !isdefined(@__MODULE__, Symbol("@warn")) # prior to 0.7.0-DEV.2988
+    macro warn(args...)
+        :(warn($args...))
+    end
+end
+
 function _indmax(a::AbstractMatrix)
     ind = indmax(a)
     if isa(ind, CartesianIndex) # since 0.7.0-DEV.1660
@@ -328,7 +334,7 @@ function model_matrices(circ::Circuit, t::Rational{BigInt})
     indeterminates = f * nullspace
 
     if sum(abs2, res[:c] * nullspace) > 1e-20
-        warn("State update depends on indeterminate quantity")
+        @warn "State update depends on indeterminate quantity"
     end
     while size(nullspace, 2) > 0
         i, j = _indmax(abs.(nullspace))
@@ -347,7 +353,7 @@ function model_matrices(circ::Circuit, t::Rational{BigInt})
 
     p = [pv(circ) pi(circ) px(circ)//2+pxd(circ)//t pq(circ)]
     if sum(abs2, p * indeterminates) > 1e-20
-        warn("Model output depends on indeterminate quantity")
+        @warn "Model output depends on indeterminate quantity"
     end
     res[:dy] = p * x[:,2+nu(circ):end] + px(circ)//2-pxd(circ)//t
     #          p * [dv; di; a;  dq_full] + px(circ)//2-pxd(circ)//t
@@ -720,7 +726,7 @@ function step!(runner::ModelRunner, y::AbstractMatrix{Float64}, u::AbstractMatri
         zsub = solve(model.solvers[idx], p)
         if !hasconverged(model.solvers[idx])
             if all(isfinite, zsub)
-                warn("Failed to converge while solving non-linear equation.")
+                @warn "Failed to converge while solving non-linear equation."
             else
                 error("Failed to converge while solving non-linear equation, got non-finite result.")
             end
