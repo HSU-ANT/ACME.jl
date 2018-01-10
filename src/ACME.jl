@@ -380,9 +380,9 @@ function model_matrices(circ::Circuit, t::Rational{BigInt})
     while size(nullspace, 2) > 0
         i, j = _indmax(map(abs, nullspace))
         nullspace = nullspace[[1:i-1; i+1:end], [1:j-1; j+1:end]]
-        f = f[:, [1:j-1; j+1:end]]
+        f = f[:, [1:i-1; i+1:end]]
         for k in [:fv; :fi; :c; :fq]
-            res[k] = res[k][:, [1:j-1; j+1:end]]
+            res[k] = res[k][:, [1:i-1; i+1:end]]
         end
     end
 
