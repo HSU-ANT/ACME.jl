@@ -167,25 +167,41 @@ let a = Rational{BigInt}[1 1 1; 1 1 2; 1 2 1; 1 2 2; 2 1 1; 2 1 2],
     @test c*f == a*b
 end
 
-let a = Rational{BigInt}[1 1 1; 1 1 2; 1 2 1; 1 2 2; 2 1 1; 2 1 2],
-    b = Rational{BigInt}[1 2 3 4 5 6; 6 5 4 3 2 1; 1 0 1 0 1 0],
-    fq = Rational{BigInt}[1 0 0; 10 0 0; 0 1 0; 0 10 0; 0 0 1; 0 0 10],
-    z = Rational{BigInt}[1 2 0 0 2 1; 0 1 2 2 0 1; 0 0 1 0 1 1]
-    mats = Dict{Symbol,Array}(:dq_full => a * b, :eq_full => zeros(Rational{BigInt},6,0), :fq => fq)
-    mats[:dq_fulls]=Matrix[mats[:dq_full]]
-    mats[:eq_fulls]=Matrix[mats[:eq_full]]
-    mats[:fqprev_fulls]=Matrix[mats[:eq_full]]
-    mats[:fqs]=Matrix[mats[:fq]]
-    ACME.reduce_pdims!(mats)
-    @test size(mats[:pexps][1], 2) == 3
-    @test mats[:pexps][1] * mats[:dqs][1] == mats[:dq_fulls][1]
-    mats = Dict{Symbol,Array}(:dq_full => a * b + fq * z, :eq_full => zeros(Rational{BigInt},6,0), :fq => fq)
-    mats[:dq_fulls]=Matrix[mats[:dq_full]]
-    mats[:eq_fulls]=Matrix[mats[:eq_full]]
-    mats[:fqprev_fulls]=Matrix[mats[:eq_full]]
-    mats[:fqs]=Matrix[mats[:fq]]
-    ACME.reduce_pdims!(mats)
-    @test size(mats[:pexps][1], 2) == 3
+let a = Rational{BigInt}[-1 -1 -4 -3 0 -1; 2 -1 -5 3 -4 0; -2 2 -5 -2 5 1;
+                         -5 4 -3 0 5 -5; 4 3 0 -1 0 2; 0 -3 -4 -4 -3 4],
+    b = hcat(Rational{BigInt}[1; 2; 3; -2; -1; 0]),
+    c = Rational{BigInt}[4 2 -1; -1 -3 0; -3 5 3; 0 0 0; -4 -1 -1; -1 -1 5],
+    dy = Rational{BigInt}[1 2 3 -2 -1 0],
+    ey = hcat(Rational{BigInt}[5]),
+    fy = Rational{BigInt}[-2 -1 3],
+    p = Rational{BigInt}[1 1 1; 1 1 2; 1 2 1; 1 2 2; 2 1 1; 2 1 2],
+    dq = Rational{BigInt}[1 2 3 4 5 6; 6 5 4 3 2 1; 1 0 1 0 1 0],
+    eq = hcat(Rational{BigInt}[1; 2; 3]),
+    fq = Rational{BigInt}[1 0 0; 10 0 0; 0 1 0; 0 10 0; 0 0 1; 0 0 10]
+
+    for zxin in (zeros(Rational{BigInt}, 3, 6), Rational{BigInt}[1 2 0 0 2 1; 0 1 2 2 0 1; 0 0 1 0 1 1]),
+        zuin in (zeros(Rational{BigInt}, 3, 1), hcat(Rational{BigInt}[1; 2; -1]))
+        dq_full = p * dq + fq * zxin
+        eq_full = p * eq + fq * zuin
+        mats = Dict{Symbol,Array}(:a => a, :b => b, :c => c, :dy => dy, :ey => ey,
+            :fy => fy, :dq_full => dq_full, :eq_full => eq_full, :fq => fq)
+        mats[:dq_fulls]=Matrix[mats[:dq_full]]
+        mats[:eq_fulls]=Matrix[mats[:eq_full]]
+        mats[:fqprev_fulls]=Matrix[mats[:eq_full]]
+        mats[:fqs]=Matrix[mats[:fq]]
+        ACME.reduce_pdims!(mats)
+        @test size(mats[:pexps][1], 2) == 3
+        @test mats[:pexps][1] * mats[:dqs][1] == mats[:dq_fulls][1]
+        @test mats[:pexps][1] * mats[:eqs][1] == mats[:eq_fulls][1]
+        zx = (fq'fq) \ fq' * (dq_full - mats[:dq_fulls][1])
+        zu = (fq'fq) \ fq' * (eq_full - mats[:eq_fulls][1])
+        @test mats[:a] == a - c*zx
+        @test mats[:b] == b - c*zu
+        @test mats[:dy] == dy - fy*zx
+        @test mats[:ey] == ey - fy*zu
+    end
+
+    # TODO: Also check dq, eq, fqprev for a test case with desomposed non-linearity
 end
 
 let circ = @circuit begin
