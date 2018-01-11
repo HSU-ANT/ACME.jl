@@ -380,9 +380,9 @@ function model_matrices(circ::Circuit, t::Rational{BigInt})
     while size(nullspace, 2) > 0
         i, j = _indmax(map(abs, nullspace))
         nullspace = nullspace[[1:i-1; i+1:end], [1:j-1; j+1:end]]
-        f = f[:, [1:j-1; j+1:end]]
+        f = f[:, [1:i-1; i+1:end]]
         for k in [:fv; :fi; :c; :fq]
-            res[k] = res[k][:, [1:j-1; j+1:end]]
+            res[k] = res[k][:, [1:i-1; i+1:end]]
         end
     end
 
@@ -486,6 +486,7 @@ function reduce_pdims!(mats::Dict)
     mats[:eqs] = Vector{Matrix}(subcount)
     mats[:fqprevs] = Vector{Matrix}(subcount)
     mats[:pexps] = Vector{Matrix}(subcount)
+    offset = 0
     for idx in 1:subcount
         # decompose [dq_full eq_full] into pexp*[dq eq] with [dq eq] having minimum
         # number of rows
@@ -496,16 +497,31 @@ function reduce_pdims!(mats::Dict)
 
         # project pexp onto the orthogonal complement of the column space of Fq
         fq = mats[:fqs][idx]
+        nn = size(fq, 2)
         fq_pinv = gensolve(sparse(fq'*fq), fq')[1]
         pexp = pexp - fq*fq_pinv*pexp
         # if the new pexp has lower rank, update
         pexp, f = rank_factorize(sparse(pexp))
         if size(pexp, 2) < size(mats[:pexps][idx], 2)
+            cols = offset .+ (1:nn)
+            mats[:a] = mats[:a] - mats[:c][:,cols]*fq_pinv*mats[:pexps][idx]*mats[:dqs][idx]
+            mats[:b] = mats[:b] - mats[:c][:,cols]*fq_pinv*mats[:pexps][idx]*mats[:eqs][idx]
+            mats[:dy] = mats[:dy] - mats[:fy][:,cols]*fq_pinv*mats[:pexps][idx]*mats[:dqs][idx]
+            mats[:ey] = mats[:ey] - mats[:fy][:,cols]*fq_pinv*mats[:pexps][idx]*mats[:eqs][idx]
+            for idx2 in (idx+1):subcount
+                mats[:dq_fulls][idx2] = mats[:dq_fulls][idx2] - mats[:fqprev_fulls][idx2][:,cols]*fq_pinv*mats[:pexps][idx]*mats[:dqs][idx]
+                mats[:eq_fulls][idx2] = mats[:eq_fulls][idx2] - mats[:fqprev_fulls][idx2][:,cols]*fq_pinv*mats[:pexps][idx]*mats[:eqs][idx]
+                mats[:fqprev_fulls][idx2][:,1:offset] = mats[:fqprev_fulls][idx2][:,1:offset] - mats[:fqprev_fulls][idx2][:,cols]*fq_pinv*mats[:pexps][idx]*mats[:fqprevs][idx][:,1:offset]
+            end
             mats[:pexps][idx] = pexp
             mats[:dqs][idx] = f * mats[:dqs][idx]
             mats[:eqs][idx] = f * mats[:eqs][idx]
             mats[:fqprevs][idx] = f * mats[:fqprevs][idx]
+            mats[:dq_fulls][idx] = pexp * mats[:dqs][idx]
+            mats[:eq_fulls][idx] = pexp * mats[:eqs][idx]
+            mats[:fqprev_fulls][idx] = pexp * mats[:fqprevs][idx]
         end
+        offset += nn
     end
 end
 
