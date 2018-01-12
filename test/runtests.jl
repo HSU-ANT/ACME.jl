@@ -443,7 +443,7 @@ function checksteady!(model)
         ACME.set_resabstol!(s, 1e-13)
     end
     run!(model, zeros(1, 1))
-    @test model.x ≈ x_steady
+    return model.x ≈ x_steady
 end
 
 @testset "examples" begin
@@ -454,7 +454,7 @@ end
          y = run!(model, sin.(2π*1000/44100*(0:44099)'); showprogress=false)
          @test size(y) == (1,44100)
          # TODO: further validate y
-         checksteady!(model)
+         @test checksteady!(model)
      end
 
      @testset "diodeclipper" begin
@@ -465,7 +465,7 @@ end
         y = run!(model, sin.(2π*1000/44100*(0:44099)'); showprogress=false)
         @test size(y) == (1,44100)
         # TODO: further validate y
-        checksteady!(model)
+        @test checksteady!(model)
 
         linmodel = linearize(model)
         N = 50000
@@ -498,7 +498,7 @@ end
         y = run!(model, sin.(2π*1000/44100*(0:44099)'); showprogress=false)
         @test size(y) == (1,44100)
         # TODO: further validate y
-        checksteady!(model)
+        @test checksteady!(model)
 
         linmodel = linearize(model)
         N = 50000
@@ -525,7 +525,7 @@ end
         y = run!(model, sin.(2π*1000/44100*(0:44099)'); showprogress=false)
         @test size(y) == (1,44100)
         # TODO: further validate y
-        checksteady!(model)
+        @test checksteady!(model)
 
         linmodel = linearize(model)
         N = 50000
@@ -548,7 +548,7 @@ end
         y = run!(model, sin.(2π*1000/44100*(0:44099)'); showprogress=false)
         @test size(y) == (1,44100)
         # TODO: further validate y
-        checksteady!(model)
+        @test checksteady!(model)
 
         linmodel = linearize(model)
         N = 50000
@@ -565,7 +565,7 @@ end
         y = run!(model, sin.(2π*1000/44100*(0:44099)'); showprogress=false)
         @test size(y) == (1,44100)
         # TODO: further validate y
-        checksteady!(model)
+        @test checksteady!(model)
 
         linmodel = linearize(model)
         N = 50000
