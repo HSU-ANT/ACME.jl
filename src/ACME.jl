@@ -7,6 +7,10 @@ module ACME
 
 export DiscreteModel, run!, steadystate, steadystate!, linearize, ModelRunner
 
+if VERSION ≥ v"0.7.0-DEV.3389"
+    using SparseArrays
+end
+
 using ProgressMeter
 using Compat
 using IterTools

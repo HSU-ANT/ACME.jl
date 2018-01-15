@@ -6,6 +6,10 @@ using Compat
 using Compat.Test
 using ProgressMeter
 
+if VERSION ≥ v"0.7.0-DEV.3389"
+    using SparseArrays
+end
+
 @testset "topomat" begin
     tv, ti = ACME.topomat(sparse([1 -1 1; -1 1 -1]))
     @test tv*ti'==spzeros(2,1)
