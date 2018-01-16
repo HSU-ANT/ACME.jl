@@ -5,6 +5,7 @@
 
 [![ACME](http://pkg.julialang.org/badges/ACME_0.5.svg)](http://pkg.julialang.org/?pkg=ACME)
 [![ACME](http://pkg.julialang.org/badges/ACME_0.6.svg)](http://pkg.julialang.org/?pkg=ACME)
+[![ACME](http://pkg.julialang.org/badges/ACME_0.7.svg)](http://pkg.julialang.org/?pkg=ACME)
 
 [![Build Status](https://travis-ci.org/HSU-ANT/ACME.jl.svg?branch=develop)](https://travis-ci.org/HSU-ANT/ACME.jl)
 [![codecov](https://codecov.io/gh/HSU-ANT/ACME.jl/branch/develop/graph/badge.svg)](https://codecov.io/gh/HSU-ANT/ACME.jl)
