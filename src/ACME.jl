@@ -7,6 +7,10 @@ module ACME
 
 export DiscreteModel, run!, steadystate, steadystate!, linearize, ModelRunner
 
+if VERSION ≥ v"0.7.0-DEV.3389"
+    using SparseArrays
+end
+
 using ProgressMeter
 using Compat
 using IterTools
@@ -20,44 +24,36 @@ if VERSION ≥ v"0.6.0"
     end
 else
     macro pfunction(sig, params, body)
-        ts = copy(params.args)
-        if VERSION < v"0.5.0"
-            for i in eachindex(ts)
-                if isa(ts[i], Expr) && ts[i].head === :comparison && ts[i].args[2] === :<:
-                    ts[i] = Expr(:<:, ts[i].args[1], ts[i].args[3])
-                end
-            end
-        end
         esc(Expr(:function,
-                 Expr(:call, Expr(:curly, sig.args[1], ts...),
+                 Expr(:call, Expr(:curly, sig.args[1], params.args...),
                       sig.args[2:end]...),
                  body))
     end
 end
 
-macro expandafter(mc)
-    args = copy(mc.args)
-    for i in eachindex(args)
-        if isa(args[i], Expr) && args[i].head === :macrocall
-            args[i] = macroexpand(Compat.@__MODULE__, args[i])
-        end
-    end
-    esc(Expr(:macrocall, args...))
-end
-
 if VERSION ≥ v"0.6.0"
     @eval macro $(:struct)(head, body)
-        Expr(Meta.parse("struct Foo end").head, false, esc(head), Expr(:block, [esc(a) for a in body.args]...))
+        Expr(Meta.parse("struct Foo end").head, false, esc(head), Expr(:block, esc.(body.args)...))
     end
     macro mutable_struct(head, body)
-        Expr(Meta.parse("struct Foo end").head, true, esc(head), Expr(:block, [esc(a) for a in body.args]...))
+        Expr(Meta.parse("struct Foo end").head, true, esc(head), Expr(:block, esc.(body.args)...))
     end
 else
     @eval macro $(:struct)(head, body)
-        Expr(:type, false, esc(head), Expr(:block, [esc(a) for a in body.args]...))
+        Expr(:type, false, esc(head), Expr(:block, esc.(body.args)...))
     end
     macro mutable_struct(head, body)
-        Expr(:type, true, esc(head), Expr(:block, [esc(a) for a in body.args]...))
+        Expr(:type, true, esc(head), Expr(:block, esc.(body.args)...))
+    end
+end
+
+if !isdefined(@__MODULE__, :copyto!) # prior to 0.7.0-DEV.3057
+    global const copyto! = Base.copy!
+end
+
+if !isdefined(@__MODULE__, Symbol("@warn")) # prior to 0.7.0-DEV.2988
+    macro warn(args...)
+        :(warn($args...))
     end
 end
 
@@ -69,6 +65,11 @@ function _indmax(a::AbstractMatrix)
         return ind2sub(size(a), ind)
     end
 end
+
+if isdefined(Base, :NamedTuple) # 0.7.0-DEV.2738 to 0.7.0-DEV.3226
+    kwargs_pairs(kwargs::NamedTuple) = pairs(kwargs)
+end
+kwargs_pairs(kwargs) = kwargs
 
 include("kdtree.jl")
 include("solvers.jl")
@@ -123,7 +124,7 @@ include("solvers.jl")
               :pxd => (:ny,:nx), :pq => (:ny,:nq) )
 
     elem = new()
-    for (key, val) in args
+    for (key, val) in kwargs_pairs(args)
       if haskey(mat_dims, key)
         val = convert(SparseMatrixCSC{Real}, sparse(hcat(val))) # turn val into a sparse matrix whatever it is
         update_sizes(val, mat_dims[key])
@@ -189,14 +190,14 @@ include("circuit.jl")
     solvers::Solvers
     x::Vector{Float64}
 
-    @expandafter @compat @pfunction (::Type{DiscreteModel{Solver}})(circ::Circuit,
+    @pfunction (::Type{DiscreteModel{Solver}})(circ::Circuit,
             t::Float64) [Solver] begin
         Base.depwarn("DiscreteModel{Solver}(circ, t) is deprecated, use DiscreteModel(circ, t, Solver) instead.",
                      :DiscreteModel)
         DiscreteModel(circ, t, Solver)
     end
 
-    @expandafter @compat @pfunction (::Type{DiscreteModel{Solvers}})(mats::Dict{Symbol},
+    @pfunction (::Type{DiscreteModel{Solvers}})(mats::Dict{Symbol},
             nonlinear_eqs::Vector{Expr}, solvers::Solvers) [Solvers] begin
         model = new{Solvers}()
 
@@ -230,24 +231,24 @@ end
     reduce_pdims!(mats)
 
     model_nonlinear_eqs = [quote
-        #copy!(q, pfull + fq * z)
-        copy!(q, pfull)
+        #copyto!(q, pfull + fq * z)
+        copyto!(q, pfull)
         BLAS.gemv!('N',1.,fq,z,1.,q)
         let J=Jq
             $(nonlinear_eq(circ, nles))
         end
-        #copy!(J, Jq*model.fq)
+        #copyto!(J, Jq*model.fq)
         BLAS.gemm!('N', 'N', 1., Jq, fq, 0., J)
     end for nles in nl_elems]
 
-    model_nps = map(dq -> size(dq, 1), mats[:dqs])
-    model_nqs = map(pexp -> size(pexp, 1), mats[:pexps])
+    model_nps = size.(mats[:dqs], 1)
+    model_nqs = size.(mats[:pexps], 1)
 
     @assert nn(circ) == sum(model_nns)
 
-    q0s = map(m -> convert(Array{Float64}, m), mats[:q0s])
-    fqs = map(m -> convert(Array{Float64}, m), mats[:fqs])
-    fqprev_fulls = map(m -> convert(Array{Float64}, m), mats[:fqprev_fulls])
+    q0s = Vector{Float64}.(mats[:q0s])
+    fqs = Matrix{Float64}.(mats[:fqs])
+    fqprev_fulls = Matrix{Float64}.(mats[:fqprev_fulls])
 
     init_zs = [zeros(nn) for nn in model_nns]
     for idx in eachindex(model_nonlinear_eqs)
@@ -278,83 +279,45 @@ end
         mats[:fy] = mats[:fy][:,varying_zidxs]
         mats[:c] = mats[:c][:,varying_zidxs]
         reduce_pdims!(mats)
-        model_nps = map(dq -> size(dq, 1), mats[:dqs])
+        model_nps = size.(mats[:dqs], 1)
     end
 
-    q0s = map(m -> convert(Array{Float64}, m), mats[:q0s])
-    fqs = map(m -> convert(Array{Float64}, m), mats[:fqs])
-    fqprev_fulls = map(m -> convert(Array{Float64}, m), mats[:fqprev_fulls])
-    pexps = map(m -> convert(Array{Float64}, m), mats[:pexps])
+    q0s = Array{Float64}.(mats[:q0s])
+    fqs = Array{Float64}.(mats[:fqs])
+    fqprev_fulls = Array{Float64}.(mats[:fqprev_fulls])
+    pexps = Array{Float64}.(mats[:pexps])
 
     nonlinear_eq_funcs = [eval(quote
-        if VERSION < v"0.5.0-dev+2396"
-            # wrap up in named function because anonymous functions are slow
-            # in old Julia versions
-            function $(gensym())(res, J, scratch, z)
-                pfull=scratch[1]
-                Jq=scratch[2]
-                q=$(zeros(nq))
-                fq=$fq
+        (res, J, scratch, z) ->
+            let pfull=scratch[1], Jq=scratch[2], q=$(zeros(nq)), fq=$fq
                 $(nonlinear_eq)
                 return nothing
             end
-        else
-            (res, J, scratch, z) ->
-                let pfull=scratch[1], Jq=scratch[2], q=$(zeros(nq)), fq=$fq
-                    $(nonlinear_eq)
-                    return nothing
-                end
-        end
     end) for (nonlinear_eq, fq, nq) in zip(model_nonlinear_eqs, fqs, model_nqs)]
-    nonlinear_eq_set_ps = [eval(quote
-        if VERSION < v"0.5.0-dev+2396"
-            # wrap up in named function because anonymous functions are slow
-            # in old Julia versions
-            function $(gensym())(scratch, p)
-                #copy!(pfull, q0 + pexp * p)
-                pfull = scratch[1]
-                copy!(pfull, $q0)
-                BLAS.gemv!('N', 1., $pexp, p, 1., pfull)
-                return nothing
-            end
-        else
-            (scratch, p) ->
-                begin
-                    pfull = scratch[1]
-                    #copy!(pfull, q0 + pexp * p)
-                    copy!(pfull, $q0)
-                    BLAS.gemv!('N', 1., $pexp, p, 1., pfull)
-                    return nothing
-                end
+    nonlinear_eq_set_ps = [
+        function(scratch, p)
+            pfull = scratch[1]
+            #copyto!(pfull, q0 + pexp * p)
+            copyto!(pfull, q0)
+            BLAS.gemv!('N', 1., pexp, p, 1., pfull)
+            return nothing
         end
-    end) for (pexp, q0) in zip(pexps, q0s)]
-    nonlinear_eq_calc_Jps = [eval(quote
-        if VERSION < v"0.5.0-dev+2396"
-            # wrap up in named function because anonymous functions are slow
-            # in old Julia versions
-            function $(gensym())(scratch, Jp)
-                Jq = scratch[2]
-                #copy!(Jp, Jq*pexp)
-                BLAS.gemm!('N', 'N', 1., Jq, $pexp, 0., Jp)
-                return nothing
-            end
-        else
-            (scratch, Jp) ->
-                begin
-                    Jq = scratch[2]
-                    #copy!(Jp, Jq*pexp)
-                    BLAS.gemm!('N', 'N', 1., Jq, $pexp, 0., Jp)
-                    return nothing
-                end
+        for (pexp, q0) in zip(pexps, q0s)]
+    nonlinear_eq_calc_Jps = [
+        function (scratch, Jp)
+            Jq = scratch[2]
+            #copyto!(Jp, Jq*pexp)
+            BLAS.gemm!('N', 'N', 1., Jq, pexp, 0., Jp)
+            return nothing
         end
-    end) for pexp in pexps]
-    solvers = ([eval(:($Solver(ParametricNonLinEq($nonlinear_eq_funcs[$idx],
+        for pexp in pexps]
+    solvers = ((eval(:($Solver(ParametricNonLinEq($nonlinear_eq_funcs[$idx],
                                           $nonlinear_eq_set_ps[$idx],
                                           $nonlinear_eq_calc_Jps[$idx],
                                           (zeros($model_nqs[$idx]), zeros($model_nns[$idx], $model_nqs[$idx])),
                                           $model_nns[$idx], $model_nps[$idx]),
                        zeros($model_nps[$idx]), $init_zs[$idx])))
-                for idx in eachindex(model_nonlinear_eqs)]...)
+                for idx in eachindex(model_nonlinear_eqs))...,)
     return DiscreteModel{typeof(solvers)}(mats, model_nonlinear_eqs, solvers)
 end
 
@@ -365,7 +328,7 @@ function model_matrices(circ::Circuit, t::Rational{BigInt})
     rhs = convert(SparseMatrixCSC{Rational{BigInt},Int},
                   sparse([u0(circ) mu(circ) mxd(circ)//t-mx(circ)//2;
                           spzeros(nb(circ), 1+nu(circ)+nx(circ))]))
-    x, f = map(Matrix, gensolve(lhs, rhs))
+    x, f = Matrix.(gensolve(lhs, rhs))
 
     rowsizes = [nb(circ); nb(circ); nx(circ); nq(circ)]
     res = Dict{Symbol,Array}(zip([:fv; :fi; :c; :fq], matsplit(f, rowsizes)))
@@ -374,11 +337,11 @@ function model_matrices(circ::Circuit, t::Rational{BigInt})
                          spzeros(Rational{BigInt}, size(res[:fq],1), 0))[2]
     indeterminates = f * nullspace
 
-    if normsquared(res[:c] * nullspace) > 1e-20
-        warn("State update depends on indeterminate quantity")
+    if sum(abs2, res[:c] * nullspace) > 1e-20
+        @warn "State update depends on indeterminate quantity"
     end
     while size(nullspace, 2) > 0
-        i, j = _indmax(map(abs, nullspace))
+        i, j = _indmax(abs.(nullspace))
         nullspace = nullspace[[1:i-1; i+1:end], [1:j-1; j+1:end]]
         f = f[:, [1:i-1; i+1:end]]
         for k in [:fv; :fi; :c; :fq]
@@ -393,8 +356,8 @@ function model_matrices(circ::Circuit, t::Rational{BigInt})
     end
 
     p = [pv(circ) pi(circ) px(circ)//2+pxd(circ)//t pq(circ)]
-    if normsquared(p * indeterminates) > 1e-20
-        warn("Model output depends on indeterminate quantity")
+    if sum(abs2, p * indeterminates) > 1e-20
+        @warn "Model output depends on indeterminate quantity"
     end
     res[:dy] = p * x[:,2+nu(circ):end] + px(circ)//2-pxd(circ)//t
     #          p * [dv; di; a;  dq_full] + px(circ)//2-pxd(circ)//t
@@ -408,14 +371,14 @@ end
 model_matrices(circ::Circuit, t) = model_matrices(circ, Rational{BigInt}(t))
 
 function tryextract(fq, numcols)
-    a = eye(eltype(fq), size(fq,2))
+    a = Matrix{eltype(fq)}(I, size(fq, 2), size(fq, 2))
     if numcols ≥ size(fq,2)
-        return Nullable(a)
+        return a
     end
     for colcnt in 1:numcols
         # determine element with maximum absolute value in unprocessed columns
         # to use as pivot
-        i, j = _indmax(map(abs, fq[:,colcnt:end]))
+        i, j = _indmax(abs.(fq[:,colcnt:end]))
         j += colcnt-1
 
         # swap pivot to first (unprocessed) column
@@ -431,27 +394,27 @@ function tryextract(fq, numcols)
         fq = fq[[1:i-1; i+1:end],:]
 
         if all(iszero, fq[:,colcnt+1:end])
-            return Nullable(a)
+            return a
         end
     end
-    return Nullable{typeof(a)}()
+    return nothing
 end
 
 function nldecompose!(mats, nns, nqs)
     fq = mats[:fq]
-    a = eye(eltype(fq), size(fq,2))
+    a = Matrix{eltype(fq)}(I, size(fq, 2), size(fq, 2))
     sub_ranges = consecranges(nqs)
     extracted_subs = Vector{Int}[]
     rem_cols = 1:size(fq, 2)
-    rem_nles = IntSet(filter!(e -> nqs[e] > 0, collect(eachindex(nqs))))
+    rem_nles = Compat.BitSet(filter!(e -> nqs[e] > 0, collect(eachindex(nqs))))
 
     while !isempty(rem_nles)
         for sz in 1:length(rem_nles), sub in subsets(collect(rem_nles), sz)
             nn_sub = sum(nns[sub])
-            maybe_a = tryextract(fq[[sub_ranges[sub]...;],rem_cols], nn_sub)
-            if !isnull(maybe_a)
-                fq[:,rem_cols] = fq[:,rem_cols] * get(maybe_a)
-                a[:,rem_cols] = a[:,rem_cols] * get(maybe_a)
+            a_update = tryextract(fq[[sub_ranges[sub]...;],rem_cols], nn_sub)
+            if a_update !== nothing
+                fq[:,rem_cols] = fq[:,rem_cols] * a_update
+                a[:,rem_cols] = a[:,rem_cols] * a_update
                 rem_cols = first(rem_cols)+nn_sub:size(fq, 2)
                 push!(extracted_subs, sub)
                 for nle in sub
@@ -472,7 +435,7 @@ end
 function split_nl_model_matrices!(mats, model_qidxs, model_nns)
     mats[:dq_fulls] = Matrix[mats[:dq_full][qidxs,:] for qidxs in model_qidxs]
     mats[:eq_fulls] = Matrix[mats[:eq_full][qidxs,:] for qidxs in model_qidxs]
-    let fqsplit = vcat([matsplit(mats[:fq][qidxs,:], [length(qidxs)], model_nns) for qidxs in model_qidxs]...)
+    let fqsplit = vcat((matsplit(mats[:fq][qidxs,:], [length(qidxs)], model_nns) for qidxs in model_qidxs)...)
         mats[:fqs] = Matrix[fqsplit[i,i] for i in 1:length(model_qidxs)]
         mats[:fqprev_fulls] = Matrix[[fqsplit[i, 1:i-1]... zeros(eltype(mats[:fq]), length(model_qidxs[i]), sum(model_nns[i:end]))]
                                      for i in 1:length(model_qidxs)]
@@ -482,10 +445,10 @@ end
 
 function reduce_pdims!(mats::Dict)
     subcount = length(mats[:dq_fulls])
-    mats[:dqs] = Vector{Matrix}(subcount)
-    mats[:eqs] = Vector{Matrix}(subcount)
-    mats[:fqprevs] = Vector{Matrix}(subcount)
-    mats[:pexps] = Vector{Matrix}(subcount)
+    mats[:dqs] = Vector{Matrix}(uninitialized, subcount)
+    mats[:eqs] = Vector{Matrix}(uninitialized, subcount)
+    mats[:fqprevs] = Vector{Matrix}(uninitialized, subcount)
+    mats[:pexps] = Vector{Matrix}(uninitialized, subcount)
     offset = 0
     for idx in 1:subcount
         # decompose [dq_full eq_full] into pexp*[dq eq] with [dq eq] having minimum
@@ -531,8 +494,7 @@ function initial_solution(nleq, q0, fq)
     nq, nn = size(fq)
     return eval(quote
         init_nl_eq_func = (res, J, scratch, z) ->
-            let pfull=scratch[1], Jp=scratch[2], q=$(zeros(nq)),
-                Jq=$(zeros(nn, nq)), fq=$(fq)
+            let pfull=scratch[1], Jq=scratch[2], q=$(zeros(nq)), fq=$(fq)
                 $(nleq)
                 return nothing
             end
@@ -555,7 +517,7 @@ nn(model::DiscreteModel, subidx) = size(model.fqs[subidx], 2)
 nn(model::DiscreteModel) = sum([size(fq, 2) for fq in model.fqs])
 
 function steadystate(model::DiscreteModel, u=zeros(nu(model)))
-    IA_LU = lufact(eye(nx(model))-model.a)
+    IA_LU = lufact(I-model.a)
     steady_z = zeros(nn(model))
     zoff = 1
     for idx in 1:length(model.solvers)
@@ -564,8 +526,7 @@ function steadystate(model::DiscreteModel, u=zeros(nu(model)))
             model.pexps[idx]*model.dqs[idx]/IA_LU*model.x0
         steady_z[zoff:zoff_last] = eval(quote
             steady_nl_eq_func = (res, J, scratch, z) ->
-                let pfull=scratch[1], Jp=scratch[2],
-                    q=$(zeros(nq(model, idx))), Jq=$(zeros(nn(model, idx), nq(model, idx))),
+                let pfull=scratch[1], Jq=scratch[2], q=$(zeros(nq(model, idx))),
                     fq=$(model.pexps[idx]*model.dqs[idx]/IA_LU*model.c[:,zoff:zoff_last] + model.fqs[idx])
                     $(model.nonlinear_eqs[idx])
                     return nothing
@@ -587,16 +548,16 @@ end
 
 function steadystate!(model::DiscreteModel, u=zeros(nu(model)))
     x_steady = steadystate(model, u)
-    copy!(model.x, x_steady)
+    copyto!(model.x, x_steady)
     return x_steady
 end
 
 function linearize(model::DiscreteModel, usteady::AbstractVector{Float64}=zeros(nu(model)))
     xsteady = steadystate(model, usteady)
-    zranges = Vector{UnitRange{Int64}}(length(model.solvers))
-    dzdps = Vector{Matrix{Float64}}(length(model.solvers))
-    dqlins = Vector{Matrix{Float64}}(length(model.solvers))
-    eqlins = Vector{Matrix{Float64}}(length(model.solvers))
+    zranges = Vector{UnitRange{Int64}}(uninitialized, length(model.solvers))
+    dzdps = Vector{Matrix{Float64}}(uninitialized, length(model.solvers))
+    dqlins = Vector{Matrix{Float64}}(uninitialized, length(model.solvers))
+    eqlins = Vector{Matrix{Float64}}(uninitialized, length(model.solvers))
     zsteady = zeros(nn(model))
     zoff = 1
     x0 = copy(model.x0)
@@ -613,7 +574,7 @@ function linearize(model::DiscreteModel, usteady::AbstractVector{Float64}=zeros(
                   model.fqprevs[idx] * zsteady
         zsub, dzdps[idx] =
             Compat.invokelatest(linearize, model.solvers[idx], psteady)
-        copy!(zsteady, zoff, zsub, 1, length(zsub))
+        copyto!(zsteady, zoff, zsub, 1, length(zsub))
 
         zranges[idx] = zoff:zoff+length(zsub)-1
         fqdzdps = [model.fqprevs[idx][:,zranges[n]] * dzdps[n] for n in 1:idx-1]
@@ -665,13 +626,13 @@ run!(model::DiscreteModel, u::AbstractMatrix{Float64}; showprogress=true) =
     ycur::Vector{Float64}
     xnew::Vector{Float64}
     z::Vector{Float64}
-    @expandafter @compat @pfunction (::Type{ModelRunner{Model,ShowProgress}})(
+    @pfunction (::Type{ModelRunner{Model,ShowProgress}})(
             model::Model) [Model<:DiscreteModel,ShowProgress] begin
-        ucur = Array{Float64,1}(nu(model))
-        ps = Vector{Float64}[Vector{Float64}(np(model, idx)) for idx in 1:length(model.solvers)]
-        ycur = Array{Float64,1}(ny(model))
-        xnew = Array{Float64,1}(nx(model))
-        z = Array{Float64,1}(nn(model))
+        ucur = Vector{Float64}(uninitialized, nu(model))
+        ps = Vector{Float64}[Vector{Float64}(uninitialized, np(model, idx)) for idx in 1:length(model.solvers)]
+        ycur = Vector{Float64}(uninitialized, ny(model))
+        xnew = Vector{Float64}(uninitialized, nx(model))
+        z = Vector{Float64}(uninitialized, nn(model))
         return new{Model,ShowProgress}(model, ucur, ps, ycur, xnew, z)
     end
 end
@@ -713,7 +674,7 @@ underlying `DiscreteModel` (e.g. capacitor charges) is preserved accross calls
 to `run!`.
 """
 function run!(runner::ModelRunner, u::AbstractMatrix{Float64})
-    y = Array{Float64,2}(ny(runner.model), size(u, 2))
+    y = Matrix{Float64}(uninitialized, ny(runner.model), size(u, 2))
     run!(runner, y, u)
     return y
 end
@@ -765,12 +726,12 @@ function step!(runner::ModelRunner, y::AbstractMatrix{Float64}, u::AbstractMatri
     ycur = runner.ycur
     xnew = runner.xnew
     z = runner.z
-    copy!(ucur, 1, u, (n-1)*nu(model)+1, nu(model))
+    copyto!(ucur, 1, u, (n-1)*nu(model)+1, nu(model))
     zoff = 1
     fill!(z, 0.0)
     for idx in 1:length(model.solvers)
         p = runner.ps[idx]
-        # copy!(p, model.dqs[idx] * model.x + model.eqs[idx] * u[:,n]) + model.fqprevs[idx] * z
+        # copyto!(p, model.dqs[idx] * model.x + model.eqs[idx] * u[:,n]) + model.fqprevs[idx] * z
         if size(model.dqs[idx], 2) == 0
             fill!(p, 0.0)
         else
@@ -783,52 +744,52 @@ function step!(runner::ModelRunner, y::AbstractMatrix{Float64}, u::AbstractMatri
         zsub = solve(model.solvers[idx], p)
         if !hasconverged(model.solvers[idx])
             if all(isfinite, zsub)
-                warn("Failed to converge while solving non-linear equation.")
+                @warn "Failed to converge while solving non-linear equation."
             else
                 error("Failed to converge while solving non-linear equation, got non-finite result.")
             end
         end
-        copy!(z, zoff, zsub, 1, length(zsub))
+        copyto!(z, zoff, zsub, 1, length(zsub))
         zoff += length(zsub)
     end
     #y[:,n] = model.dy * model.x + model.ey * u[:,n] + model.fy * z + model.y0
-    copy!(ycur, model.y0)
+    copyto!(ycur, model.y0)
     BLAS.gemv!('N', 1., model.dy, model.x, 1., ycur)
     BLAS.gemv!('N', 1., model.ey, ucur, 1., ycur)
     BLAS.gemv!('N', 1., model.fy, z, 1., ycur)
     #y[:,n] = ycur
-    copy!(y, (n-1)*ny(model)+1, ycur, 1, ny(model))
+    copyto!(y, (n-1)*ny(model)+1, ycur, 1, ny(model))
     #model.x = model.a * model.x + model.b * u[:,n] + model.c * z + model.x0
-    copy!(xnew, model.x0)
+    copyto!(xnew, model.x0)
     BLAS.gemv!('N', 1., model.a, model.x, 1., xnew)
     BLAS.gemv!('N', 1., model.b, ucur, 1.,xnew)
     BLAS.gemv!('N', 1., model.c, z, 1., xnew)
-    copy!(model.x, xnew)
+    copyto!(model.x, xnew)
 end
 
-# lines marked with !SV avoid creation of SparseVector by indexing with Ranges
-# instead of Ints; a better way for cross-julia-version compatibilty would be
-# nice; maybe Compat helps in the future...
-function gensolve(a::SparseMatrixCSC, b, x, h, thresh=0.1)
+function gensolve(a, b, x, h, thresh=0.1)
     m = size(a)[1]
-    t = sortperm(vec(sum(spones(a),2))) # row indexes in ascending order of nnz
+    if m == 0
+        return x, h
+    end
+    t = sortperm(vec(mapslices(ait -> count(!iszero, ait), a, 2))) # row indexes in ascending order of nnz
     tol = 3 * max(eps(float(eltype(a))), eps(float(eltype(h)))) * size(a, 2)
     for i in 1:m
-        ait = a[t[i:i],:] # ait is a row of the a matrix # !SV
+        ait = a[t[i],:]' # ait is a row of the a matrix
         s = ait * h;
         inz, jnz, nz_vals = findnz(s)
-        nz_abs_vals = map(abs, nz_vals)
+        nz_abs_vals = abs.(nz_vals)
         max_abs_val = reduce(max, zero(eltype(s)), nz_abs_vals)
         if max_abs_val ≤ tol # cosidered numerical zero
             continue
         end
         jat = jnz[nz_abs_vals .≥ thresh*max_abs_val] # cols above threshold
-        j = jat[indmin(sum(spones(h[:,jat])))]
-        q = h[:,j:j] # !SV
-        # ait*q only has a single element!
-        x = x + convert(typeof(x), q * ((b[t[i:i],:] - ait*x) * (1 / (ait*q)[1]))); # !SV
+        j = jat[indmin(vec(mapslices(hj -> count(!iszero, hj), h[:,jat], 1)))]
+        q = h[:,j]
+        # ait*q is a scalar in Julia 0.6+, but a single element matrix before!
+        x = x + convert(typeof(x), q * ((b[t[i],:]' - ait*x) * (1 / (ait*q)[1])))
         if size(h)[2] > 1
-            h = h[:,[1:j-1;j+1:end]] - convert(typeof(h), q * s[1:1,[1:j-1;j+1:end]]*(1/s[1,j])) # !SV
+            h = h[:,[1:j-1;j+1:end]] - convert(typeof(h), q * s[1,[1:j-1;j+1:end]]'*(1/s[1,j]))
         else
             h = similar(h, eltype(h), (size(h)[1], 0))
         end
@@ -837,14 +798,14 @@ function gensolve(a::SparseMatrixCSC, b, x, h, thresh=0.1)
 end
 
 gensolve(a, b, thresh=0.1) =
-    gensolve(a, b, spzeros(promote_type(eltype(a), eltype(b)), size(a)[2], size(b)[2]), speye(eltype(a), size(a)[2]), thresh)
+    gensolve(a, b, spzeros(promote_type(eltype(a), eltype(b)), size(a, 2), size(b, 2)), SparseMatrixCSC{eltype(a)}(I, size(a,2), size(a,2)), thresh)
 
 function rank_factorize(a::SparseMatrixCSC)
     f = a
     nullspace = gensolve(a', spzeros(size(a, 2), 0))[2]
-    c = eye(eltype(a), size(a, 1))
+    c = Matrix{eltype(a)}(I, size(a, 1), size(a, 1))
     while size(nullspace, 2) > 0
-        i, j = _indmax(map(abs, nullspace))
+        i, j = _indmax(abs.(nullspace))
         c -= c[:, i] * nullspace[:, j]' / nullspace[i, j]
         c = c[:, [1:i-1; i+1:end]]
         nullspace -= nullspace[:, j] * vec(nullspace[i, :])' / nullspace[i, j]
@@ -854,18 +815,10 @@ function rank_factorize(a::SparseMatrixCSC)
     return c, f
 end
 
-consecranges(lengths) = isempty(lengths) ? [] : map(range, cumsum([1; lengths[1:end-1]]), lengths)
+consecranges(lengths) = isempty(lengths) ? [] : range.(cumsum([1; lengths[1:end-1]]), lengths)
 
 matsplit(v::AbstractVector, rowsizes) = [v[rs] for rs in consecranges(rowsizes)]
 matsplit(m::AbstractMatrix, rowsizes, colsizes=[size(m,2)]) =
     [m[rs, cs] for rs in consecranges(rowsizes), cs in consecranges(colsizes)]
-
-    if VERSION < v"0.5.0"
-        # this is deprecated starting in Julia 0.6
-        normsquared(x) = sumabs2(x)
-    else
-        # prior to Julia 0.5, this fails for empty x and is slow
-        normsquared(x) = sum(abs2, x)
-    end
 
 end # module

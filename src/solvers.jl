@@ -13,7 +13,7 @@ import Base.copy!
     Jp::Matrix{Float64}
     J::Matrix{Float64}
     scratch::Scratch
-    @expandafter @compat @pfunction (::Type{ParametricNonLinEq{F_eval,F_setp,F_calcjp,Scratch}})(
+    @pfunction (::Type{ParametricNonLinEq{F_eval,F_setp,F_calcjp,Scratch}})(
             func::F_eval, set_p::F_setp, calc_Jp::F_calcjp, scratch::Scratch,
             nn::Integer, np::Integer
         ) [F_eval<:Function,F_setp<:Function,F_calcjp<:Function,Scratch] begin
@@ -32,8 +32,8 @@ ParametricNonLinEq(func::Function, nn::Integer, np::Integer) =
     ParametricNonLinEq(func, default_set_p, default_calc_Jp,
                        (zeros(np), zeros(nn, np)), nn, np)
 
-default_set_p(scratch, p) = (copy!(scratch[1], p); nothing)
-default_calc_Jp(scratch, Jp) = (copy!(Jp, scratch[2]); nothing)
+default_set_p(scratch, p) = (copyto!(scratch[1], p); nothing)
+default_calc_Jp(scratch, Jp) = (copyto!(Jp, scratch[2]); nothing)
 
 nn(nleq::ParametricNonLinEq) = length(nleq.res)
 np(nleq::ParametricNonLinEq) = size(nleq.Jp, 2)
@@ -57,7 +57,7 @@ function setlhs!(solver::LinearSolver, A::Matrix{Float64})
     if (m, n) ≠ size(A)
         throw(DimensionMismatch("matrix has size $(size(A)), but must have size $(size(solver.factors))"))
     end
-    copy!(solver.factors, A)
+    copyto!(solver.factors, A)
 
     # based on Julia's generic_lufact!, but storing inverses on the diagonal;
     # faster than calling out to dgetrf for sizes up to about 60×60
@@ -113,7 +113,7 @@ function solve!(solver::LinearSolver, x::Vector{Float64}, b::Vector{Float64})
         if n ≠ length(b)
             throw(DimensionMismatch("b has length $(length(b)), but needs $n"))
         end
-        copy!(x, b)
+        copyto!(x, b)
     end
 
     # native Julia implementation seems to be faster than dgetrs up to about
@@ -141,8 +141,8 @@ function solve!(solver::LinearSolver, x::Vector{Float64}, b::Vector{Float64})
 end
 
 function copy!(dest::LinearSolver, src::LinearSolver)
-    copy!(dest.factors, src.factors)
-    copy!(dest.ipiv, src.ipiv)
+    copyto!(dest.factors, src.factors)
+    copyto!(dest.ipiv, src.ipiv)
 end
 
 """
@@ -169,7 +169,7 @@ is rarely useful as such.
     tol::Float64
     tmp_nn::Vector{Float64}
     tmp_np::Vector{Float64}
-    @expandafter @compat @pfunction (::Type{SimpleSolver{NLEQ}})(
+    @pfunction (::Type{SimpleSolver{NLEQ}})(
             nleq::NLEQ, initial_p::Vector{Float64}, initial_z::Vector{Float64}) [NLEQ<:ParametricNonLinEq] begin
         z = zeros(nn(nleq))
         linsolver = LinearSolver(nn(nleq))
@@ -203,9 +203,9 @@ end
 
 function set_extrapolation_origin(solver::SimpleSolver, p, z, Jp, linsolver)
     copy!(solver.last_linsolver, linsolver)
-    copy!(solver.last_Jp, Jp)
-    copy!(solver.last_p, p)
-    copy!(solver.last_z, z)
+    copyto!(solver.last_Jp, Jp)
+    copyto!(solver.last_p, p)
+    copyto!(solver.last_z, z)
 end
 
 get_extrapolation_origin(solver::SimpleSolver) = solver.last_p, solver.last_z
@@ -220,11 +220,11 @@ needediterations(solver::SimpleSolver) = solver.iters
 function solve(solver::SimpleSolver, p::AbstractVector{Float64}, maxiter=500)
     set_p!(solver.nleq, p)
     #solver.z = solver.last_z - solver.last_J\(solver.last_Jp * (p-solver.last_p))
-    copy!(solver.tmp_np, p)
+    copyto!(solver.tmp_np, p)
     BLAS.axpy!(-1.0, solver.last_p, solver.tmp_np)
     BLAS.gemv!('N', 1.,solver.last_Jp, solver.tmp_np, 0., solver.tmp_nn)
     solve!(solver.last_linsolver, solver.tmp_nn, solver.tmp_nn)
-    copy!(solver.z, solver.last_z)
+    copyto!(solver.z, solver.last_z)
     BLAS.axpy!(-1.0, solver.tmp_nn, solver.z)
 
     for solver.iters=1:maxiter
@@ -263,11 +263,11 @@ properties.
     start_p::Vector{Float64}
     pa::Vector{Float64}
     iters::Int
-    @expandafter @compat @pfunction (::Type{HomotopySolver{BaseSolver}})(
+    @pfunction (::Type{HomotopySolver{BaseSolver}})(
             basesolver::BaseSolver, np::Integer) [BaseSolver] begin
         return new{BaseSolver}(basesolver, zeros(np), zeros(np), 0)
     end
-    @expandafter @compat @pfunction (::Type{HomotopySolver{BaseSolver}})(
+    @pfunction (::Type{HomotopySolver{BaseSolver}})(
             nleq::ParametricNonLinEq, initial_p::Vector{Float64},
             initial_z::Vector{Float64}) [BaseSolver] begin
         basesolver = BaseSolver(nleq, initial_p, initial_z)
@@ -287,10 +287,10 @@ function solve(solver::HomotopySolver, p)
     if !hasconverged(solver)
         a = 0.5
         best_a = 0.0
-        copy!(solver.start_p, get_extrapolation_origin(solver.basesolver)[1])
+        copyto!(solver.start_p, get_extrapolation_origin(solver.basesolver)[1])
         while best_a < 1
-            # copy!(solver.pa = (1-a) * solver.start_p + a * p)
-            copy!(solver.pa, solver.start_p)
+            # copyto!(solver.pa, (1-a) * solver.start_p + a * p)
+            copyto!(solver.pa, solver.start_p)
             LinAlg.scale!(1-a, solver.pa)
             LinAlg.axpy!(a, p, solver.pa)
             z = solve(solver.basesolver, solver.pa)
@@ -341,14 +341,14 @@ for a more detailed discussion.
     new_count::Int
     new_count_limit::Int
     alts::Alts{Float64}
-    @expandafter @compat @pfunction (::Type{CachingSolver{BaseSolver}})(basesolver::BaseSolver,
+    @pfunction (::Type{CachingSolver{BaseSolver}})(basesolver::BaseSolver,
             initial_p::Vector{Float64}, initial_z::Vector{Float64}, nn::Integer) [BaseSolver] begin
          ps_tree = KDTree(hcat(initial_p))
          zs = reshape(copy(initial_z), nn, 1)
          alts = Alts(initial_p)
          return new{BaseSolver}(basesolver, ps_tree, zs, 1, 0, 2, alts)
     end
-    @expandafter @compat @pfunction (::Type{CachingSolver{BaseSolver}})(nleq::ParametricNonLinEq,
+    @pfunction (::Type{CachingSolver{BaseSolver}})(nleq::ParametricNonLinEq,
             initial_p::Vector{Float64}, initial_z::Vector{Float64}) [BaseSolver] begin
         basesolver = BaseSolver(nleq, initial_p, initial_z)
         return CachingSolver{typeof(basesolver)}(basesolver, initial_p, initial_z, nn(nleq))
@@ -392,10 +392,10 @@ function solve(solver::CachingSolver, p)
         solver.num_ps += 1
         if solver.num_ps > size(solver.ps_tree.ps, 2)
             solver.ps_tree.ps =
-                copy!(zeros(size(solver.ps_tree.ps, 1), 2solver.num_ps),
+                copyto!(zeros(size(solver.ps_tree.ps, 1), 2solver.num_ps),
                       solver.ps_tree.ps)
             solver.zs =
-                copy!(zeros(size(solver.zs, 1), 2solver.num_ps), solver.zs)
+                copyto!(zeros(size(solver.zs, 1), 2solver.num_ps), solver.zs)
         end
         solver.ps_tree.ps[:,solver.num_ps] = p
         solver.zs[:,solver.num_ps] = z

@@ -15,11 +15,12 @@ Pins: `1`, `2`
 """
 resistor(r) = Element(mv=-1, mi=r)
 
-potentiometer(r, pos) = Element(mv=-eye(2), mi=[r*pos 0; 0 r*(1-pos)],
+potentiometer(r, pos) = Element(mv=Matrix{Int}(-I, 2, 2), mi=[r*pos 0; 0 r*(1-pos)],
                                 pins=[1, 2, 2, 3])
 potentiometer(r) =
-    Element(mv=[eye(2); zeros(3, 2)], mi=[zeros(2, 2); eye(2); zeros(1, 2)],
-            mq=-eye(5), mu=[zeros(4, 1); -1],
+    Element(mv=[Matrix{Int}(I, 2, 2); zeros(3, 2)],
+            mi=[zeros(2, 2); Matrix{Int}(I, 2, 2); zeros(1, 2)],
+            mq=Matrix{Int}(-I, 5, 5), mu=[zeros(4, 1); -1],
             nonlinear_eq = quote
                 let v1=q[1], v2=q[2], i1=q[3], i2=q[4], pos=q[5]
                     res[1] = v1 - $(r)*pos*i1
@@ -130,7 +131,7 @@ function transformer(::Type{Val{:JA}}; D=2.4e-2, A=4.54e-5, ns=[],
         J[1,4] = $(1e-4/Ms) * ($(c * Ms/a * α)*Ld_q1 - 1)
     end
     Element(mv=[speye(length(ns)); spzeros(5, length(ns))],
-            mi=[spzeros(length(ns), length(ns)); ns.'; spzeros(4, length(ns))],
+            mi=[spzeros(length(ns), length(ns)); ns'; spzeros(4, length(ns))],
             mx=[spzeros(length(ns), 2); -π*D 0; -1/a -α/a; 0 -1; 0 0; 0 0],
             mxd=[-μ0*A*ns -μ0*ns*A; 0 0; 0 0; 0 0; -1 0; 0 -1],
             mq=[zeros(length(ns)+1,4); eye(4)], nonlinear_eq = nonlinear_eq)
@@ -434,7 +435,7 @@ function bjt(typ; is=1e-12, η=1, isc=is, ise=is, ηc=η, ηe=η, βf=1000, βr=
         end
     return Element(mv=[1 0; 0 1; 0 0; 0 0],
                    mi = [-(re+rb) -rb; -rb -(rc+rb); 1 0; 0 1],
-                   mq = -polarity*speye(4), nonlinear_eq = nonlinear_eq,
+                   mq = Matrix{Int}(-polarity*I, 4, 4), nonlinear_eq = nonlinear_eq,
                    pins = [:base; :emitter; :base; :collector])
 end
 

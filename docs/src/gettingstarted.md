@@ -3,8 +3,8 @@
 ## Installation
 
 If you have not done so already, [download and install
-Julia](http://julialang.org/downloads/). (Any version starting with 0.4 should
-be fine; earlier ACME versions also support Julia 0.3.)
+Julia](http://julialang.org/downloads/). (Any version starting with 0.5 should
+be fine; earlier ACME versions also support Julia 0.3 and 0.4.)
 
 To install ACME, start Julia and run:
 
@@ -23,17 +23,24 @@ to load ACME:
 using ACME
 ```
 
-Now we create all the necessary circuit elements:
+Now we create the circuit description:
 
 ```Julia
-j_in = voltagesource()
-r1 = resistor(1e3)
-c1 = capacitor(47e-9)
-d1 = diode(is=1e-15)
-d2 = diode(is=1.8e-15)
-j_out = voltageprobe()
+circ = @circuit begin
+    j_in = voltagesource()
+    r1 = resistor(1e3)
+    c1 = capacitor(47e-9)
+    d1 = diode(is=1e-15)
+    d2 = diode(is=1.8e-15)
+    j_out = voltageprobe()
+    j_in[+] ⟷ r1[1]
+    j_in[-] ⟷ gnd
+    r1[2] ⟷ c1[1] ⟷ d1[+] ⟷ d2[-] ⟷ j_out[+]
+    gnd ⟷ c1[2] ⟷ d1[-] ⟷ d2[+] ⟷ j_out[-]
+end
 ```
 
+The first six lines inside the `begin`/`end` block instantiate circuit elements.
 Specifying a `voltagesource()` sets up a voltage source as an input, i.e. the
 voltage it sources will be specified when running the model. Alternatively, one
 can instantiate a constant voltage source for say 9V with  `voltagesource(9)`.
@@ -43,38 +50,32 @@ specify the saturation current `is` as done here and/or the emission
 coefficient `η`. Finally, desired outputs are denoted by adding probes to the
 circuit; in this case a `voltageprobe()` will provide voltage as output.
 
-Next we need a `Circuit` instance to keep track of how the elements connect to
-each other:
+The remaining four lines specify connections, either among element pins as in
+`j_in[+] ⟷ r1[1]`, which connects the `+` pin of the input voltage to pin `1` of
+the resistor, or among pins and named nets as in `j_in[-] ⟷ gnd`, which
+connects the `-` pin of the input voltage source to a net named `gnd`. Note that
+naming nets is only for the sake of readability; there is nothing special about
+them and the names are arbitrary. As can be seen in the last two lines, multiple
+pins can be connected at once.
+
+It is also possible to specify connections following the element definition
+(separated by commas), in which case the element name may be omitted. However,
+one can only connect to elements defined before. Thus, above circuit could also
+be entered as:
 
 ```Julia
-circ = Circuit()
+circ = @circuit begin
+    j_in = voltagesource(), [-] ⟷ gnd
+    r1 = resistor(1e3), [1] ⟷ j_in[+]
+    c1 = capacitor(47e-9), [1] ⟷ r1[2], [2] ⟷ gnd
+    d1 = diode(is=1e-15), [+] ⟷ r1[2], [-] ⟷ gnd
+    d2 = diode(is=1.8e-15), [+] ⟷ gnd, [-] ⟷ r1[2]
+    j_out = voltageprobe(), [+] ⟷ r1[2], [-] ⟷ gnd
+end
 ```
 
-Connections can be specified by naming element pins that are connected:
-
-```Julia
-connect!(circ, j_in["+"], r1[1])
-```
-
-This connects the positive output of the input voltage source with pin 1 of the
-resistor. Alternatively, one can introduce named nets to which element pins
-connect. This may increase readability for nets with many connected elements,
-like supply voltages. Here, we use it for the ground net where we connect the
-negative side of the input voltage:
-
-```Julia
-connect!(circ, j_in["-"], :gnd)
-```
-
-One can also connect multiple pins at once:
-
-```Julia
-connect!(circ, r1[2], c1[1], d1["+"], d2["-"], j_out["+"])
-connect!(circ, :gnd, c1[2], d1["-"], d2["+"], j_out["-"])
-```
-
-Now that all connections have been set up, we need to turn the circuit
-description into a model. This could hardly be any easier:
+Now that the circuit has been set up, we need to turn it into a model. This
+could hardly be any easier:
 
 ```Julia
 model = DiscreteModel(circ, 1./44100)
@@ -88,7 +89,7 @@ row per input (just one in the example) and one column per sample. So for a
 sinusoid at 1 kHz lasting one second, we do::
 
 ```Julia
-y = run!(model, sin(2π*1000/44100*(0:44099).'))
+y = run!(model, sin(2π*1000/44100*(0:44099)'))
 ```
 
 The output `y` now likewise is a matrix with one row for the one probe we have
