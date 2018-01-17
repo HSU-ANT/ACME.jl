@@ -51,6 +51,10 @@ if !isdefined(@__MODULE__, :copyto!) # prior to 0.7.0-DEV.3057
     global const copyto! = Base.copy!
 end
 
+if !isdefined(@__MODULE__, :findall) # prior to 0.7.0-DEV.3415
+    global const findall = Base.find
+end
+
 if !isdefined(@__MODULE__, Symbol("@warn")) # prior to 0.7.0-DEV.2988
     macro warn(args...)
         :(warn($args...))
@@ -221,7 +225,7 @@ end
     if decompose_nonlinearity
         nl_elems = nldecompose!(mats, nns, nqs)
     else
-        nl_elems = Vector{Int}[find(nn -> nn > 0, nns)]
+        nl_elems = Vector{Int}[findall(nn -> nn > 0, nns)]
     end
 
     model_nns = Int[sum(nns[nles]) for nles in nl_elems]
@@ -257,7 +261,7 @@ end
     end
 
     while any(np -> np == 0, model_nps)
-        const_idxs = find(np -> np == 0, model_nps)
+        const_idxs = findall(iszero, model_nps)
         const_zidxs = vcat(consecranges(model_nns)[const_idxs]...)
         varying_zidxs = filter(idx -> !(idx in const_zidxs), 1:sum(model_nns))
         for idx in eachindex(mats[:q0s])

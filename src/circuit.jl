@@ -255,7 +255,7 @@ end
 
     row = 1;
     for col = 1:size(incidence)[2]
-        rows = filter(r -> r ≥ row, find(!iszero, incidence[:, col]))
+        rows = filter(r -> r ≥ row, findall(!iszero, incidence[:, col]))
         @assert length(rows) ≤ 2
 
         isempty(rows) && continue
@@ -269,12 +269,12 @@ end
             incidence[rows[2],:] = incidence[rows[2],:] + incidence[row,:]
         end
         if incidence[row, col] < 0
-            cols = find(!iszero, incidence[row, :])
+            cols = findall(!iszero, incidence[row, :])
             incidence[row,cols] = -incidence[row,cols]
         end
-        rows = find(incidence[1:row-1, col] .== 1)
+        rows = findall(equalto(1), incidence[1:row-1, col])
         incidence[rows, :] .-= incidence[row, :]'
-        rows = find(incidence[1:row-1, col] .== -1)
+        rows = findall(equalto(-1), incidence[1:row-1, col])
         incidence[rows, :] .+= incidence[row, :]'
         row += 1
     end
