@@ -10,6 +10,11 @@ export DiscreteModel, run!, steadystate, steadystate!, linearize, ModelRunner
 if VERSION ≥ v"0.7.0-DEV.3389"
     using SparseArrays
 end
+if VERSION ≥ v"0.7.0-DEV.3449"
+    using LinearAlgebra
+else
+    using Base.LinAlg: axpy!
+end
 
 using ProgressMeter
 using Compat
