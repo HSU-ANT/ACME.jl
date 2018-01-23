@@ -1,6 +1,7 @@
 # ACME.jl - Analog Circuit Modeling and Emulation for Julia
 
 [![Join the chat at https://gitter.im/HSU-ANT/ACME.jl](https://badges.gitter.im/HSU-ANT/ACME.jl.svg)](https://gitter.im/HSU-ANT/ACME.jl?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+[![Documentation](https://img.shields.io/badge/docs-stable-blue.svg)](https://hsu-ant.github.io/ACME.jl/stable)
 [![Documentation](https://img.shields.io/badge/docs-latest-blue.svg)](https://hsu-ant.github.io/ACME.jl/latest)
 
 [![ACME](http://pkg.julialang.org/badges/ACME_0.5.svg)](http://pkg.julialang.org/?pkg=ACME)
