@@ -194,7 +194,11 @@ end
         ps = rand(6, 10000)
         t = ACME.KDTree(ps)
         p = rand(6)
-        best_p = ps[:,indmin(vec(sum(abs2, ps .- p, 1)))]
+        if isdefined(@__MODULE__, :argmin) # since 0.7.0-DEV.3516
+            best_p = ps[:,argmin(vec(sum(abs2, ps .- p, 1)))]
+        else
+            best_p = ps[:,indmin(vec(sum(abs2, ps .- p, 1)))]
+        end
         idx = ACME.indnearest(t, p)
         @test sum(abs2, p - best_p) ≈ sum(abs2, p - ps[:, idx])
     end

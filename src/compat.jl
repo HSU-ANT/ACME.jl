@@ -43,16 +43,25 @@ if !isdefined(@__MODULE__, Symbol("@warn")) # prior to 0.7.0-DEV.2988
     end
 end
 
-function _indmax(a::AbstractMatrix)
-    ind = indmax(a)
-    if isa(ind, CartesianIndex) # since 0.7.0-DEV.1660
-        return (ind[1], ind[2])
-    else
-        return ind2sub(size(a), ind)
-    end
-end
-
 if isdefined(Base, :NamedTuple) # 0.7.0-DEV.2738 to 0.7.0-DEV.3226
     kwargs_pairs(kwargs::NamedTuple) = pairs(kwargs)
 end
 kwargs_pairs(kwargs) = kwargs
+
+for f in (:min, :max)
+    argf = Symbol(:arg, f)
+    if !isdefined(@__MODULE__, argf) # prior to 0.7.0-DEV.3516
+        indf = Symbol(:ind, f)
+        eval(@__MODULE__, quote
+            $argf(x::AbstractVector) = $indf(x)
+            function $argf(x::AbstractArray)
+                idx = $indf(x)
+                if !isa(idx, CartesianIndex)
+                    return CartesianIndex(ind2sub(x, idx))
+                else
+                    return idx
+                end
+            end
+        end)
+    end
+end

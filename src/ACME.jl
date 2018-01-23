@@ -294,7 +294,7 @@ function model_matrices(circ::Circuit, t::Rational{BigInt})
         @warn "State update depends on indeterminate quantity"
     end
     while size(nullspace, 2) > 0
-        i, j = _indmax(abs.(nullspace))
+        i, j = argmax(abs.(nullspace)).I
         nullspace = nullspace[[1:i-1; i+1:end], [1:j-1; j+1:end]]
         f = f[:, [1:i-1; i+1:end]]
         for k in [:fv; :fi; :c; :fq]
@@ -331,7 +331,7 @@ function tryextract(fq, numcols)
     for colcnt in 1:numcols
         # determine element with maximum absolute value in unprocessed columns
         # to use as pivot
-        i, j = _indmax(abs.(fq[:,colcnt:end]))
+        i, j = argmax(abs.(fq[:,colcnt:end])).I
         j += colcnt-1
 
         # swap pivot to first (unprocessed) column
@@ -737,7 +737,7 @@ function gensolve(a, b, x, h, thresh=0.1)
             continue
         end
         jat = jnz[nz_abs_vals .≥ thresh*max_abs_val] # cols above threshold
-        j = jat[indmin(vec(mapslices(hj -> count(!iszero, hj), h[:,jat], 1)))]
+        j = jat[argmin(vec(mapslices(hj -> count(!iszero, hj), h[:,jat], 1)))]
         q = h[:,j]
         # ait*q is a scalar in Julia 0.6+, but a single element matrix before!
         x = x + convert(typeof(x), q * ((b[t[i],:]' - ait*x) * (1 / (ait*q)[1])))
@@ -758,7 +758,7 @@ function rank_factorize(a::SparseMatrixCSC)
     nullspace = gensolve(a', spzeros(size(a, 2), 0))[2]
     c = Matrix{eltype(a)}(I, size(a, 1), size(a, 1))
     while size(nullspace, 2) > 0
-        i, j = _indmax(abs.(nullspace))
+        i, j = argmax(abs.(nullspace)).I
         c -= c[:, i] * nullspace[:, j]' / nullspace[i, j]
         c = c[:, [1:i-1; i+1:end]]
         nullspace -= nullspace[:, j] * vec(nullspace[i, :])' / nullspace[i, j]
