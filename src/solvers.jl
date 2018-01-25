@@ -291,7 +291,11 @@ function solve(solver::HomotopySolver, p)
         while best_a < 1
             # copyto!(solver.pa, (1-a) * solver.start_p + a * p)
             copyto!(solver.pa, solver.start_p)
-            scale!(1-a, solver.pa)
+            @static if VERSION > v"0.7.0-DEV.3563"
+                mul1!(solver.pa, 1-a)
+            else
+                scale!(1-a, solver.pa)
+            end
             axpy!(a, p, solver.pa)
             z = solve(solver.basesolver, solver.pa)
             solver.iters += needediterations(solver.basesolver)
