@@ -65,3 +65,7 @@ for f in (:min, :max)
         end)
     end
 end
+
+if VERSION ≥ v"0.7.0-DEV.3589"
+    using Markdown # for @doc_str
+end
