@@ -69,3 +69,11 @@ end
 if VERSION ≥ v"0.7.0-DEV.3589"
     using Markdown # for @doc_str
 end
+
+if !isdefined(@__MODULE__, :rmul!) # prior to 0.7.0-DEV.3665
+    if VERSION < v"0.7.0-DEV.3563"
+        const rmul! = scale!
+    else
+        const rmul! = mul1!
+    end
+end
