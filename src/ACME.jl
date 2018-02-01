@@ -10,66 +10,19 @@ export DiscreteModel, run!, steadystate, steadystate!, linearize, ModelRunner
 if VERSION ≥ v"0.7.0-DEV.3389"
     using SparseArrays
 end
+if VERSION ≥ v"0.7.0-DEV.3449"
+    using LinearAlgebra
+else
+    using Base.LinAlg: axpy!
+end
 
 using ProgressMeter
-using Compat
 using IterTools
 using DataStructures
 
 import Base.getindex
 
-if VERSION ≥ v"0.6.0"
-    macro pfunction(sig, params, body)
-        esc(Expr(:function, Expr(:where, sig, params.args...), body))
-    end
-else
-    macro pfunction(sig, params, body)
-        esc(Expr(:function,
-                 Expr(:call, Expr(:curly, sig.args[1], params.args...),
-                      sig.args[2:end]...),
-                 body))
-    end
-end
-
-if VERSION ≥ v"0.6.0"
-    @eval macro $(:struct)(head, body)
-        Expr(Meta.parse("struct Foo end").head, false, esc(head), Expr(:block, esc.(body.args)...))
-    end
-    macro mutable_struct(head, body)
-        Expr(Meta.parse("struct Foo end").head, true, esc(head), Expr(:block, esc.(body.args)...))
-    end
-else
-    @eval macro $(:struct)(head, body)
-        Expr(:type, false, esc(head), Expr(:block, esc.(body.args)...))
-    end
-    macro mutable_struct(head, body)
-        Expr(:type, true, esc(head), Expr(:block, esc.(body.args)...))
-    end
-end
-
-if !isdefined(@__MODULE__, :copyto!) # prior to 0.7.0-DEV.3057
-    global const copyto! = Base.copy!
-end
-
-if !isdefined(@__MODULE__, Symbol("@warn")) # prior to 0.7.0-DEV.2988
-    macro warn(args...)
-        :(warn($args...))
-    end
-end
-
-function _indmax(a::AbstractMatrix)
-    ind = indmax(a)
-    if isa(ind, CartesianIndex) # since 0.7.0-DEV.1660
-        return (ind[1], ind[2])
-    else
-        return ind2sub(size(a), ind)
-    end
-end
-
-if isdefined(Base, :NamedTuple) # 0.7.0-DEV.2738 to 0.7.0-DEV.3226
-    kwargs_pairs(kwargs::NamedTuple) = pairs(kwargs)
-end
-kwargs_pairs(kwargs) = kwargs
+include("compat.jl")
 
 include("kdtree.jl")
 include("solvers.jl")
@@ -221,7 +174,7 @@ end
     if decompose_nonlinearity
         nl_elems = nldecompose!(mats, nns, nqs)
     else
-        nl_elems = Vector{Int}[find(nn -> nn > 0, nns)]
+        nl_elems = Vector{Int}[findall(nn -> nn > 0, nns)]
     end
 
     model_nns = Int[sum(nns[nles]) for nles in nl_elems]
@@ -257,7 +210,7 @@ end
     end
 
     while any(np -> np == 0, model_nps)
-        const_idxs = find(np -> np == 0, model_nps)
+        const_idxs = findall(iszero, model_nps)
         const_zidxs = vcat(consecranges(model_nns)[const_idxs]...)
         varying_zidxs = filter(idx -> !(idx in const_zidxs), 1:sum(model_nns))
         for idx in eachindex(mats[:q0s])
@@ -341,7 +294,7 @@ function model_matrices(circ::Circuit, t::Rational{BigInt})
         @warn "State update depends on indeterminate quantity"
     end
     while size(nullspace, 2) > 0
-        i, j = _indmax(abs.(nullspace))
+        i, j = argmax(abs.(nullspace)).I
         nullspace = nullspace[[1:i-1; i+1:end], [1:j-1; j+1:end]]
         f = f[:, [1:i-1; i+1:end]]
         for k in [:fv; :fi; :c; :fq]
@@ -378,7 +331,7 @@ function tryextract(fq, numcols)
     for colcnt in 1:numcols
         # determine element with maximum absolute value in unprocessed columns
         # to use as pivot
-        i, j = _indmax(abs.(fq[:,colcnt:end]))
+        i, j = argmax(abs.(fq[:,colcnt:end])).I
         j += colcnt-1
 
         # swap pivot to first (unprocessed) column
@@ -784,7 +737,7 @@ function gensolve(a, b, x, h, thresh=0.1)
             continue
         end
         jat = jnz[nz_abs_vals .≥ thresh*max_abs_val] # cols above threshold
-        j = jat[indmin(vec(mapslices(hj -> count(!iszero, hj), h[:,jat], 1)))]
+        j = jat[argmin(vec(mapslices(hj -> count(!iszero, hj), h[:,jat], 1)))]
         q = h[:,j]
         # ait*q is a scalar in Julia 0.6+, but a single element matrix before!
         x = x + convert(typeof(x), q * ((b[t[i],:]' - ait*x) * (1 / (ait*q)[1])))
@@ -805,7 +758,7 @@ function rank_factorize(a::SparseMatrixCSC)
     nullspace = gensolve(a', spzeros(size(a, 2), 0))[2]
     c = Matrix{eltype(a)}(I, size(a, 1), size(a, 1))
     while size(nullspace, 2) > 0
-        i, j = _indmax(abs.(nullspace))
+        i, j = argmax(abs.(nullspace)).I
         c -= c[:, i] * nullspace[:, j]' / nullspace[i, j]
         c = c[:, [1:i-1; i+1:end]]
         nullspace -= nullspace[:, j] * vec(nullspace[i, :])' / nullspace[i, j]
