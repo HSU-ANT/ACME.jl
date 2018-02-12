@@ -469,7 +469,7 @@ end
 
 @testset "examples" begin
     @testset "sallenkey" begin
-        include("../examples/sallenkey.jl")
+        include(joinpath(dirname(@__FILE__), "..", "examples", "sallenkey.jl"))
          model=sallenkey()
          println("Running sallenkey")
          y = run!(model, sin.(2π*1000/44100*(0:44099)'); showprogress=false)
@@ -479,7 +479,7 @@ end
      end
 
      @testset "diodeclipper" begin
-        include("../examples/diodeclipper.jl")
+        include(joinpath(dirname(@__FILE__), "..", "examples", "diodeclipper.jl"))
         model=diodeclipper()
         println("Running diodeclipper")
         @test ACME.np(model, 1) == 1
@@ -503,7 +503,7 @@ end
     end
 
     @testset "birdie" begin
-        include("../examples/birdie.jl")
+        include(joinpath(dirname(@__FILE__), "..", "examples", "birdie.jl"))
         model=birdie(vol=0.8)
         ACME.solve(model.solvers[1], [0.003, -0.0002])
         @assert all(ACME.hasconverged, model.solvers)
@@ -525,7 +525,7 @@ end
     end
 
     @testset "superover" begin
-        include("../examples/superover.jl")
+        include(joinpath(dirname(@__FILE__), "..", "examples", "superover.jl"))
         model=superover(drive=1.0, tone=1.0, level=1.0)
         println("Running superover with fixed potentiometer values")
         @test ACME.np(model, 1) == 5
