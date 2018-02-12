@@ -222,7 +222,7 @@ at `+`
 """
 currentprobe(;rs=0) = Element(mv=1, mi=-rs, pi=1, pins=[:+; :-])
 
-doc"""
+@doc doc"""
     diode(;is=1e-12, η = 1)
 
 Creates a diode obeying Shockley's law
@@ -231,8 +231,7 @@ The reverse saturation current `is` has to be given in Ampere, the emission
 coefficient `η` is unitless.
 
 Pins: `+` (anode) and `-` (cathode)
-"""
-diode(;is::Real=1e-12, η::Real = 1) =
+""" diode(;is::Real=1e-12, η::Real = 1) =
   Element(mv=[1;0], mi=[0;1], mq=[-1 0; 0 -1], pins=[:+; :-], nonlinear_eq =
     quote
       let v = q[1], i = q[2], ex = exp(v*$(1 / (25e-3 * η)))
@@ -243,7 +242,7 @@ diode(;is::Real=1e-12, η::Real = 1) =
     end
   )
 
-doc"""
+@doc doc"""
     bjt(typ; is=1e-12, η=1, isc=is, ise=is, ηc=η, ηe=η, βf=1000, βr=10,
         ile=0, ilc=0, ηcl=ηc, ηel=ηe, vaf=Inf, var=Inf, ikf=Inf, ikr=Inf)
 
@@ -303,8 +302,7 @@ The parameters are set using named arguments:
 | `rb`  | Base terminal resistance
 
 Pins: `base`, `emitter`, `collector`
-"""
-function bjt(typ; is=1e-12, η=1, isc=is, ise=is, ηc=η, ηe=η, βf=1000, βr=10,
+""" function bjt(typ; is=1e-12, η=1, isc=is, ise=is, ηc=η, ηe=η, βf=1000, βr=10,
              ile=0, ilc=0, ηcl=ηc, ηel=ηe, vaf=Inf, var=Inf, ikf=Inf, ikr=Inf,
              re=0, rc=0, rb=0)
     local polarity
@@ -455,7 +453,7 @@ Pins: `in+` and `in-` for input, `out+` and `out-` for output
 opamp() = Element(mv=[0 0; 1 0], mi=[1 0; 0 0],
                   pins=["in+", "in-", "out+", "out-"])
 
-doc"""
+@doc doc"""
     opamp(Val{:macak}, gain, vomin, vomax)
 
 Creates a clipping operational amplifier where input and output voltage are
@@ -472,8 +470,7 @@ connected to a ground node and has to provide the current sourced on the other
 output pin.
 
 Pins: `in+` and `in-` for input, `out+` and `out-` for output
-"""
-function opamp(::Type{Val{:macak}}, gain, vomin, vomax)
+""" function opamp(::Type{Val{:macak}}, gain, vomin, vomax)
     offset = 0.5 * (vomin + vomax)
     scale = 0.5 * (vomax - vomin)
     nonlinear_eq =
