@@ -1,6 +1,8 @@
 # Copyright 2015, 2016, 2017, 2018 Martin Holters
 # See accompanying license file.
 
+include("checklic.jl")
+
 using ACME
 using Compat
 using Compat.Test
