@@ -1,3 +1,6 @@
+# Copyright 2018 Martin Holters
+# See accompanying license file.
+
 using Compat
 
 if VERSION ≥ v"0.6.0"

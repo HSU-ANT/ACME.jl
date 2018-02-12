@@ -1,4 +1,4 @@
-# Copyright 2016, 2017 Martin Holters
+# Copyright 2016, 2017, 2018 Martin Holters
 # See accompanying license file.
 
 export SimpleSolver, HomotopySolver, CachingSolver
