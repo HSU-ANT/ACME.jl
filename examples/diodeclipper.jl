@@ -1,4 +1,4 @@
-# Copyright 2015, 2016, 2017 Martin Holters
+# Copyright 2015, 2016, 2017, 2018 Martin Holters
 # See accompanying license file.
 
 using ACME
@@ -14,5 +14,7 @@ function diodeclipper(::Type{Circuit})
     end
 end
 
-diodeclipper{T<:DiscreteModel}(::Type{T}=DiscreteModel; fs=44100) =
-    T(diodeclipper(Circuit), 1//fs)
+diodeclipper(::Type{DiscreteModel}=DiscreteModel; fs=44100, solver=nothing) =
+    solver === nothing ?
+        DiscreteModel(diodeclipper(Circuit), 1//fs) :
+        DiscreteModel(diodeclipper(Circuit), 1//fs, solver)

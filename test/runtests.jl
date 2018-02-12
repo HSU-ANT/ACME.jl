@@ -490,8 +490,7 @@ end
 
         @test linearization_error!(model, 1e-3) < 1e-15
 
-        circ = diodeclipper(Circuit)
-        model = DiscreteModel(circ, 44100, ACME.HomotopySolver{ACME.SimpleSolver})
+        model = diodeclipper(solver=HomotopySolver{SimpleSolver})
         runner = ModelRunner(model, false)
         u = sin.(2π*1000/44100*(0:44099)')
         y = run!(runner, u)

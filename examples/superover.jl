@@ -1,4 +1,4 @@
-# Copyright 2016, 2017 Martin Holters
+# Copyright 2016, 2017, 2018 Martin Holters
 # See accompanying license file.
 
 using ACME
@@ -71,5 +71,7 @@ function superover(::Type{Circuit}; drive=nothing, tone=nothing, level=nothing, 
     return circ
 end
 
-superover{T<:DiscreteModel}(::Type{T}=DiscreteModel; drive=nothing, tone=nothing, level=nothing, sym::Bool=false, fs=44100) =
-    T(superover(Circuit, drive=drive, tone=tone, level=level, sym=sym), 1//fs)
+superover(::Type{DiscreteModel}=DiscreteModel;drive=nothing, tone=nothing, level=nothing, sym::Bool=false, fs=44100, solver=nothing) =
+    solver === nothing ?
+        DiscreteModel(superover(Circuit, drive=drive, tone=tone, level=level, sym=sym), 1//fs) :
+        DiscreteModel(superover(Circuit, drive=drive, tone=tone, level=level, sym=sym), 1//fs, solver)
