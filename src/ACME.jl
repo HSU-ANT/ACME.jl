@@ -768,7 +768,7 @@ function rank_factorize(a::SparseMatrixCSC)
     return c, f
 end
 
-consecranges(lengths) = isempty(lengths) ? [] : range.(cumsum([1; lengths[1:end-1]]), lengths)
+consecranges(lengths) = isempty(lengths) ? [] : ((s,l) -> (s:s+l-1)).(cumsum([1; lengths[1:end-1]]), lengths)
 
 matsplit(v::AbstractVector, rowsizes) = [v[rs] for rs in consecranges(rowsizes)]
 matsplit(m::AbstractMatrix, rowsizes, colsizes=[size(m,2)]) =
