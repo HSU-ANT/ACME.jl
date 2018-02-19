@@ -1,4 +1,4 @@
-# Copyright 2016, 2017 Martin Holters
+# Copyright 2016, 2017, 2018 Martin Holters
 # See accompanying license file.
 
 using ACME
@@ -30,5 +30,7 @@ function birdie(::Type{Circuit}; vol=nothing)
     end
 end
 
-birdie{T<:DiscreteModel}(::Type{T}=DiscreteModel; vol=nothing, fs=44100) =
-    T(birdie(Circuit, vol=vol), 1//fs)
+birdie(::Type{DiscreteModel}=DiscreteModel; vol=nothing, fs=44100, solver=nothing) =
+    solver === nothing ?
+        DiscreteModel(birdie(Circuit, vol=vol), 1//fs) :
+        DiscreteModel(birdie(Circuit, vol=vol), 1//fs, solver)

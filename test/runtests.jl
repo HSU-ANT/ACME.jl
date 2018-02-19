@@ -1,5 +1,7 @@
-# Copyright 2015, 2016, 2017 Martin Holters
+# Copyright 2015, 2016, 2017, 2018 Martin Holters
 # See accompanying license file.
+
+include("checklic.jl")
 
 using ACME
 using Compat
@@ -9,7 +11,9 @@ using ProgressMeter
 if VERSION ≥ v"0.7.0-DEV.3389"
     using SparseArrays
 end
-
+if VERSION < v"0.7.0-DEV.3986"
+    range(start; stop=error("missing stop"), length=error("missing length")) = linspace(start, stop, length)
+end
 @testset "topomat" begin
     tv, ti = ACME.topomat(sparse([1 -1 1; -1 1 -1]))
     @test tv*ti'==spzeros(2,1)
@@ -356,7 +360,7 @@ end
         end
         model = DiscreteModel(circ, 1)
         N = 100
-        output = run!(model, [linspace(0, ib, N)'; linspace(1, -1, N÷2)' linspace(-1, 1, N÷2)'])
+        output = run!(model, [range(0, stop=ib, length=N)'; range(1, stop=-1, length=N÷2)' range(-1, stop=1, length=N÷2)'])
         if typ == :pnp
             output = -output
         end
@@ -386,7 +390,7 @@ end
         end
         model = DiscreteModel(circ, 1)
         N = 100
-        output = run!(model, [linspace(0, ib, N)'; linspace(1, -1, N÷2)' linspace(-1, 1, N÷2)'])
+        output = run!(model, [range(0, stop=ib, length=N)'; range(1, stop=-1, length=N÷2)' range(-1, stop=1, length=N÷2)'])
         if typ == :pnp
             output = -output
         end
@@ -467,7 +471,7 @@ end
 
 @testset "examples" begin
     @testset "sallenkey" begin
-        include("../examples/sallenkey.jl")
+        include(joinpath(dirname(@__FILE__), "..", "examples", "sallenkey.jl"))
          model=sallenkey()
          println("Running sallenkey")
          y = run!(model, sin.(2π*1000/44100*(0:44099)'); showprogress=false)
@@ -477,7 +481,7 @@ end
      end
 
      @testset "diodeclipper" begin
-        include("../examples/diodeclipper.jl")
+        include(joinpath(dirname(@__FILE__), "..", "examples", "diodeclipper.jl"))
         model=diodeclipper()
         println("Running diodeclipper")
         @test ACME.np(model, 1) == 1
@@ -488,8 +492,7 @@ end
 
         @test linearization_error!(model, 1e-3) < 1e-15
 
-        circ = diodeclipper(Circuit)
-        model = DiscreteModel(circ, 44100, ACME.HomotopySolver{ACME.SimpleSolver})
+        model = diodeclipper(solver=HomotopySolver{SimpleSolver})
         runner = ModelRunner(model, false)
         u = sin.(2π*1000/44100*(0:44099)')
         y = run!(runner, u)
@@ -501,7 +504,7 @@ end
     end
 
     @testset "birdie" begin
-        include("../examples/birdie.jl")
+        include(joinpath(dirname(@__FILE__), "..", "examples", "birdie.jl"))
         model=birdie(vol=0.8)
         ACME.solve(model.solvers[1], [0.003, -0.0002])
         @assert all(ACME.hasconverged, model.solvers)
@@ -517,13 +520,13 @@ end
         model=birdie()
         println("Running birdie with varying vol")
         @test ACME.np(model, 1) == 3
-        y = run!(model, [sin.(2π*1000/44100*(0:44099)'); linspace(1,0,44100)']; showprogress=false)
+        y = run!(model, [sin.(2π*1000/44100*(0:44099)'); range(1, stop=0, length=44100)']; showprogress=false)
         @test size(y) == (1,44100)
         # TODO: further validate y
     end
 
     @testset "superover" begin
-        include("../examples/superover.jl")
+        include(joinpath(dirname(@__FILE__), "..", "examples", "superover.jl"))
         model=superover(drive=1.0, tone=1.0, level=1.0)
         println("Running superover with fixed potentiometer values")
         @test ACME.np(model, 1) == 5
@@ -560,7 +563,7 @@ end
         model=superover()
         println("Running superover with varying potentiometer values")
         @test ACME.np(model, 1) == 11
-        y = run!(model, [sin.(2π*1000/44100*(0:999)'); linspace(1,0,1000)'; linspace(0,1,1000)'; linspace(1,0,1000)']; showprogress=false)
+        y = run!(model, [sin.(2π*1000/44100*(0:999)'); range(1, stop=0, length=1000)'; range(0, stop=1, length=1000)'; range(1, stop=0, length=1000)']; showprogress=false)
         @test size(y) == (1,1000)
         # TODO: further validate y
 
@@ -574,7 +577,7 @@ end
         @test ACME.np(model, 2) == 2
         @test ACME.np(model, 3) == 2
         @test ACME.np(model, 4) == 4
-        y = run!(model, [sin.(2π*1000/44100*(0:999)'); linspace(1,0,1000)'; linspace(0,1,1000)'; linspace(1,0,1000)']; showprogress=false)
+        y = run!(model, [sin.(2π*1000/44100*(0:999)'); range(1, stop=0, length=1000)'; range(0, stop=1, length=1000)'; range(1, stop=0, length=1000)']; showprogress=false)
         @test size(y) == (1,1000)
         # TODO: further validate y
     end

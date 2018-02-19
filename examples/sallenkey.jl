@@ -1,4 +1,4 @@
-# Copyright 2015, 2017 Martin Holters
+# Copyright 2015, 2016, 2017, 2018 Martin Holters
 # See accompanying license file.
 
 using ACME
@@ -16,5 +16,7 @@ function sallenkey(::Type{Circuit})
     end
 end
 
-sallenkey{T<:DiscreteModel}(::Type{T}=DiscreteModel; fs=44100) =
-    T(sallenkey(Circuit), 1//fs)
+sallenkey(::Type{DiscreteModel}=DiscreteModel; fs=44100, solver=nothing) =
+    solver === nothing ?
+        DiscreteModel(sallenkey(Circuit), 1//fs) :
+        DiscreteModel(sallenkey(Circuit), 1//fs, solver)
