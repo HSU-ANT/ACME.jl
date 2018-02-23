@@ -11,14 +11,23 @@ for dirname in ("src", "examples", "test")
     for name in readdir(dirname)
         if endswith(name, ".jl")
             name = joinpath(dirname, name)
-            years = sort!(unique(parse.([Int], readlines(`git log --format=%cd --date=format:%Y -- $name`))))
+            local years
+            try
+                years = sort!(unique(parse.([Int], readlines(`git log --format=%cd --date=format:%Y -- $name`))))
+            catch e
+                @static if isdefined(Base, Symbol("@warn"))
+                    @warn e
+                else
+                    warn(e)
+                end
+                continue
+            end
             if isempty(years)
                 continue
             end
             println(name)
             open(name, "r") do io
                 l = readline(io)
-                #println(l)
                 m = match(r"#\s*Copyright\s+(([0-9]+(,\s*)?)*)", l)
                 if m === nothing
                     error("Missing copyright header in $name")
