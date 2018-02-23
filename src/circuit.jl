@@ -249,7 +249,11 @@ end
 
 @pfunction topomat!(incidence::SparseMatrixCSC{T}) [T<:Integer] begin
     @assert all(x -> abs(x) == 1, nonzeros(incidence))
-    @assert all(sum(incidence, 1) .== 0)
+    @static if VERSION ≥ v"0.7.0-DEV.4064"
+        @assert all(sum(incidence, dims=1) .== 0)
+    else
+        @assert all(sum(incidence, 1) .== 0)
+    end
 
     t = falses(size(incidence)[2]);
 

@@ -199,7 +199,11 @@ end
         t = ACME.KDTree(ps)
         p = rand(6)
         if isdefined(@__MODULE__, :argmin) # since 0.7.0-DEV.3516
-            best_p = ps[:,argmin(vec(sum(abs2, ps .- p, 1)))]
+            if VERSION ≥ v"0.7.0-DEV.4064"
+                best_p = ps[:,argmin(vec(sum(abs2, ps .- p, dims=1)))]
+            else
+                best_p = ps[:,argmin(vec(sum(abs2, ps .- p, 1)))]
+            end
         else
             best_p = ps[:,indmin(vec(sum(abs2, ps .- p, 1)))]
         end
