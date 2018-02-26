@@ -26,10 +26,8 @@ Schematics"](http://www.eurasip.org/Proceedings/Eusipco/Eusipco2015/papers/15701
 ## Installation
 
 If you have not done so already, [download and install
-Julia](http://julialang.org/downloads/). (Any version starting with 0.5 should
-be fine; [ACME 0.1.2](https://github.com/HSU-ANT/ACME.jl/tree/v0.1.2) also
-supports Julia 0.3, [ACME 0.5.1](https://github.com/HSU-ANT/ACME.jl/tree/v0.5.1) also
-supports Julia 0.4.)
+Julia](http://julialang.org/downloads/). (Any version starting with 0.6 should
+be fine; earlier ACME versions support Julia starting with version 0.3.)
 
 To install ACME, start Julia and run:
 
