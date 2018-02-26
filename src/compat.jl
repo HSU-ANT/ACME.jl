@@ -3,33 +3,15 @@
 
 using Compat
 
-if VERSION ≥ v"0.6.0"
-    macro pfunction(sig, params, body)
-        esc(Expr(:function, Expr(:where, sig, params.args...), body))
-    end
-else
-    macro pfunction(sig, params, body)
-        esc(Expr(:function,
-                 Expr(:call, Expr(:curly, sig.args[1], params.args...),
-                      sig.args[2:end]...),
-                 body))
-    end
+macro pfunction(sig, params, body)
+    esc(Expr(:function, Expr(:where, sig, params.args...), body))
 end
 
-if VERSION ≥ v"0.6.0"
-    @eval macro $(:struct)(head, body)
-        Expr(Meta.parse("struct Foo end").head, false, esc(head), Expr(:block, esc.(body.args)...))
-    end
-    macro mutable_struct(head, body)
-        Expr(Meta.parse("struct Foo end").head, true, esc(head), Expr(:block, esc.(body.args)...))
-    end
-else
-    @eval macro $(:struct)(head, body)
-        Expr(:type, false, esc(head), Expr(:block, esc.(body.args)...))
-    end
-    macro mutable_struct(head, body)
-        Expr(:type, true, esc(head), Expr(:block, esc.(body.args)...))
-    end
+@eval macro $(:struct)(head, body)
+    Expr(Meta.parse("struct Foo end").head, false, esc(head), Expr(:block, esc.(body.args)...))
+end
+macro mutable_struct(head, body)
+    Expr(Meta.parse("struct Foo end").head, true, esc(head), Expr(:block, esc.(body.args)...))
 end
 
 if !isdefined(@__MODULE__, :copyto!) # prior to 0.7.0-DEV.3057

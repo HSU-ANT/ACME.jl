@@ -1,10 +1,6 @@
 # Copyright 2018 Martin Holters
 # See accompanying license file.
-@static if VERSION < v"0.6"
-    ACMEdir = joinpath(dirname(@__FILE__), "..")
-else
-    ACMEdir = joinpath(@__DIR__, "..")
-end
+ACMEdir = joinpath(@__DIR__, "..")
 println("Checking copyright headers...")
 for dirname in ("src", "examples", "test")
     dirname = joinpath(ACMEdir, dirname)
