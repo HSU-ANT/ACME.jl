@@ -5,8 +5,7 @@ import Base.deleteat!
 import Base.isless
 import Base.isempty
 
-#mutable struct KDTree{Tcv<:AbstractVector,Tp<:AbstractMatrix}
-@mutable_struct KDTree{Tcv<:AbstractVector,Tp<:AbstractMatrix} begin
+mutable struct KDTree{Tcv<:AbstractVector,Tp<:AbstractMatrix}
     cut_dim::Vector{Int}
     cut_val::Tcv
     ps_idx::Vector{Int}
@@ -85,8 +84,7 @@ function KDTree(p::AbstractMatrix, Np=size(p,2))
     return KDTree{typeof(cut_val),typeof(p)}(cut_dim, cut_val, p_idx_final, p)
 end
 
-#mutable struct AltEntry{T}
-@mutable_struct AltEntry{T} begin
+mutable struct AltEntry{T}
     idx::Int
     delta::Vector{T}
     delta_norm::T
@@ -94,19 +92,17 @@ end
 
 isless(e1::AltEntry, e2::AltEntry) = isless(e1.delta_norm, e2.delta_norm)
 
-#mutable struct Alts{T}
-@mutable_struct Alts{T} begin
+mutable struct Alts{T}
     entries::Vector{AltEntry{T}}
     best_dist::T
     best_pidx::Int
     number_valid::Int
 end
 
-@pfunction Alts(p::Vector{T}) [T] begin
-     Alts([AltEntry(1, Vector{T}(uninitialized, length(p)), zero(T))], typemax(T), 0, 1)
- end
+Alts(p::Vector{T}) where {T} =
+    Alts([AltEntry(1, Vector{T}(uninitialized, length(p)), zero(T))], typemax(T), 0, 1)
 
-@pfunction init!(alts::Alts{T}, best_dist, best_pidx) [T] begin
+function init!(alts::Alts{T}, best_dist, best_pidx) where {T}
     alts.number_valid = 1
     alts.entries[1].idx = 1
     fill!(alts.entries[1].delta, zero(T))
@@ -171,9 +167,9 @@ function dequeue!(alts::Alts)
     return e
 end
 
-@pfunction enqueue!(alts::Alts{T}, new_idx::Int, ref_delta::Vector{T},
-                    delta_update_dim::Int, delta_update_val::T,
-                    new_delta_norm::T) [T] begin
+function enqueue!(alts::Alts{T}, new_idx::Int, ref_delta::Vector{T},
+                  delta_update_dim::Int, delta_update_val::T,
+                  new_delta_norm::T) where {T}
     if alts.number_valid == length(alts.entries)
         delta = copy(ref_delta)
         delta[delta_update_dim] = delta_update_val

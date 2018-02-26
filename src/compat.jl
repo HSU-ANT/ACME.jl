@@ -3,17 +3,6 @@
 
 using Compat
 
-macro pfunction(sig, params, body)
-    esc(Expr(:function, Expr(:where, sig, params.args...), body))
-end
-
-@eval macro $(:struct)(head, body)
-    Expr(Meta.parse("struct Foo end").head, false, esc(head), Expr(:block, esc.(body.args)...))
-end
-macro mutable_struct(head, body)
-    Expr(Meta.parse("struct Foo end").head, true, esc(head), Expr(:block, esc.(body.args)...))
-end
-
 if !isdefined(@__MODULE__, :copyto!) # prior to 0.7.0-DEV.3057
     global const copyto! = Base.copy!
 end

@@ -28,8 +28,7 @@ include("kdtree.jl")
 include("solvers.jl")
 
 
-#mutable struct Element
-@mutable_struct Element begin
+mutable struct Element
   mv :: SparseMatrixCSC{Real,Int}
   mi :: SparseMatrixCSC{Real,Int}
   mx :: SparseMatrixCSC{Real,Int}
@@ -121,8 +120,7 @@ include("elements.jl")
 
 include("circuit.jl")
 
-#mutable struct DiscreteModel{Solvers}
-@mutable_struct DiscreteModel{Solvers} begin
+mutable struct DiscreteModel{Solvers}
     a::Matrix{Float64}
     b::Matrix{Float64}
     c::Matrix{Float64}
@@ -143,15 +141,14 @@ include("circuit.jl")
     solvers::Solvers
     x::Vector{Float64}
 
-    @pfunction (::Type{DiscreteModel{Solver}})(circ::Circuit,
-            t::Float64) [Solver] begin
+    function (::Type{DiscreteModel{Solver}})(circ::Circuit, t::Float64) where {Solver}
         Base.depwarn("DiscreteModel{Solver}(circ, t) is deprecated, use DiscreteModel(circ, t, Solver) instead.",
                      :DiscreteModel)
         DiscreteModel(circ, t, Solver)
     end
 
-    @pfunction (::Type{DiscreteModel{Solvers}})(mats::Dict{Symbol},
-            nonlinear_eqs::Vector{Expr}, solvers::Solvers) [Solvers] begin
+    function (::Type{DiscreteModel{Solvers}})(mats::Dict{Symbol},
+            nonlinear_eqs::Vector{Expr}, solvers::Solvers) where {Solvers}
         model = new{Solvers}()
 
         for mat in (:a, :b, :c, :pexps, :dqs, :eqs, :fqprevs, :fqs, :dy, :ey, :fy, :x0, :q0s, :y0)
@@ -165,8 +162,8 @@ include("circuit.jl")
     end
 end
 
-@pfunction DiscreteModel(circ::Circuit, t::Real, ::Type{Solver}=HomotopySolver{CachingSolver{SimpleSolver}};
-                         decompose_nonlinearity=true) [Solver] begin
+function DiscreteModel(circ::Circuit, t::Real, ::Type{Solver}=HomotopySolver{CachingSolver{SimpleSolver}};
+                       decompose_nonlinearity=true) where {Solver}
     mats = model_matrices(circ, t)
 
     nns = Int[nn(e) for e in elements(circ)]
@@ -571,16 +568,14 @@ disabled by passing `showprogress=false`.
 run!(model::DiscreteModel, u::AbstractMatrix{Float64}; showprogress=true) =
     return run!(ModelRunner(model, showprogress), u)
 
-#struct ModelRunner{Model<:DiscreteModel,ShowProgress}
-@struct ModelRunner{Model<:DiscreteModel,ShowProgress} begin
+struct ModelRunner{Model<:DiscreteModel,ShowProgress}
     model::Model
     ucur::Vector{Float64}
     ps::Vector{Vector{Float64}}
     ycur::Vector{Float64}
     xnew::Vector{Float64}
     z::Vector{Float64}
-    @pfunction (::Type{ModelRunner{Model,ShowProgress}})(
-            model::Model) [Model<:DiscreteModel,ShowProgress] begin
+    function (::Type{ModelRunner{Model,ShowProgress}})(model::Model) where {Model<:DiscreteModel,ShowProgress}
         ucur = Vector{Float64}(uninitialized, nu(model))
         ps = Vector{Float64}[Vector{Float64}(uninitialized, np(model, idx)) for idx in 1:length(model.solvers)]
         ycur = Vector{Float64}(uninitialized, ny(model))
@@ -590,12 +585,9 @@ run!(model::DiscreteModel, u::AbstractMatrix{Float64}; showprogress=true) =
     end
 end
 
-@pfunction ModelRunner(model::Model) [Model<:DiscreteModel] begin
-     ModelRunner{Model,true}(model)
- end
-@pfunction ModelRunner(model::Model, ::Val{ShowProgress}) [Model<:DiscreteModel,ShowProgress] begin
+ModelRunner(model::Model) where {Model<:DiscreteModel} = ModelRunner{Model,true}(model)
+ModelRunner(model::Model, ::Val{ShowProgress}) where {Model<:DiscreteModel,ShowProgress} =
     ModelRunner{Model,ShowProgress}(model)
-end
 
 """
     ModelRunner(model::DiscreteModel, showprogress::Bool = true)
@@ -609,9 +601,8 @@ By default `run!` for the constructed `ModelRunner` will show a progress bar to
 report its progress. This can be disabled by passing `false` as second
 parameter.
 """
-@pfunction ModelRunner(model::Model, showprogress::Bool) [Model<:DiscreteModel] begin
+ModelRunner(model::Model, showprogress::Bool) where {Model<:DiscreteModel} =
     ModelRunner{Model,showprogress}(model)
-end
 
 """
     run!(runner::ModelRunner, u::AbstractMatrix{Float64})
@@ -657,16 +648,16 @@ To simulate a circuit without inputs, a matrix with zero rows may be passed.
 The internal state of the  underlying `DiscreteModel` (e.g. capacitor charges)
 is preserved accross calls to `run!`.
 """
-@pfunction run!(runner::ModelRunner{Model,true}, y::AbstractMatrix{Float64},
-                u::AbstractMatrix{Float64}) [Model<:DiscreteModel] begin
+function run!(runner::ModelRunner{<:DiscreteModel,true}, y::AbstractMatrix{Float64},
+              u::AbstractMatrix{Float64})
     checkiosizes(runner, u, y)
     @showprogress "Running model: " for n = 1:size(u, 2)
         step!(runner, y, u, n)
     end
 end
 
-@pfunction run!(runner::ModelRunner{Model,false}, y::AbstractMatrix{Float64},
-                u::AbstractMatrix{Float64}) [Model<:DiscreteModel] begin
+function run!(runner::ModelRunner{<:DiscreteModel,false}, y::AbstractMatrix{Float64},
+              u::AbstractMatrix{Float64})
     checkiosizes(runner, u, y)
     for n = 1:size(u, 2)
         step!(runner, y, u, n)

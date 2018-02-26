@@ -7,8 +7,7 @@ import Base: delete!
 
 const Net = Vector{Tuple{Symbol,Symbol}} # pairs of element designator and pin name
 
-#struct Circuit
-@struct Circuit begin
+struct Circuit
     elements::OrderedDict{Symbol, Element}
     nets :: Vector{Net}
     net_names :: Dict{Symbol, Net}
@@ -247,7 +246,7 @@ function disconnect!(c::Circuit, pin::Pin)
     disconnect!(c, (designator, pinname))
 end
 
-@pfunction topomat!(incidence::SparseMatrixCSC{T}) [T<:Integer] begin
+function topomat!(incidence::SparseMatrixCSC{T}) where {T<:Integer}
     @assert all(x -> abs(x) == 1, nonzeros(incidence))
     @static if VERSION ≥ v"0.7.0-DEV.4064"
         @assert all(sum(incidence, dims=1) .== 0)
@@ -293,9 +292,7 @@ end
     tv, ti
 end
 
-@pfunction topomat(incidence::SparseMatrixCSC{T}) [T<:Integer] begin
-    topomat!(copy(incidence))
- end
+topomat(incidence::SparseMatrixCSC{<:Integer}) = topomat!(copy(incidence))
 topomat(c::Circuit) = topomat!(incidence(c))
 
 """
