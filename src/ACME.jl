@@ -7,14 +7,10 @@ module ACME
 
 export DiscreteModel, run!, steadystate, steadystate!, linearize, ModelRunner
 
-if VERSION ≥ v"0.7.0-DEV.3389"
-    using SparseArrays
-end
-if VERSION ≥ v"0.7.0-DEV.3449"
-    using LinearAlgebra
-else
-    using Base.LinAlg: axpy!
-end
+using Compat.SparseArrays: SparseMatrixCSC, blkdiag, dropzeros!, findnz,
+    nonzeros, sparse, spzeros
+using Compat.LinearAlgebra: I, axpy!, lufact
+import Compat.LinearAlgebra.BLAS
 
 using ProgressMeter
 using IterTools
@@ -356,7 +352,7 @@ function nldecompose!(mats, nns, nqs)
     sub_ranges = consecranges(nqs)
     extracted_subs = Vector{Int}[]
     rem_cols = 1:size(fq, 2)
-    rem_nles = Compat.BitSet(filter!(e -> nqs[e] > 0, collect(eachindex(nqs))))
+    rem_nles = BitSet(filter!(e -> nqs[e] > 0, collect(eachindex(nqs))))
 
     while !isempty(rem_nles)
         for sz in 1:length(rem_nles), sub in subsets(collect(rem_nles), sz)
@@ -523,7 +519,7 @@ function linearize(model::DiscreteModel, usteady::AbstractVector{Float64}=zeros(
         psteady = model.dqs[idx] * xsteady + model.eqs[idx] * usteady +
                   model.fqprevs[idx] * zsteady
         zsub, dzdps[idx] =
-            Compat.invokelatest(linearize, model.solvers[idx], psteady)
+            Base.invokelatest(linearize, model.solvers[idx], psteady)
         copyto!(zsteady, zoff, zsub, 1, length(zsub))
 
         zranges[idx] = zoff:zoff+length(zsub)-1
