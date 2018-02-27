@@ -137,14 +137,8 @@ mutable struct DiscreteModel{Solvers}
     solvers::Solvers
     x::Vector{Float64}
 
-    function (::Type{DiscreteModel{Solver}})(circ::Circuit, t::Float64) where {Solver}
-        Base.depwarn("DiscreteModel{Solver}(circ, t) is deprecated, use DiscreteModel(circ, t, Solver) instead.",
-                     :DiscreteModel)
-        DiscreteModel(circ, t, Solver)
-    end
-
-    function (::Type{DiscreteModel{Solvers}})(mats::Dict{Symbol},
-            nonlinear_eqs::Vector{Expr}, solvers::Solvers) where {Solvers}
+    function DiscreteModel(mats::Dict{Symbol}, nonlinear_eqs::Vector{Expr},
+            solvers::Solvers) where {Solvers}
         model = new{Solvers}()
 
         for mat in (:a, :b, :c, :pexps, :dqs, :eqs, :fqprevs, :fqs, :dy, :ey, :fy, :x0, :q0s, :y0)
@@ -156,6 +150,12 @@ mutable struct DiscreteModel{Solvers}
         model.x = zeros(nx(model))
         return model
     end
+end
+
+function DiscreteModel{Solver}(circ::Circuit, t::Float64) where {Solver}
+    Base.depwarn("DiscreteModel{Solver}(circ, t) is deprecated, use DiscreteModel(circ, t, Solver) instead.",
+                 :DiscreteModel)
+    DiscreteModel(circ, t, Solver)
 end
 
 function DiscreteModel(circ::Circuit, t::Real, ::Type{Solver}=HomotopySolver{CachingSolver{SimpleSolver}};
@@ -264,7 +264,7 @@ function DiscreteModel(circ::Circuit, t::Real, ::Type{Solver}=HomotopySolver{Cac
                                           $model_nns[$idx], $model_nps[$idx]),
                        zeros($model_nps[$idx]), $init_zs[$idx])))
                 for idx in eachindex(model_nonlinear_eqs))...,)
-    return DiscreteModel{typeof(solvers)}(mats, model_nonlinear_eqs, solvers)
+    return DiscreteModel(mats, model_nonlinear_eqs, solvers)
 end
 
 function model_matrices(circ::Circuit, t::Rational{BigInt})
@@ -543,7 +543,7 @@ function linearize(model::DiscreteModel, usteady::AbstractVector{Float64}=zeros(
         :eqs => Matrix{Float64}[], :fqprevs => Matrix{Float64}[],
         :fqs => Matrix{Float64}[], :q0s => Vector{Float64}[],
         :dy => dy, :ey => ey, :fy => zeros(ny(model), 0), :x0 => x0, :y0 => y0)
-    return DiscreteModel{Tuple{}}(mats, Expr[], ())
+    return DiscreteModel(mats, Expr[], ())
 end
 
 """
@@ -571,7 +571,7 @@ struct ModelRunner{Model<:DiscreteModel,ShowProgress}
     ycur::Vector{Float64}
     xnew::Vector{Float64}
     z::Vector{Float64}
-    function (::Type{ModelRunner{Model,ShowProgress}})(model::Model) where {Model<:DiscreteModel,ShowProgress}
+    function ModelRunner{Model,ShowProgress}(model::Model) where {Model<:DiscreteModel,ShowProgress}
         ucur = Vector{Float64}(uninitialized, nu(model))
         ps = Vector{Float64}[Vector{Float64}(uninitialized, np(model, idx)) for idx in 1:length(model.solvers)]
         ycur = Vector{Float64}(uninitialized, ny(model))

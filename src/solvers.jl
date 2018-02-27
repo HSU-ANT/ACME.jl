@@ -12,9 +12,8 @@ struct ParametricNonLinEq{F_eval<:Function,F_setp<:Function,F_calcjp<:Function,S
     Jp::Matrix{Float64}
     J::Matrix{Float64}
     scratch::Scratch
-    function (::Type{ParametricNonLinEq{F_eval,F_setp,F_calcjp,Scratch}})(
-            func::F_eval, set_p::F_setp, calc_Jp::F_calcjp, scratch::Scratch,
-            nn::Integer, np::Integer
+    function ParametricNonLinEq(func::F_eval, set_p::F_setp, calc_Jp::F_calcjp,
+            scratch::Scratch, nn::Integer, np::Integer
         ) where {F_eval<:Function,F_setp<:Function,F_calcjp<:Function,Scratch}
         res = zeros(nn)
         Jp = zeros(nn, np)
@@ -22,10 +21,6 @@ struct ParametricNonLinEq{F_eval<:Function,F_setp<:Function,F_calcjp<:Function,S
         return new{F_eval,F_setp,F_calcjp,Scratch}(func, set_p, calc_Jp, res, Jp, J, scratch)
     end
 end
-ParametricNonLinEq(func::F_eval, set_p::F_setp, calc_Jp::F_calcjp,
-        scratch::Scratch, nn::Integer, np::Integer) where {F_eval<:Function,
-        F_setp<:Function,F_calcjp<:Function,Scratch} =
-    ParametricNonLinEq{F_eval,F_setp,F_calcjp,Scratch}(func, set_p, calc_Jp, scratch, nn, np)
 ParametricNonLinEq(func::Function, nn::Integer, np::Integer) =
     ParametricNonLinEq(func, default_set_p, default_calc_Jp,
                        (zeros(np), zeros(nn, np)), nn, np)
@@ -165,8 +160,8 @@ mutable struct SimpleSolver{NLEQ<:ParametricNonLinEq}
     tol::Float64
     tmp_nn::Vector{Float64}
     tmp_np::Vector{Float64}
-    function (::Type{SimpleSolver{NLEQ}})(
-            nleq::NLEQ, initial_p::Vector{Float64}, initial_z::Vector{Float64}) where {NLEQ<:ParametricNonLinEq}
+    function SimpleSolver(nleq::NLEQ, initial_p::Vector{Float64},
+            initial_z::Vector{Float64}) where {NLEQ<:ParametricNonLinEq}
         z = zeros(nn(nleq))
         linsolver = LinearSolver(nn(nleq))
         last_z = zeros(nn(nleq))
@@ -181,10 +176,6 @@ mutable struct SimpleSolver{NLEQ<:ParametricNonLinEq}
         return solver
     end
 end
-
-SimpleSolver(nleq::NLEQ, initial_p::Vector{Float64},
-             initial_z::Vector{Float64}) where {NLEQ<:ParametricNonLinEq} =
-    SimpleSolver{NLEQ}(nleq, initial_p, initial_z)
 
 set_resabstol!(solver::SimpleSolver, tol) = solver.tol = tol
 
@@ -257,14 +248,13 @@ mutable struct HomotopySolver{BaseSolver}
     start_p::Vector{Float64}
     pa::Vector{Float64}
     iters::Int
-    (::Type{HomotopySolver{BaseSolver}})(
-            basesolver::BaseSolver, np::Integer) where {BaseSolver} =
+    HomotopySolver(basesolver::BaseSolver, np::Integer) where {BaseSolver} =
         new{BaseSolver}(basesolver, zeros(np), zeros(np), 0)
-    function (::Type{HomotopySolver{BaseSolver}})(
-            nleq::ParametricNonLinEq, initial_p::Vector{Float64},
-            initial_z::Vector{Float64}) where {BaseSolver}
+    function HomotopySolver{BaseSolver}(nleq::ParametricNonLinEq,
+            initial_p::Vector{Float64}, initial_z::Vector{Float64}
+        ) where {BaseSolver}
         basesolver = BaseSolver(nleq, initial_p, initial_z)
-        return HomotopySolver{typeof(basesolver)}(basesolver, np(nleq))
+        return HomotopySolver(basesolver, np(nleq))
     end
 end
 
@@ -333,17 +323,17 @@ mutable struct CachingSolver{BaseSolver}
     new_count::Int
     new_count_limit::Int
     alts::Alts{Float64}
-    function (::Type{CachingSolver{BaseSolver}})(basesolver::BaseSolver,
-            initial_p::Vector{Float64}, initial_z::Vector{Float64}, nn::Integer) where {BaseSolver}
+    function CachingSolver(basesolver::BaseSolver, initial_p::Vector{Float64},
+            initial_z::Vector{Float64}, nn::Integer) where {BaseSolver}
          ps_tree = KDTree(hcat(initial_p))
          zs = reshape(copy(initial_z), nn, 1)
          alts = Alts(initial_p)
          return new{BaseSolver}(basesolver, ps_tree, zs, 1, 0, 2, alts)
     end
-    function (::Type{CachingSolver{BaseSolver}})(nleq::ParametricNonLinEq,
+    function CachingSolver{BaseSolver}(nleq::ParametricNonLinEq,
             initial_p::Vector{Float64}, initial_z::Vector{Float64}) where {BaseSolver}
         basesolver = BaseSolver(nleq, initial_p, initial_z)
-        return CachingSolver{typeof(basesolver)}(basesolver, initial_p, initial_z, nn(nleq))
+        return CachingSolver(basesolver, initial_p, initial_z, nn(nleq))
     end
 end
 
