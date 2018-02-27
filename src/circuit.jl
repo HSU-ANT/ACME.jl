@@ -17,7 +17,7 @@ end
 elements(c::Circuit) = values(c.elements)
 
 for n in [:nb; :nx; :nq; :nu; :nl; :ny; :nn]
-    @eval ($n)(c::Circuit) = sum([$n(elem) for elem in elements(c)])
+    @eval ($n)(c::Circuit) = reduce(+, 0, $n(elem) for elem in elements(c))
 end
 
 for mat in [:mv; :mi; :mx; :mxd; :mq; :mu; :pv; :pi; :px; :pxd; :pq]

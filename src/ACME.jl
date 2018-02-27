@@ -74,7 +74,7 @@ mutable struct Element
     elem = new()
     for (key, val) in kwargs_pairs(args)
       if haskey(mat_dims, key)
-        val = convert(SparseMatrixCSC{Real}, sparse(hcat(val))) # turn val into a sparse matrix whatever it is
+        val = convert(SparseMatrixCSC{Real,Int}, hcat(val)) # turn val into a sparse matrix whatever it is
         update_sizes(val, mat_dims[key])
       elseif key == :pins
         val = make_pin_dict(val)
@@ -269,11 +269,11 @@ end
 
 function model_matrices(circ::Circuit, t::Rational{BigInt})
     lhs = convert(SparseMatrixCSC{Rational{BigInt},Int},
-                  sparse([mv(circ) mi(circ) mxd(circ)//t+mx(circ)//2 mq(circ);
-                   blkdiag(topomat(circ)...) spzeros(nb(circ), nx(circ) + nq(circ))]))
+                  [mv(circ) mi(circ) mxd(circ)//t+mx(circ)//2 mq(circ);
+                   blkdiag(topomat(circ)...) spzeros(nb(circ), nx(circ) + nq(circ))])
     rhs = convert(SparseMatrixCSC{Rational{BigInt},Int},
-                  sparse([u0(circ) mu(circ) mxd(circ)//t-mx(circ)//2;
-                          spzeros(nb(circ), 1+nu(circ)+nx(circ))]))
+                  [u0(circ) mu(circ) mxd(circ)//t-mx(circ)//2;
+                          spzeros(nb(circ), 1+nu(circ)+nx(circ))])
     x, f = Matrix.(gensolve(lhs, rhs))
 
     rowsizes = [nb(circ); nb(circ); nx(circ); nq(circ)]
@@ -460,7 +460,7 @@ np(model::DiscreteModel, subidx) = size(model.dqs[subidx], 1)
 nu(model::DiscreteModel) = size(model.b, 2)
 ny(model::DiscreteModel) = length(model.y0)
 nn(model::DiscreteModel, subidx) = size(model.fqs[subidx], 2)
-nn(model::DiscreteModel) = sum([size(fq, 2) for fq in model.fqs])
+nn(model::DiscreteModel) = reduce(+, 0, size(fq, 2) for fq in model.fqs)
 
 function steadystate(model::DiscreteModel, u=zeros(nu(model)))
     IA_LU = lufact(I-model.a)
