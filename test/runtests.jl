@@ -4,15 +4,11 @@
 include("checklic.jl")
 
 using ACME
-using Compat: argmin
+using Compat: argmin, range
 import Compat.Test
 using Compat.Test: @test, @test_broken, @test_throws, @test_warn, @testset
 using ProgressMeter
 using Compat.SparseArrays: sparse, spzeros
-
-if VERSION < v"0.7.0-DEV.3986"
-    range(start; stop=error("missing stop"), length=error("missing length")) = linspace(start, stop, length)
-end
 
 @testset "topomat" begin
     tv, ti = ACME.topomat(sparse([1 -1 1; -1 1 -1]))
