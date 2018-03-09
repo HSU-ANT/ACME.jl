@@ -21,12 +21,12 @@ for n in [:nb; :nx; :nq; :nu; :nl; :ny; :nn]
 end
 
 for mat in [:mv; :mi; :mx; :mxd; :mq; :mu; :pv; :pi; :px; :pxd; :pq]
-    # blkdiag() does not work, so include an empty matrix of desired type in
+    # blockdiag() does not work, so include an empty matrix of desired type in
     # case elements(c) is empty
-    # as blkdiag for unknown number of arguments cannot be inferred properly,
+    # as blockdiag for unknown number of arguments cannot be inferred properly,
     # add type-assertion
     @eval ($mat)(c::Circuit) =
-         blkdiag(spzeros(Rational{BigInt}, 0, 0),
+         blockdiag(spzeros(Rational{BigInt}, 0, 0),
                  (convert(SparseMatrixCSC{Rational{BigInt}}, elem.$mat)
                   for elem in elements(c))...
                 )::SparseMatrixCSC{Rational{BigInt},Int}

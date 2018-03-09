@@ -20,3 +20,9 @@ kwargs_pairs(kwargs) = kwargs
 else
     using Compat.LinearAlgebra: rmul!
 end
+
+@static if !isdefined(Compat.SparseArrays, :blockdiag) # prior to 0.7.0-DEV.4498
+    const blockdiag = Compat.SparseArrays.blkdiag
+else
+    using Compat.SparseArrays: blockdiag
+end

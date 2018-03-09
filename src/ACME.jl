@@ -7,7 +7,7 @@ module ACME
 
 export DiscreteModel, run!, steadystate, steadystate!, linearize, ModelRunner
 
-using Compat.SparseArrays: SparseMatrixCSC, blkdiag, dropzeros!, findnz,
+using Compat.SparseArrays: SparseMatrixCSC, dropzeros!, findnz,
     nonzeros, sparse, spzeros
 using Compat.LinearAlgebra: I, axpy!, lufact
 import Compat.LinearAlgebra.BLAS
@@ -270,7 +270,7 @@ end
 function model_matrices(circ::Circuit, t::Rational{BigInt})
     lhs = convert(SparseMatrixCSC{Rational{BigInt},Int},
                   [mv(circ) mi(circ) mxd(circ)//t+mx(circ)//2 mq(circ);
-                   blkdiag(topomat(circ)...) spzeros(nb(circ), nx(circ) + nq(circ))])
+                   blockdiag(topomat(circ)...) spzeros(nb(circ), nx(circ) + nq(circ))])
     rhs = convert(SparseMatrixCSC{Rational{BigInt},Int},
                   [u0(circ) mu(circ) mxd(circ)//t-mx(circ)//2;
                           spzeros(nb(circ), 1+nu(circ)+nx(circ))])
