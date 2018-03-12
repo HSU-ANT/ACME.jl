@@ -391,10 +391,10 @@ end
 
 function reduce_pdims!(mats::Dict)
     subcount = length(mats[:dq_fulls])
-    mats[:dqs] = Vector{Matrix}(uninitialized, subcount)
-    mats[:eqs] = Vector{Matrix}(uninitialized, subcount)
-    mats[:fqprevs] = Vector{Matrix}(uninitialized, subcount)
-    mats[:pexps] = Vector{Matrix}(uninitialized, subcount)
+    mats[:dqs] = Vector{Matrix}(undef, subcount)
+    mats[:eqs] = Vector{Matrix}(undef, subcount)
+    mats[:fqprevs] = Vector{Matrix}(undef, subcount)
+    mats[:pexps] = Vector{Matrix}(undef, subcount)
     offset = 0
     for idx in 1:subcount
         # decompose [dq_full eq_full] into pexp*[dq eq] with [dq eq] having minimum
@@ -500,10 +500,10 @@ end
 
 function linearize(model::DiscreteModel, usteady::AbstractVector{Float64}=zeros(nu(model)))
     xsteady = steadystate(model, usteady)
-    zranges = Vector{UnitRange{Int64}}(uninitialized, length(model.solvers))
-    dzdps = Vector{Matrix{Float64}}(uninitialized, length(model.solvers))
-    dqlins = Vector{Matrix{Float64}}(uninitialized, length(model.solvers))
-    eqlins = Vector{Matrix{Float64}}(uninitialized, length(model.solvers))
+    zranges = Vector{UnitRange{Int64}}(undef, length(model.solvers))
+    dzdps = Vector{Matrix{Float64}}(undef, length(model.solvers))
+    dqlins = Vector{Matrix{Float64}}(undef, length(model.solvers))
+    eqlins = Vector{Matrix{Float64}}(undef, length(model.solvers))
     zsteady = zeros(nn(model))
     zoff = 1
     x0 = copy(model.x0)
@@ -572,11 +572,11 @@ struct ModelRunner{Model<:DiscreteModel,ShowProgress}
     xnew::Vector{Float64}
     z::Vector{Float64}
     function ModelRunner{Model,ShowProgress}(model::Model) where {Model<:DiscreteModel,ShowProgress}
-        ucur = Vector{Float64}(uninitialized, nu(model))
-        ps = Vector{Float64}[Vector{Float64}(uninitialized, np(model, idx)) for idx in 1:length(model.solvers)]
-        ycur = Vector{Float64}(uninitialized, ny(model))
-        xnew = Vector{Float64}(uninitialized, nx(model))
-        z = Vector{Float64}(uninitialized, nn(model))
+        ucur = Vector{Float64}(undef, nu(model))
+        ps = Vector{Float64}[Vector{Float64}(undef, np(model, idx)) for idx in 1:length(model.solvers)]
+        ycur = Vector{Float64}(undef, ny(model))
+        xnew = Vector{Float64}(undef, nx(model))
+        z = Vector{Float64}(undef, nn(model))
         return new{Model,ShowProgress}(model, ucur, ps, ycur, xnew, z)
     end
 end
@@ -614,7 +614,7 @@ underlying `DiscreteModel` (e.g. capacitor charges) is preserved accross calls
 to `run!`.
 """
 function run!(runner::ModelRunner, u::AbstractMatrix{Float64})
-    y = Matrix{Float64}(uninitialized, ny(runner.model), size(u, 2))
+    y = Matrix{Float64}(undef, ny(runner.model), size(u, 2))
     run!(runner, y, u)
     return y
 end

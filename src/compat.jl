@@ -2,8 +2,7 @@
 # See accompanying license file.
 
 import Compat
-using Compat: @warn, BitSet, argmax, argmin, copyto!, equalto, findall,
-    uninitialized
+using Compat: @warn, BitSet, argmax, argmin, copyto!, equalto, findall, undef
 using Compat.Markdown: @doc_str
 
 if isdefined(Base, :NamedTuple) # 0.7.0-DEV.2738 to 0.7.0-DEV.3226

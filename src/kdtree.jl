@@ -100,7 +100,7 @@ mutable struct Alts{T}
 end
 
 Alts(p::Vector{T}) where {T} =
-    Alts([AltEntry(1, Vector{T}(uninitialized, length(p)), zero(T))], typemax(T), 0, 1)
+    Alts([AltEntry(1, Vector{T}(undef, length(p)), zero(T))], typemax(T), 0, 1)
 
 function init!(alts::Alts{T}, best_dist, best_pidx) where {T}
     alts.number_valid = 1
