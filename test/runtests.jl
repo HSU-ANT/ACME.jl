@@ -65,11 +65,11 @@ end
         v_r = i*r
         v_d = 25e-3 * log(i/is+1)
         circ = @circuit begin
-            vsrc = voltagesource(v_r + v_d), [+] ⟷ vcc,[-] ⟷ gnd
+            vsrc = voltagesource(v_r + v_d), [+] ⟷ "supply voltage",[-] ⟷ gnd
             r1 = resistor(r)
             d = diode(is=is), [-] ⟷ gnd, [+] ⟷ r1[2]
             vprobe = voltageprobe(), [-] ⟷ gnd, [+] ⟷ r1[2]
-            r1[1] ⟷ vcc
+            r1[1] ⟷ "supply voltage"
         end
         model = DiscreteModel(circ, 1)
         y = run!(model, zeros(0, 1))

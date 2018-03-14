@@ -339,6 +339,10 @@ to a named net. (Such named nets are created as needed.)
     r = resistor(1000), [1] ⟷ src[+], [2] ⟷ gnd
 end
 ```
+
+If a net or pin specification is not just a single symbol or number, and has to
+be put in quotes (e.g. `"in+"`, `"9V"`)
+
 !!! note
     Instead of `⟷` (`\\longleftrightarrow`), one can also use `==`.
 """
@@ -394,6 +398,9 @@ macro circuit(cdef)
     function extractpins(netname::Symbol, default_element=nothing)
         return [QuoteNode(netname)]
     end
+
+    extractpins(netname::String, default_element=nothing) =
+        extractpins(Symbol(netname), default_element)
 
     if !isa(cdef, Expr) || cdef.head !== :block
         error("@circuit must be followed by a begin/end block")
