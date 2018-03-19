@@ -4,16 +4,12 @@
 include("checklic.jl")
 
 using ACME
-using Compat
-using Compat.Test
+using Compat: argmin, range
+import Compat.Test
+using Compat.Test: @test, @test_broken, @test_throws, @test_warn, @testset
 using ProgressMeter
+using Compat.SparseArrays: sparse, spzeros
 
-if VERSION ≥ v"0.7.0-DEV.3389"
-    using SparseArrays
-end
-if VERSION < v"0.7.0-DEV.3986"
-    range(start; stop=error("missing stop"), length=error("missing length")) = linspace(start, stop, length)
-end
 @testset "topomat" begin
     tv, ti = ACME.topomat(sparse([1 -1 1; -1 1 -1]))
     @test tv*ti'==spzeros(2,1)
@@ -69,11 +65,11 @@ end
         v_r = i*r
         v_d = 25e-3 * log(i/is+1)
         circ = @circuit begin
-            vsrc = voltagesource(v_r + v_d), [+] ⟷ vcc,[-] ⟷ gnd
+            vsrc = voltagesource(v_r + v_d), [+] ⟷ "supply voltage",[-] ⟷ gnd
             r1 = resistor(r)
             d = diode(is=is), [-] ⟷ gnd, [+] ⟷ r1[2]
             vprobe = voltageprobe(), [-] ⟷ gnd, [+] ⟷ r1[2]
-            r1[1] ⟷ vcc
+            r1[1] ⟷ "supply voltage"
         end
         model = DiscreteModel(circ, 1)
         y = run!(model, zeros(0, 1))
@@ -139,18 +135,9 @@ end
             probe = currentprobe(), [+] ⟷ r[1], [-] ⟷ r[2]
         end
         @static if VERSION ≥ v"0.7.0-DEV.2988"
-            @test_logs (:warn, "Model output depends on indeterminate quantity") DiscreteModel(circ, 1)
+            Test.@test_logs (:warn, "Model output depends on indeterminate quantity") DiscreteModel(circ, 1)
         else
-            @static if VERSION ≥ v"0.6.0"
-                @test_warn "output depends on indeterminate quantity" DiscreteModel(circ, 1)
-            else
-                orig_stderr = STDERR
-                rd, wr = redirect_stderr()
-                DiscreteModel(circ, 1)
-                # should warn because output is indeterminate
-                @test !isempty(search(String(readavailable(rd)), "WARNING"))
-                redirect_stderr(orig_stderr)
-            end
+            @test_warn "output depends on indeterminate quantity" DiscreteModel(circ, 1)
         end
     end
 
@@ -167,18 +154,9 @@ end
         @test y[1,1] == y[1,2]
         @test_throws ErrorException run!(model, hcat([Inf]))
         @static if VERSION ≥ v"0.7.0-DEV.2988"
-            @test(size(@test_logs((:warn, "Failed to converge while solving non-linear equation."), run!(model, hcat([-1.0])))) == (1, 1))
+            @test(size(Test.@test_logs((:warn, "Failed to converge while solving non-linear equation."), run!(model, hcat([-1.0])))) == (1, 1))
         else
-            @static if VERSION ≥ v"0.6.0"
-                @test_warn("Failed to converge", @test size(run!(model, hcat([-1.0]))) == (1, 1))
-            else
-                orig_stderr = STDERR
-                rd, wr = redirect_stderr()
-                @test size(run!(model, hcat([-1.0]))) == (1, 1)
-                # should warn because solution exists as diode cannot reach reverse current of 1A
-                @test !isempty(search(String(readavailable(rd)), "WARNING"))
-                redirect_stderr(orig_stderr)
-            end
+            @test_warn("Failed to converge", @test size(run!(model, hcat([-1.0]))) == (1, 1))
         end
     end
 end
@@ -198,10 +176,10 @@ end
         ps = rand(6, 10000)
         t = ACME.KDTree(ps)
         p = rand(6)
-        if isdefined(@__MODULE__, :argmin) # since 0.7.0-DEV.3516
-            best_p = ps[:,argmin(vec(sum(abs2, ps .- p, 1)))]
+        if VERSION ≥ v"0.7.0-DEV.4064"
+            best_p = ps[:,argmin(vec(sum(abs2, ps .- p, dims=1)))]
         else
-            best_p = ps[:,indmin(vec(sum(abs2, ps .- p, 1)))]
+            best_p = ps[:,argmin(vec(sum(abs2, ps .- p, 1)))]
         end
         idx = ACME.indnearest(t, p)
         @test sum(abs2, p - best_p) ≈ sum(abs2, p - ps[:, idx])

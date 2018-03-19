@@ -7,14 +7,10 @@ module ACME
 
 export DiscreteModel, run!, steadystate, steadystate!, linearize, ModelRunner
 
-if VERSION ≥ v"0.7.0-DEV.3389"
-    using SparseArrays
-end
-if VERSION ≥ v"0.7.0-DEV.3449"
-    using LinearAlgebra
-else
-    using Base.LinAlg: axpy!
-end
+using Compat.SparseArrays: SparseMatrixCSC, dropzeros!, findnz,
+    nonzeros, sparse, spzeros
+using Compat.LinearAlgebra: I, axpy!, lufact
+import Compat.LinearAlgebra.BLAS
 
 using ProgressMeter
 using IterTools
@@ -28,8 +24,7 @@ include("kdtree.jl")
 include("solvers.jl")
 
 
-#mutable struct Element
-@mutable_struct Element begin
+mutable struct Element
   mv :: SparseMatrixCSC{Real,Int}
   mi :: SparseMatrixCSC{Real,Int}
   mx :: SparseMatrixCSC{Real,Int}
@@ -79,7 +74,7 @@ include("solvers.jl")
     elem = new()
     for (key, val) in kwargs_pairs(args)
       if haskey(mat_dims, key)
-        val = convert(SparseMatrixCSC{Real}, sparse(hcat(val))) # turn val into a sparse matrix whatever it is
+        val = convert(SparseMatrixCSC{Real,Int}, hcat(val)) # turn val into a sparse matrix whatever it is
         update_sizes(val, mat_dims[key])
       elseif key == :pins
         val = make_pin_dict(val)
@@ -121,8 +116,7 @@ include("elements.jl")
 
 include("circuit.jl")
 
-#mutable struct DiscreteModel{Solvers}
-@mutable_struct DiscreteModel{Solvers} begin
+mutable struct DiscreteModel{Solvers}
     a::Matrix{Float64}
     b::Matrix{Float64}
     c::Matrix{Float64}
@@ -143,15 +137,8 @@ include("circuit.jl")
     solvers::Solvers
     x::Vector{Float64}
 
-    @pfunction (::Type{DiscreteModel{Solver}})(circ::Circuit,
-            t::Float64) [Solver] begin
-        Base.depwarn("DiscreteModel{Solver}(circ, t) is deprecated, use DiscreteModel(circ, t, Solver) instead.",
-                     :DiscreteModel)
-        DiscreteModel(circ, t, Solver)
-    end
-
-    @pfunction (::Type{DiscreteModel{Solvers}})(mats::Dict{Symbol},
-            nonlinear_eqs::Vector{Expr}, solvers::Solvers) [Solvers] begin
+    function DiscreteModel(mats::Dict{Symbol}, nonlinear_eqs::Vector{Expr},
+            solvers::Solvers) where {Solvers}
         model = new{Solvers}()
 
         for mat in (:a, :b, :c, :pexps, :dqs, :eqs, :fqprevs, :fqs, :dy, :ey, :fy, :x0, :q0s, :y0)
@@ -165,8 +152,14 @@ include("circuit.jl")
     end
 end
 
-@pfunction DiscreteModel(circ::Circuit, t::Real, ::Type{Solver}=HomotopySolver{CachingSolver{SimpleSolver}};
-                         decompose_nonlinearity=true) [Solver] begin
+function DiscreteModel{Solver}(circ::Circuit, t::Float64) where {Solver}
+    Base.depwarn("DiscreteModel{Solver}(circ, t) is deprecated, use DiscreteModel(circ, t, Solver) instead.",
+                 :DiscreteModel)
+    DiscreteModel(circ, t, Solver)
+end
+
+function DiscreteModel(circ::Circuit, t::Real, ::Type{Solver}=HomotopySolver{CachingSolver{SimpleSolver}};
+                       decompose_nonlinearity=true) where {Solver}
     mats = model_matrices(circ, t)
 
     nns = Int[nn(e) for e in elements(circ)]
@@ -271,16 +264,16 @@ end
                                           $model_nns[$idx], $model_nps[$idx]),
                        zeros($model_nps[$idx]), $init_zs[$idx])))
                 for idx in eachindex(model_nonlinear_eqs))...,)
-    return DiscreteModel{typeof(solvers)}(mats, model_nonlinear_eqs, solvers)
+    return DiscreteModel(mats, model_nonlinear_eqs, solvers)
 end
 
 function model_matrices(circ::Circuit, t::Rational{BigInt})
     lhs = convert(SparseMatrixCSC{Rational{BigInt},Int},
-                  sparse([mv(circ) mi(circ) mxd(circ)//t+mx(circ)//2 mq(circ);
-                   blkdiag(topomat(circ)...) spzeros(nb(circ), nx(circ) + nq(circ))]))
+                  [mv(circ) mi(circ) mxd(circ)//t+mx(circ)//2 mq(circ);
+                   blockdiag(topomat(circ)...) spzeros(nb(circ), nx(circ) + nq(circ))])
     rhs = convert(SparseMatrixCSC{Rational{BigInt},Int},
-                  sparse([u0(circ) mu(circ) mxd(circ)//t-mx(circ)//2;
-                          spzeros(nb(circ), 1+nu(circ)+nx(circ))]))
+                  [u0(circ) mu(circ) mxd(circ)//t-mx(circ)//2;
+                          spzeros(nb(circ), 1+nu(circ)+nx(circ))])
     x, f = Matrix.(gensolve(lhs, rhs))
 
     rowsizes = [nb(circ); nb(circ); nx(circ); nq(circ)]
@@ -359,7 +352,7 @@ function nldecompose!(mats, nns, nqs)
     sub_ranges = consecranges(nqs)
     extracted_subs = Vector{Int}[]
     rem_cols = 1:size(fq, 2)
-    rem_nles = Compat.BitSet(filter!(e -> nqs[e] > 0, collect(eachindex(nqs))))
+    rem_nles = BitSet(filter!(e -> nqs[e] > 0, collect(eachindex(nqs))))
 
     while !isempty(rem_nles)
         for sz in 1:length(rem_nles), sub in subsets(collect(rem_nles), sz)
@@ -398,10 +391,10 @@ end
 
 function reduce_pdims!(mats::Dict)
     subcount = length(mats[:dq_fulls])
-    mats[:dqs] = Vector{Matrix}(uninitialized, subcount)
-    mats[:eqs] = Vector{Matrix}(uninitialized, subcount)
-    mats[:fqprevs] = Vector{Matrix}(uninitialized, subcount)
-    mats[:pexps] = Vector{Matrix}(uninitialized, subcount)
+    mats[:dqs] = Vector{Matrix}(undef, subcount)
+    mats[:eqs] = Vector{Matrix}(undef, subcount)
+    mats[:fqprevs] = Vector{Matrix}(undef, subcount)
+    mats[:pexps] = Vector{Matrix}(undef, subcount)
     offset = 0
     for idx in 1:subcount
         # decompose [dq_full eq_full] into pexp*[dq eq] with [dq eq] having minimum
@@ -467,7 +460,7 @@ np(model::DiscreteModel, subidx) = size(model.dqs[subidx], 1)
 nu(model::DiscreteModel) = size(model.b, 2)
 ny(model::DiscreteModel) = length(model.y0)
 nn(model::DiscreteModel, subidx) = size(model.fqs[subidx], 2)
-nn(model::DiscreteModel) = sum([size(fq, 2) for fq in model.fqs])
+nn(model::DiscreteModel) = reduce(+, 0, size(fq, 2) for fq in model.fqs)
 
 function steadystate(model::DiscreteModel, u=zeros(nu(model)))
     IA_LU = lufact(I-model.a)
@@ -507,10 +500,10 @@ end
 
 function linearize(model::DiscreteModel, usteady::AbstractVector{Float64}=zeros(nu(model)))
     xsteady = steadystate(model, usteady)
-    zranges = Vector{UnitRange{Int64}}(uninitialized, length(model.solvers))
-    dzdps = Vector{Matrix{Float64}}(uninitialized, length(model.solvers))
-    dqlins = Vector{Matrix{Float64}}(uninitialized, length(model.solvers))
-    eqlins = Vector{Matrix{Float64}}(uninitialized, length(model.solvers))
+    zranges = Vector{UnitRange{Int64}}(undef, length(model.solvers))
+    dzdps = Vector{Matrix{Float64}}(undef, length(model.solvers))
+    dqlins = Vector{Matrix{Float64}}(undef, length(model.solvers))
+    eqlins = Vector{Matrix{Float64}}(undef, length(model.solvers))
     zsteady = zeros(nn(model))
     zoff = 1
     x0 = copy(model.x0)
@@ -526,7 +519,7 @@ function linearize(model::DiscreteModel, usteady::AbstractVector{Float64}=zeros(
         psteady = model.dqs[idx] * xsteady + model.eqs[idx] * usteady +
                   model.fqprevs[idx] * zsteady
         zsub, dzdps[idx] =
-            Compat.invokelatest(linearize, model.solvers[idx], psteady)
+            Base.invokelatest(linearize, model.solvers[idx], psteady)
         copyto!(zsteady, zoff, zsub, 1, length(zsub))
 
         zranges[idx] = zoff:zoff+length(zsub)-1
@@ -550,7 +543,7 @@ function linearize(model::DiscreteModel, usteady::AbstractVector{Float64}=zeros(
         :eqs => Matrix{Float64}[], :fqprevs => Matrix{Float64}[],
         :fqs => Matrix{Float64}[], :q0s => Vector{Float64}[],
         :dy => dy, :ey => ey, :fy => zeros(ny(model), 0), :x0 => x0, :y0 => y0)
-    return DiscreteModel{Tuple{}}(mats, Expr[], ())
+    return DiscreteModel(mats, Expr[], ())
 end
 
 """
@@ -571,31 +564,26 @@ disabled by passing `showprogress=false`.
 run!(model::DiscreteModel, u::AbstractMatrix{Float64}; showprogress=true) =
     return run!(ModelRunner(model, showprogress), u)
 
-#struct ModelRunner{Model<:DiscreteModel,ShowProgress}
-@struct ModelRunner{Model<:DiscreteModel,ShowProgress} begin
+struct ModelRunner{Model<:DiscreteModel,ShowProgress}
     model::Model
     ucur::Vector{Float64}
     ps::Vector{Vector{Float64}}
     ycur::Vector{Float64}
     xnew::Vector{Float64}
     z::Vector{Float64}
-    @pfunction (::Type{ModelRunner{Model,ShowProgress}})(
-            model::Model) [Model<:DiscreteModel,ShowProgress] begin
-        ucur = Vector{Float64}(uninitialized, nu(model))
-        ps = Vector{Float64}[Vector{Float64}(uninitialized, np(model, idx)) for idx in 1:length(model.solvers)]
-        ycur = Vector{Float64}(uninitialized, ny(model))
-        xnew = Vector{Float64}(uninitialized, nx(model))
-        z = Vector{Float64}(uninitialized, nn(model))
+    function ModelRunner{Model,ShowProgress}(model::Model) where {Model<:DiscreteModel,ShowProgress}
+        ucur = Vector{Float64}(undef, nu(model))
+        ps = Vector{Float64}[Vector{Float64}(undef, np(model, idx)) for idx in 1:length(model.solvers)]
+        ycur = Vector{Float64}(undef, ny(model))
+        xnew = Vector{Float64}(undef, nx(model))
+        z = Vector{Float64}(undef, nn(model))
         return new{Model,ShowProgress}(model, ucur, ps, ycur, xnew, z)
     end
 end
 
-@pfunction ModelRunner(model::Model) [Model<:DiscreteModel] begin
-     ModelRunner{Model,true}(model)
- end
-@pfunction ModelRunner(model::Model, ::Val{ShowProgress}) [Model<:DiscreteModel,ShowProgress] begin
+ModelRunner(model::Model) where {Model<:DiscreteModel} = ModelRunner{Model,true}(model)
+ModelRunner(model::Model, ::Val{ShowProgress}) where {Model<:DiscreteModel,ShowProgress} =
     ModelRunner{Model,ShowProgress}(model)
-end
 
 """
     ModelRunner(model::DiscreteModel, showprogress::Bool = true)
@@ -609,9 +597,8 @@ By default `run!` for the constructed `ModelRunner` will show a progress bar to
 report its progress. This can be disabled by passing `false` as second
 parameter.
 """
-@pfunction ModelRunner(model::Model, showprogress::Bool) [Model<:DiscreteModel] begin
+ModelRunner(model::Model, showprogress::Bool) where {Model<:DiscreteModel} =
     ModelRunner{Model,showprogress}(model)
-end
 
 """
     run!(runner::ModelRunner, u::AbstractMatrix{Float64})
@@ -627,7 +614,7 @@ underlying `DiscreteModel` (e.g. capacitor charges) is preserved accross calls
 to `run!`.
 """
 function run!(runner::ModelRunner, u::AbstractMatrix{Float64})
-    y = Matrix{Float64}(uninitialized, ny(runner.model), size(u, 2))
+    y = Matrix{Float64}(undef, ny(runner.model), size(u, 2))
     run!(runner, y, u)
     return y
 end
@@ -657,16 +644,16 @@ To simulate a circuit without inputs, a matrix with zero rows may be passed.
 The internal state of the  underlying `DiscreteModel` (e.g. capacitor charges)
 is preserved accross calls to `run!`.
 """
-@pfunction run!(runner::ModelRunner{Model,true}, y::AbstractMatrix{Float64},
-                u::AbstractMatrix{Float64}) [Model<:DiscreteModel] begin
+function run!(runner::ModelRunner{<:DiscreteModel,true}, y::AbstractMatrix{Float64},
+              u::AbstractMatrix{Float64})
     checkiosizes(runner, u, y)
     @showprogress "Running model: " for n = 1:size(u, 2)
         step!(runner, y, u, n)
     end
 end
 
-@pfunction run!(runner::ModelRunner{Model,false}, y::AbstractMatrix{Float64},
-                u::AbstractMatrix{Float64}) [Model<:DiscreteModel] begin
+function run!(runner::ModelRunner{<:DiscreteModel,false}, y::AbstractMatrix{Float64},
+              u::AbstractMatrix{Float64})
     checkiosizes(runner, u, y)
     for n = 1:size(u, 2)
         step!(runner, y, u, n)
@@ -739,8 +726,7 @@ function gensolve(a, b, x, h, thresh=0.1)
         jat = jnz[nz_abs_vals .≥ thresh*max_abs_val] # cols above threshold
         j = jat[argmin(vec(mapslices(hj -> count(!iszero, hj), h[:,jat], 1)))]
         q = h[:,j]
-        # ait*q is a scalar in Julia 0.6+, but a single element matrix before!
-        x = x + convert(typeof(x), q * ((b[t[i],:]' - ait*x) * (1 / (ait*q)[1])))
+        x = x + convert(typeof(x), q * ((b[t[i],:]' - ait*x) * (1 / (ait*q))))
         if size(h)[2] > 1
             h = h[:,[1:j-1;j+1:end]] - convert(typeof(h), q * s[1,[1:j-1;j+1:end]]'*(1/s[1,j]))
         else
@@ -768,7 +754,7 @@ function rank_factorize(a::SparseMatrixCSC)
     return c, f
 end
 
-consecranges(lengths) = isempty(lengths) ? [] : ((s,l) -> (s:s+l-1)).(cumsum([1; lengths[1:end-1]]), lengths)
+consecranges(lengths) = map((l, e) -> (e-l+1):e, lengths, cumsum(lengths))
 
 matsplit(v::AbstractVector, rowsizes) = [v[rs] for rs in consecranges(rowsizes)]
 matsplit(m::AbstractMatrix, rowsizes, colsizes=[size(m,2)]) =

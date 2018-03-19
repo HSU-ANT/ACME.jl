@@ -7,8 +7,7 @@ import Base: delete!
 
 const Net = Vector{Tuple{Symbol,Symbol}} # pairs of element designator and pin name
 
-#struct Circuit
-@struct Circuit begin
+struct Circuit
     elements::OrderedDict{Symbol, Element}
     nets :: Vector{Net}
     net_names :: Dict{Symbol, Net}
@@ -18,16 +17,16 @@ end
 elements(c::Circuit) = values(c.elements)
 
 for n in [:nb; :nx; :nq; :nu; :nl; :ny; :nn]
-    @eval ($n)(c::Circuit) = sum([$n(elem) for elem in elements(c)])
+    @eval ($n)(c::Circuit) = reduce(+, 0, $n(elem) for elem in elements(c))
 end
 
 for mat in [:mv; :mi; :mx; :mxd; :mq; :mu; :pv; :pi; :px; :pxd; :pq]
-    # blkdiag() does not work, so include an empty matrix of desired type in
+    # blockdiag() does not work, so include an empty matrix of desired type in
     # case elements(c) is empty
-    # as blkdiag for unknown number of arguments cannot be inferred properly,
+    # as blockdiag for unknown number of arguments cannot be inferred properly,
     # add type-assertion
     @eval ($mat)(c::Circuit) =
-         blkdiag(spzeros(Rational{BigInt}, 0, 0),
+         blockdiag(spzeros(Rational{BigInt}, 0, 0),
                  (convert(SparseMatrixCSC{Rational{BigInt}}, elem.$mat)
                   for elem in elements(c))...
                 )::SparseMatrixCSC{Rational{BigInt},Int}
@@ -247,9 +246,13 @@ function disconnect!(c::Circuit, pin::Pin)
     disconnect!(c, (designator, pinname))
 end
 
-@pfunction topomat!(incidence::SparseMatrixCSC{T}) [T<:Integer] begin
+function topomat!(incidence::SparseMatrixCSC{T}) where {T<:Integer}
     @assert all(x -> abs(x) == 1, nonzeros(incidence))
-    @assert all(sum(incidence, 1) .== 0)
+    @static if VERSION ≥ v"0.7.0-DEV.4064"
+        @assert all(sum(incidence, dims=1) .== 0)
+    else
+        @assert all(sum(incidence, 1) .== 0)
+    end
 
     t = falses(size(incidence)[2]);
 
@@ -272,9 +275,9 @@ end
             cols = findall(!iszero, incidence[row, :])
             incidence[row,cols] = -incidence[row,cols]
         end
-        rows = findall(equalto(1), incidence[1:row-1, col])
+        rows = findall(==(1), incidence[1:row-1, col])
         incidence[rows, :] .-= incidence[row, :]'
-        rows = findall(equalto(-1), incidence[1:row-1, col])
+        rows = findall(==(-1), incidence[1:row-1, col])
         incidence[rows, :] .+= incidence[row, :]'
         row += 1
     end
@@ -289,9 +292,7 @@ end
     tv, ti
 end
 
-@pfunction topomat(incidence::SparseMatrixCSC{T}) [T<:Integer] begin
-    topomat!(copy(incidence))
- end
+topomat(incidence::SparseMatrixCSC{<:Integer}) = topomat!(copy(incidence))
 topomat(c::Circuit) = topomat!(incidence(c))
 
 """
@@ -338,6 +339,10 @@ to a named net. (Such named nets are created as needed.)
     r = resistor(1000), [1] ⟷ src[+], [2] ⟷ gnd
 end
 ```
+
+If a net or pin specification is not just a single symbol or number, and has to
+be put in quotes (e.g. `"in+"`, `"9V"`)
+
 !!! note
     Instead of `⟷` (`\\longleftrightarrow`), one can also use `==`.
 """
@@ -393,6 +398,9 @@ macro circuit(cdef)
     function extractpins(netname::Symbol, default_element=nothing)
         return [QuoteNode(netname)]
     end
+
+    extractpins(netname::String, default_element=nothing) =
+        extractpins(Symbol(netname), default_element)
 
     if !isa(cdef, Expr) || cdef.head !== :block
         error("@circuit must be followed by a begin/end block")
