@@ -275,9 +275,9 @@ function topomat!(incidence::SparseMatrixCSC{T}) where {T<:Integer}
             cols = findall(!iszero, incidence[row, :])
             incidence[row,cols] = -incidence[row,cols]
         end
-        rows = findall(equalto(1), incidence[1:row-1, col])
+        rows = findall(==(1), incidence[1:row-1, col])
         incidence[rows, :] .-= incidence[row, :]'
-        rows = findall(equalto(-1), incidence[1:row-1, col])
+        rows = findall(==(-1), incidence[1:row-1, col])
         incidence[rows, :] .+= incidence[row, :]'
         row += 1
     end
