@@ -286,8 +286,9 @@ function topomat!(incidence::SparseMatrixCSC{T}) where {T<:Integer}
 
     dl = ti[:, (!).(t)]
     tv = spzeros(T, size(dl, 2), size(incidence, 2))
-    tv[:, t] = -dl'
-    tv[:, (!).(t)] = SparseMatrixCSC{T}(I, size(dl, 2), size(dl, 2))
+    # findall here works around JuliaLang/julia#27013 (introdcued in 0.7.0-DEV.4983)
+    tv[:, findall(t)] = -dl'
+    tv[:, findall((!).(t))] = SparseMatrixCSC{T}(I, size(dl, 2), size(dl, 2))
 
     tv, ti
 end
