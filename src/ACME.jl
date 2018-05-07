@@ -298,7 +298,7 @@ function model_matrices(circ::Circuit, t::Rational{BigInt})
     merge!(res, Dict(zip([:v0 :ev :dv; :i0 :ei :di; :x0 :b :a; :q0 :eq_full :dq_full],
                          matsplit(x, rowsizes, [1; nu(circ); nx(circ)]))))
     for v in (:v0, :i0, :x0, :q0)
-        res[v] = squeeze(res[v], 2)
+        res[v] = squeeze(res[v], dims=2)
     end
 
     p = [pv(circ) pi(circ) px(circ)//2+pxd(circ)//t pq(circ)]
