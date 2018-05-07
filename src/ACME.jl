@@ -741,7 +741,7 @@ gensolve(a, b, thresh=0.1) =
 
 function rank_factorize(a::SparseMatrixCSC)
     f = a
-    nullspace = gensolve(a', spzeros(size(a, 2), 0))[2]
+    nullspace = gensolve(a', spzeros(eltype(a), size(a, 2), 0))[2]
     c = Matrix{eltype(a)}(I, size(a, 1), size(a, 1))
     while size(nullspace, 2) > 0
         i, j = argmax(abs.(nullspace)).I
