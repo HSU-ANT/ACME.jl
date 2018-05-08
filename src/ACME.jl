@@ -298,7 +298,7 @@ function model_matrices(circ::Circuit, t::Rational{BigInt})
     merge!(res, Dict(zip([:v0 :ev :dv; :i0 :ei :di; :x0 :b :a; :q0 :eq_full :dq_full],
                          matsplit(x, rowsizes, [1; nu(circ); nx(circ)]))))
     for v in (:v0, :i0, :x0, :q0)
-        res[v] = squeeze(res[v], 2)
+        res[v] = squeeze(res[v], dims=2)
     end
 
     p = [pv(circ) pi(circ) px(circ)//2+pxd(circ)//t pq(circ)]
@@ -741,7 +741,7 @@ gensolve(a, b, thresh=0.1) =
 
 function rank_factorize(a::SparseMatrixCSC)
     f = a
-    nullspace = gensolve(a', spzeros(size(a, 2), 0))[2]
+    nullspace = gensolve(a', spzeros(eltype(a), size(a, 2), 0))[2]
     c = Matrix{eltype(a)}(I, size(a, 1), size(a, 1))
     while size(nullspace, 2) > 0
         i, j = argmax(abs.(nullspace)).I
