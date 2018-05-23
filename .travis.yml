@@ -27,9 +27,9 @@ after_success:
             using Pkg # `using Pkg` and `pkg"..."` must be in separate if blocks
         end
         @static if VERSION >= v"0.7.0-DEV.3656"
-            pkg"add Documenter@0.13.2"
+            pkg"add Documenter@0.18.0"
         else
-            Pkg.add("Documenter", v"0.13.2", v"0.13.2+")
+            Pkg.add("Documenter", v"0.18.0", v"0.18.0+")
             cd(Pkg.dir("ACME"))
         end
         include(joinpath("docs", "make.jl"))'
