@@ -193,11 +193,14 @@ a `Symbol` as needed.
 
 # Example
 
-```julia
+```jldoctest; output = false, setup = :(using ACME)
 circ = Circuit()
 add!(circ, :r, resistor(1e3))
-add!(circ, :src, voltages(5))
+add!(circ, :src, voltagesource(5))
 connect!(circ, (:src, -), (:r, 2), :gnd) # connect to gnd net
+
+# output
+
 ```
 """
 function connect!(c::Circuit, pins::Union{Pin,Symbol,Tuple{Symbol,Any}}...)
@@ -295,7 +298,7 @@ end
 topomat(incidence::SparseMatrixCSC{<:Integer}) = topomat!(copy(incidence))
 topomat(c::Circuit) = topomat!(incidence(c))
 
-"""
+@doc doc"""
     @circuit begin #= ... =# end
 
 Provides a simple domain-specific language to decribe circuits. The
@@ -306,13 +309,17 @@ Provides a simple domain-specific language to decribe circuits. The
 # Example
 
 To create a circuit with a voltage source connected to a resistor:
-```julia
+```jldoctest; output = false, setup = :(using ACME), filter = r"(ACME\.)?Circuit\(.*"s
 @circuit begin
     src = voltagesource(5)
     r = resistor(1000)
     src[+] ⟷ r[1]
     src[-] ⟷ r[2]
 end
+
+# output
+
+Circuit(...)
 ```
 
 Alternatively, connection specifications can be given after an element
@@ -321,11 +328,15 @@ defaulting to the current element.
 
 # Example
 
-```julia
+```jldoctest; output = false, setup = :(using ACME), filter = r"(ACME\.)?Circuit\(.*"s
 @circuit begin
     src = voltagesource(5)
     r = resistor(1000), src[+] ⟷ [1], src[-] ⟷ [2]
 end
+
+# output
+
+Circuit(...)
 ```
 
 Finally, a connection endpoint may simply be of the form `netname`, to connect
@@ -333,11 +344,15 @@ to a named net. (Such named nets are created as needed.)
 
 # Example
 
-```julia
+```jldoctest; output = false, setup = :(using ACME), filter = r"(ACME\.)?Circuit\(.*"s
 @circuit begin
     src = voltagesource(5), [-] ⟷ gnd
     r = resistor(1000), [1] ⟷ src[+], [2] ⟷ gnd
 end
+
+# output
+
+Circuit(...)
 ```
 
 If a net or pin specification is not just a single symbol or number, and has to
@@ -345,8 +360,7 @@ be put in quotes (e.g. `"in+"`, `"9V"`)
 
 !!! note
     Instead of `⟷` (`\\longleftrightarrow`), one can also use `==`.
-"""
-macro circuit(cdef)
+""" macro circuit(cdef)
     is_conn_spec(expr::Expr) =
         (expr.head === :call && (expr.args[1] === :(⟷) || expr.args[1] === :(↔) || expr.args[1] === :(==))) ||
         (expr.head === :comparison && all(c -> c === :(==), expr.args[2:2:end]))
