@@ -9,7 +9,7 @@ export DiscreteModel, run!, steadystate, steadystate!, linearize, ModelRunner
 
 using Compat.SparseArrays: SparseMatrixCSC, dropzeros!, findnz,
     nonzeros, sparse, spzeros
-using Compat.LinearAlgebra: I, axpy!, lufact
+using Compat.LinearAlgebra: I, axpy!
 import Compat.LinearAlgebra.BLAS
 
 using ProgressMeter
@@ -463,7 +463,11 @@ nn(model::DiscreteModel, subidx) = size(model.fqs[subidx], 2)
 nn(model::DiscreteModel) = reduce(+, 0, size(fq, 2) for fq in model.fqs)
 
 function steadystate(model::DiscreteModel, u=zeros(nu(model)))
-    IA_LU = lufact(I-model.a)
+    @static if VERSION < v"0.7.0-DEV.5211"
+        IA_LU = Compat.LinearAlgebra.lufact(I-model.a)
+    else
+        IA_LU = Compat.LinearAlgebra.lu(I-model.a)
+    end
     steady_z = zeros(nn(model))
     zoff = 1
     for idx in 1:length(model.solvers)
