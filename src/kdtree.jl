@@ -4,6 +4,7 @@
 import Base.deleteat!
 import Base.isless
 import Base.isempty
+using StatsBase: var
 
 mutable struct KDTree{Tcv<:AbstractVector,Tp<:AbstractMatrix}
     cut_dim::Vector{Int}
