@@ -11,5 +11,25 @@ notifications:
     on_failure: always
     on_start: never
 after_success:
-  - julia -e 'cd(Pkg.dir("ACME")); Pkg.add("Coverage"); using Coverage; Codecov.submit(process_folder()); Coveralls.submit(process_folder())'
-  - julia -e 'Pkg.add("Documenter", v"0.13.2", v"0.13.2+"); cd(Pkg.dir("ACME")); include(joinpath("docs", "make.jl"))'
+  - |
+    julia -e '
+        if VERSION >= v"0.7.0-DEV.3656"
+            import Pkg
+        else
+            cd(Pkg.dir("ACME"))
+        end
+        Pkg.add("Coverage")
+        using Coverage
+        Codecov.submit(process_folder()); Coveralls.submit(process_folder())'
+  - |
+    julia -e '
+        if VERSION >= v"0.7.0-DEV.3656"
+            using Pkg # `using Pkg` and `pkg"..."` must be in separate if blocks
+        end
+        @static if VERSION >= v"0.7.0-DEV.3656"
+            pkg"add Documenter@0.13.2"
+        else
+            Pkg.add("Documenter", v"0.13.2", v"0.13.2+")
+            cd(Pkg.dir("ACME"))
+        end
+        include(joinpath("docs", "make.jl"))'
