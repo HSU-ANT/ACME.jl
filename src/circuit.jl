@@ -66,7 +66,6 @@ function nonlinear_eq(c::Circuit, elem_idxs=1:length(elements(c)))
 
         function offset_indexes(expr::Expr)
             ret = Expr(expr.head)
-            ret.typ = expr.typ
             if expr.head == :ref && haskey(index_offsets, expr.args[1])
                 push!(ret.args, expr.args[1])
                 offsets = index_offsets[expr.args[1]]
