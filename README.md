@@ -1,16 +1,7 @@
 # ACME.jl - Analog Circuit Modeling and Emulation for Julia
 
 [![Join the chat at https://gitter.im/HSU-ANT/ACME.jl](https://badges.gitter.im/HSU-ANT/ACME.jl.svg)](https://gitter.im/HSU-ANT/ACME.jl?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
-[![Documentation](https://img.shields.io/badge/docs-stable-blue.svg)](https://hsu-ant.github.io/ACME.jl/stable)
-[![Documentation](https://img.shields.io/badge/docs-latest-blue.svg)](https://hsu-ant.github.io/ACME.jl/latest)
-
-[![ACME](http://pkg.julialang.org/badges/ACME_0.5.svg)](http://pkg.julialang.org/?pkg=ACME)
-[![ACME](http://pkg.julialang.org/badges/ACME_0.6.svg)](http://pkg.julialang.org/?pkg=ACME)
-[![ACME](http://pkg.julialang.org/badges/ACME_0.7.svg)](http://pkg.julialang.org/?pkg=ACME)
-
-[![Build Status](https://travis-ci.org/HSU-ANT/ACME.jl.svg?branch=develop)](https://travis-ci.org/HSU-ANT/ACME.jl)
-[![codecov](https://codecov.io/gh/HSU-ANT/ACME.jl/branch/develop/graph/badge.svg)](https://codecov.io/gh/HSU-ANT/ACME.jl)
-[![Coverage Status](https://coveralls.io/repos/github/HSU-ANT/ACME.jl/badge.svg?branch=develop)](https://coveralls.io/github/HSU-ANT/ACME.jl)
+[![Documentation](https://img.shields.io/badge/docs-v0.7.3-blue.svg)](https://hsu-ant.github.io/ACME.jl/v0.7.3)
 
 ACME is a [Julia](http://julialang.org/) package for the simulation of
 electrical circuits, focusing on audio effect circuits. It allows to
@@ -131,7 +122,7 @@ fail to run altogether.
 
 ## Moving on
 
-There is some [documentation](https://hsu-ant.github.io/ACME.jl/latest)
+There is some [documentation](https://hsu-ant.github.io/ACME.jl/v0.7.3)
 available for how
 to use ACME. Additionally, you can take a look at the examples that can be found
 in the `examples` directory below `Pkg.dir("ACME")`.
