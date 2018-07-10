@@ -721,7 +721,7 @@ function gensolve(a, b, x, h, thresh=0.1)
     for i in 1:m
         ait = a[t[i],:]' # ait is a row of the a matrix
         s = ait * h;
-        inz, jnz, nz_vals = findnz(s)
+        jnz, nz_vals = findnz(s')
         nz_abs_vals = abs.(nz_vals)
         max_abs_val = reduce(max, zero(eltype(s)), nz_abs_vals)
         if max_abs_val ≤ tol # cosidered numerical zero
