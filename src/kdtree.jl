@@ -4,7 +4,7 @@
 import Base.deleteat!
 import Base.isless
 import Base.isempty
-using StatsBase: var
+using Compat.Statistics: mean, var
 
 mutable struct KDTree{Tcv<:AbstractVector,Tp<:AbstractMatrix}
     cut_dim::Vector{Int}
@@ -41,7 +41,7 @@ function KDTree(p::AbstractMatrix, Np=size(p,2))
     @static if VERSION ≥ v"0.7.0-DEV.4064"
         dim = argmax(vec(var(p[:,1:Np], dims=2)))
     else
-        dim = argmax(vec(var(p[:,1:Np], 2)))
+        dim = argmax(vec(Base.var(p[:,1:Np], 2)))
     end
     p_idx = sortperm(vec(p[dim,:]))
 
@@ -63,7 +63,7 @@ function KDTree(p::AbstractMatrix, Np=size(p,2))
         @static if VERSION ≥ v"0.7.0-DEV.4064"
             dim = argmax(vec(var(p[:,p_idx[min_idx[n]:max_idx[n]]], dims=2)))
         else
-            dim = argmax(vec(var(p[:,p_idx[min_idx[n]:max_idx[n]]], 2)))
+            dim = argmax(vec(Base.var(p[:,p_idx[min_idx[n]:max_idx[n]]], 2)))
         end
         idx = sortperm(vec(p[dim,p_idx[min_idx[n]:max_idx[n]]]))
         p_idx[min_idx[n]:max_idx[n]] = p_idx[idx .+ min_idx[n] .- 1]

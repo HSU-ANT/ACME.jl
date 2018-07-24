@@ -460,7 +460,7 @@ np(model::DiscreteModel, subidx) = size(model.dqs[subidx], 1)
 nu(model::DiscreteModel) = size(model.b, 2)
 ny(model::DiscreteModel) = length(model.y0)
 nn(model::DiscreteModel, subidx) = size(model.fqs[subidx], 2)
-nn(model::DiscreteModel) = reduce(+, 0, size(fq, 2) for fq in model.fqs)
+nn(model::DiscreteModel) = Compat.reduce(+, init=0, size(fq, 2) for fq in model.fqs)
 
 function steadystate(model::DiscreteModel, u=zeros(nu(model)))
     @static if VERSION < v"0.7.0-DEV.5211"
@@ -528,8 +528,8 @@ function linearize(model::DiscreteModel, usteady::AbstractVector{Float64}=zeros(
 
         zranges[idx] = zoff:zoff+length(zsub)-1
         fqdzdps = [model.fqprevs[idx][:,zranges[n]] * dzdps[n] for n in 1:idx-1]
-        dqlins[idx] = reduce(+, model.dqs[idx], fqdzdps .* dqlins[1:idx-1])
-        eqlins[idx] = reduce(+, model.eqs[idx], fqdzdps .* eqlins[1:idx-1])
+        dqlins[idx] = Compat.reduce(+, init=model.dqs[idx], fqdzdps .* dqlins[1:idx-1])
+        eqlins[idx] = Compat.reduce(+, init=model.eqs[idx], fqdzdps .* eqlins[1:idx-1])
 
         x0 += model.c[:,zranges[idx]] * (zsub - dzdps[idx]*psteady)
         a += model.c[:,zranges[idx]] * dzdps[idx] * dqlins[idx]
@@ -716,19 +716,19 @@ function gensolve(a, b, x, h, thresh=0.1)
     if m == 0
         return x, h
     end
-    t = sortperm(vec(mapslices(ait -> count(!iszero, ait), a, 2))) # row indexes in ascending order of nnz
+    t = sortperm(vec(mapslices(ait -> count(!iszero, ait), a, dims=2))) # row indexes in ascending order of nnz
     tol = 3 * max(eps(float(eltype(a))), eps(float(eltype(h)))) * size(a, 2)
     for i in 1:m
         ait = a[t[i],:]' # ait is a row of the a matrix
         s = ait * h;
-        inz, jnz, nz_vals = findnz(s)
+        jnz, nz_vals = findnz(s')
         nz_abs_vals = abs.(nz_vals)
-        max_abs_val = reduce(max, zero(eltype(s)), nz_abs_vals)
+        max_abs_val = Compat.reduce(max, init=zero(eltype(s)), nz_abs_vals)
         if max_abs_val ≤ tol # cosidered numerical zero
             continue
         end
         jat = jnz[nz_abs_vals .≥ thresh*max_abs_val] # cols above threshold
-        j = jat[argmin(vec(mapslices(hj -> count(!iszero, hj), h[:,jat], 1)))]
+        j = jat[argmin(vec(mapslices(hj -> count(!iszero, hj), h[:,jat], dims=1)))]
         q = h[:,j]
         x = x + convert(typeof(x), q * ((b[t[i],:]' - ait*x) * (1 / (ait*q))))
         if size(h)[2] > 1

@@ -19,13 +19,16 @@ This will download ACME and all of its dependencies.
 We will demonstrate ACME by modeling a simple diode clipper. The first step is
 to load ACME:
 
-```Julia
+```jldoctest firststeps; output = false
 using ACME
+
+# output
+
 ```
 
 Now we create the circuit description:
 
-```Julia
+```jldoctest firststeps; output = false, filter = r"(ACME\.)?Circuit\(.*"s
 circ = @circuit begin
     j_in = voltagesource()
     r1 = resistor(1e3)
@@ -38,6 +41,10 @@ circ = @circuit begin
     r1[2] ⟷ c1[1] ⟷ d1[+] ⟷ d2[-] ⟷ j_out[+]
     gnd ⟷ c1[2] ⟷ d1[-] ⟷ d2[+] ⟷ j_out[-]
 end
+
+# output
+
+Circuit(...)
 ```
 
 The first six lines inside the `begin`/`end` block instantiate circuit elements.
@@ -63,7 +70,7 @@ It is also possible to specify connections following the element definition
 one can only connect to elements defined before. Thus, above circuit could also
 be entered as:
 
-```Julia
+```jldoctest firststeps; output = false, filter = r"(ACME\.)?Circuit\(.*"s
 circ = @circuit begin
     j_in = voltagesource(), [-] ⟷ gnd
     r1 = resistor(1e3), [1] ⟷ j_in[+]
@@ -72,13 +79,21 @@ circ = @circuit begin
     d2 = diode(is=1.8e-15), [+] ⟷ gnd, [-] ⟷ r1[2]
     j_out = voltageprobe(), [+] ⟷ r1[2], [-] ⟷ gnd
 end
+
+# output
+
+Circuit(...)
 ```
 
 Now that the circuit has been set up, we need to turn it into a model. This
 could hardly be any easier:
 
-```Julia
-model = DiscreteModel(circ, 1./44100)
+```jldoctest firststeps; output = false, filter = r"(ACME\.)?DiscreteModel{.*"s
+model = DiscreteModel(circ, 1/44100)
+
+# output
+
+DiscreteModel{...}(...)
 ```
 
 The second argument specifies the sampling interval, the reciprocal of the
@@ -86,10 +101,16 @@ sampling rate, here assumed to be the typical 44100 Hz.
 
 Now we can process some input data. It has to be provided as a matrix with one
 row per input (just one in the example) and one column per sample. So for a
-sinusoid at 1 kHz lasting one second, we do::
+sinusoid at 1 kHz lasting one second, we do:
 
-```Julia
-y = run!(model, sin(2π*1000/44100*(0:44099)'))
+```jldoctest firststeps; filter = r"\r?Running model:.*"
+y = run!(model, sin.(2π*1000/44100*(0:44099)'))
+
+# output
+
+Running model: 100%|████████████████████████████████████| Time: 0:00:01
+1×44100 Array{Float64,2}:
+ 0.0  0.0275964  0.0990996  0.195777  …  -0.537508  -0.462978  -0.36521
 ```
 
 The output `y` now likewise is a matrix with one row for the one probe we have
