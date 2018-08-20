@@ -1,7 +1,7 @@
 # Copyright 2015, 2016, 2017, 2018 Martin Holters
 # See accompanying license file.
 
-__precompile__()
+VERSION < v"0.7.0-beta2.199" && __precompile__()
 
 module ACME
 
