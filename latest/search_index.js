@@ -85,7 +85,7 @@ var documenterSearchIndex = {"docs": [
     "page": "User Guide",
     "title": "ACME.add!",
     "category": "function",
-    "text": "add!(c::Circuit, elem::Element)\n\nAdds the element elem to the circuit c, creating and returning a new, unique reference designator, leaving its pins unconnected.\n\n\n\nadd!(c::Circuit, designator::Symbol, elem::Element)\n\nAdds the element elem to the circuit c with the reference designator designator, leaving its pins unconnected. If the circuit already contained an element named designator, it is removed first.\n\n\n\n"
+    "text": "add!(c::Circuit, elem::Element)\n\nAdds the element elem to the circuit c, creating and returning a new, unique reference designator, leaving its pins unconnected.\n\n\n\n\n\nadd!(c::Circuit, designator::Symbol, elem::Element)\n\nAdds the element elem to the circuit c with the reference designator designator, leaving its pins unconnected. If the circuit already contained an element named designator, it is removed first.\n\n\n\n\n\n"
 },
 
 {
@@ -93,7 +93,7 @@ var documenterSearchIndex = {"docs": [
     "page": "User Guide",
     "title": "Base.delete!",
     "category": "function",
-    "text": "delete!(c::Circuit, designator::Symbol)\n\nDeletes the element named designator from the circuit c (disconnecting all its pins).\n\n\n\n"
+    "text": "delete!(c::Circuit, designator::Symbol)\n\nDeletes the element named designator from the circuit c (disconnecting all its pins).\n\n\n\n\n\n"
 },
 
 {
@@ -101,7 +101,7 @@ var documenterSearchIndex = {"docs": [
     "page": "User Guide",
     "title": "ACME.connect!",
     "category": "function",
-    "text": "connect!(c::Circuit, pins::Union{Symbol,Tuple{Symbol,Any}}...)\n\nConnects the given pins (or named nets) to each other in the circuit c. Named nets are given as Symbols, pins are given as Tuple{Symbols,Any}s, where the first entry is the reference designator of an element in c, and the second entry is the pin name. For convenience, the latter is automatically converted to a Symbol as needed.\n\nExample\n\ncirc = Circuit()\nadd!(circ, :r, resistor(1e3))\nadd!(circ, :src, voltagesource(5))\nconnect!(circ, (:src, -), (:r, 2), :gnd) # connect to gnd net\n\n\n\n"
+    "text": "connect!(c::Circuit, pins::Union{Symbol,Tuple{Symbol,Any}}...)\n\nConnects the given pins (or named nets) to each other in the circuit c. Named nets are given as Symbols, pins are given as Tuple{Symbols,Any}s, where the first entry is the reference designator of an element in c, and the second entry is the pin name. For convenience, the latter is automatically converted to a Symbol as needed.\n\nExample\n\ncirc = Circuit()\nadd!(circ, :r, resistor(1e3))\nadd!(circ, :src, voltagesource(5))\nconnect!(circ, (:src, -), (:r, 2), :gnd) # connect to gnd net\n\n\n\n\n\n"
 },
 
 {
@@ -109,7 +109,7 @@ var documenterSearchIndex = {"docs": [
     "page": "User Guide",
     "title": "ACME.disconnect!",
     "category": "function",
-    "text": "disconnect!(c::Circuit, p::Tuple{Symbol,Any})\n\nDisconnects the given pin p from anything else in the circuit c. The pin is given as aTuple{Symbols,Any}, where the first entry is the reference designator of an element in c, and the second entry is the pin name. For convenience, the latter is automatically converted to a Symbol as needed. Note that if e.g. three pin p1, p2, and p3 are connected then disconnect!(c, p1) will disconnect p1 from p2 and p3, but leave p2 and p3 connected to each other.\n\n\n\n"
+    "text": "disconnect!(c::Circuit, p::Tuple{Symbol,Any})\n\nDisconnects the given pin p from anything else in the circuit c. The pin is given as aTuple{Symbols,Any}, where the first entry is the reference designator of an element in c, and the second entry is the pin name. For convenience, the latter is automatically converted to a Symbol as needed. Note that if e.g. three pin p1, p2, and p3 are connected then disconnect!(c, p1) will disconnect p1 from p2 and p3, but leave p2 and p3 connected to each other.\n\n\n\n\n\n"
 },
 
 {
@@ -133,7 +133,7 @@ var documenterSearchIndex = {"docs": [
     "page": "User Guide",
     "title": "ACME.SimpleSolver",
     "category": "type",
-    "text": "SimpleSolver\n\nThe SimpleSolver is the simplest available solver. It uses Newton iteration which features fast local convergence, but makes no guarantees about global convergence. The initial solution of the iteration is obtained by extrapolating the last solution found (or another solution provided externally) using the available Jacobians. Due to the missing global convergence, the SimpleSolver is rarely useful as such.\n\n\n\n"
+    "text": "SimpleSolver\n\nThe SimpleSolver is the simplest available solver. It uses Newton iteration which features fast local convergence, but makes no guarantees about global convergence. The initial solution of the iteration is obtained by extrapolating the last solution found (or another solution provided externally) using the available Jacobians. Due to the missing global convergence, the SimpleSolver is rarely useful as such.\n\n\n\n\n\n"
 },
 
 {
@@ -141,7 +141,7 @@ var documenterSearchIndex = {"docs": [
     "page": "User Guide",
     "title": "ACME.HomotopySolver",
     "category": "type",
-    "text": "HomotopySolver{BaseSolver}\n\nThe HomotopySolver extends an existing solver (provided as the type parameter) by applying homotopy to (at least theoretically) ensure global convergence. It can be combined with the SimpleSolver as HomotopySolver{SimpleSolver} to obtain a useful Newton homtopy solver with generally good convergence properties.\n\n\n\n"
+    "text": "HomotopySolver{BaseSolver}\n\nThe HomotopySolver extends an existing solver (provided as the type parameter) by applying homotopy to (at least theoretically) ensure global convergence. It can be combined with the SimpleSolver as HomotopySolver{SimpleSolver} to obtain a useful Newton homtopy solver with generally good convergence properties.\n\n\n\n\n\n"
 },
 
 {
@@ -149,7 +149,7 @@ var documenterSearchIndex = {"docs": [
     "page": "User Guide",
     "title": "ACME.CachingSolver",
     "category": "type",
-    "text": "CachingSolver{BaseSolver}\n\nThe CachingSolver extends an existing solver (provided as the type parameter) by storing found solutions in a k-d tree to use as initial solutions in the future. Whenever the underlying solver needs more than a preset number of iterations (defaults to five), the solution will be stored. Storing new solutions is a relatively expensive operation, so until the stored solutions suffice to ensure convergence in few iterations throughout, use of a CachingSolver may actually slow things down.\n\nSee M. Holters, U. Zölzer, \"A k-d Tree Based Solution Cache for the Non-linear Equation of Circuit Simulations\" for a more detailed discussion.\n\n\n\n"
+    "text": "CachingSolver{BaseSolver}\n\nThe CachingSolver extends an existing solver (provided as the type parameter) by storing found solutions in a k-d tree to use as initial solutions in the future. Whenever the underlying solver needs more than a preset number of iterations (defaults to five), the solution will be stored. Storing new solutions is a relatively expensive operation, so until the stored solutions suffice to ensure convergence in few iterations throughout, use of a CachingSolver may actually slow things down.\n\nSee M. Holters, U. Zölzer, \"A k-d Tree Based Solution Cache for the Non-linear Equation of Circuit Simulations\" for a more detailed discussion.\n\n\n\n\n\n"
 },
 
 {
@@ -181,7 +181,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Element Reference",
     "title": "ACME.resistor",
     "category": "function",
-    "text": "resistor(r)\n\nCreates a resistor obeying Ohm’s law. The resistance r has to be given in Ohm.\n\nPins: 1, 2\n\n\n\n"
+    "text": "resistor(r)\n\nCreates a resistor obeying Ohm’s law. The resistance r has to be given in Ohm.\n\nPins: 1, 2\n\n\n\n\n\n"
 },
 
 {
@@ -189,7 +189,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Element Reference",
     "title": "ACME.capacitor",
     "category": "function",
-    "text": "capacitor(c)\n\nCreates a capacitor. The capacitance c has to be given in Farad.\n\nPins: 1, 2\n\n\n\n"
+    "text": "capacitor(c)\n\nCreates a capacitor. The capacitance c has to be given in Farad.\n\nPins: 1, 2\n\n\n\n\n\n"
 },
 
 {
@@ -197,7 +197,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Element Reference",
     "title": "ACME.inductor",
     "category": "method",
-    "text": "inductor(l)\n\nCreates an inductor. The inductance l has to be given in Henri.\n\nPins: 1, 2\n\n\n\n"
+    "text": "inductor(l)\n\nCreates an inductor. The inductance l has to be given in Henri.\n\nPins: 1, 2\n\n\n\n\n\n"
 },
 
 {
@@ -205,7 +205,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Element Reference",
     "title": "ACME.inductor",
     "category": "method",
-    "text": "inductor(Val{:JA}; D, A, n, a, α, c, k, Ms)\n\nCreates a non-linear inductor based on the Jiles-Atherton model of magnetization assuming a toroidal core thin compared to its diameter. The parameters are set using named arguments:\n\nparameter description\nD Torus diameter (in meters)\nA Torus cross-sectional area (in square-meters)\nn Winding\'s number of turns\na Shape parameter of the anhysteretic magnetization curve (in Ampere-per-meter)\nα Inter-domain coupling\nc Ratio of the initial normal to the initial anhysteretic differential susceptibility\nk amount of hysteresis (in Ampere-per-meter)\nMs saturation magnetization (in Ampere-per-meter)\n\nA detailed discussion of the paramters can be found in D. C. Jiles and D. L. Atherton, “Theory of ferromagnetic hysteresis,” J. Magn. Magn. Mater., vol. 61, no. 1–2, pp. 48–60, Sep. 1986 and J. H. B. Deane, “Modeling the dynamics of nonlinear inductor circuits,” IEEE Trans. Magn., vol. 30, no. 5, pp. 2795–2801, 1994, where the definition of c is taken from the latter. The ACME implementation is discussed in M. Holters, U. Zölzer, \"Circuit Simulation with Inductors and Transformers Based on the Jiles-Atherton Model of Magnetization\".\n\nPins: 1, 2\n\n\n\n"
+    "text": "inductor(Val{:JA}; D, A, n, a, α, c, k, Ms)\n\nCreates a non-linear inductor based on the Jiles-Atherton model of magnetization assuming a toroidal core thin compared to its diameter. The parameters are set using named arguments:\n\nparameter description\nD Torus diameter (in meters)\nA Torus cross-sectional area (in square-meters)\nn Winding\'s number of turns\na Shape parameter of the anhysteretic magnetization curve (in Ampere-per-meter)\nα Inter-domain coupling\nc Ratio of the initial normal to the initial anhysteretic differential susceptibility\nk amount of hysteresis (in Ampere-per-meter)\nMs saturation magnetization (in Ampere-per-meter)\n\nA detailed discussion of the paramters can be found in D. C. Jiles and D. L. Atherton, “Theory of ferromagnetic hysteresis,” J. Magn. Magn. Mater., vol. 61, no. 1–2, pp. 48–60, Sep. 1986 and J. H. B. Deane, “Modeling the dynamics of nonlinear inductor circuits,” IEEE Trans. Magn., vol. 30, no. 5, pp. 2795–2801, 1994, where the definition of c is taken from the latter. The ACME implementation is discussed in M. Holters, U. Zölzer, \"Circuit Simulation with Inductors and Transformers Based on the Jiles-Atherton Model of Magnetization\".\n\nPins: 1, 2\n\n\n\n\n\n"
 },
 
 {
@@ -213,7 +213,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Element Reference",
     "title": "ACME.transformer",
     "category": "method",
-    "text": "transformer(l1, l2; coupling_coefficient=1, mutual_coupling=coupling_coefficient*sqrt(l1*l2))\n\nCreates a transformer with two windings having inductances. The primary self-inductance l1 and the secondary self-inductance l2 have to be given in Henri. The coupling can either be specified using coupling_coefficient (0 is not coupled, 1 is closely coupled) or by mutual_coupling, the mutual inductance in Henri, where the latter takes precedence if both are given.\n\nPins: 1 and 2 for primary winding, 3 and 4 for secondary winding\n\n\n\n"
+    "text": "transformer(l1, l2; coupling_coefficient=1, mutual_coupling=coupling_coefficient*sqrt(l1*l2))\n\nCreates a transformer with two windings having inductances. The primary self-inductance l1 and the secondary self-inductance l2 have to be given in Henri. The coupling can either be specified using coupling_coefficient (0 is not coupled, 1 is closely coupled) or by mutual_coupling, the mutual inductance in Henri, where the latter takes precedence if both are given.\n\nPins: 1 and 2 for primary winding, 3 and 4 for secondary winding\n\n\n\n\n\n"
 },
 
 {
@@ -221,7 +221,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Element Reference",
     "title": "ACME.transformer",
     "category": "method",
-    "text": "transformer(Val{:JA}; D, A, ns, a, α, c, k, Ms)\n\nCreates a non-linear transformer based on the Jiles-Atherton model of magnetization assuming a toroidal core thin compared to its diameter. The parameters are set using named arguments:\n\nparameter description\nD Torus diameter (in meters)\nA Torus cross-sectional area (in square-meters)\nns Windings\' number of turns as a vector with one entry per winding\na Shape parameter of the anhysteretic magnetization curve (in Ampere-per-meter)\nα Inter-domain coupling\nc Ratio of the initial normal to the initial anhysteretic differential susceptibility\nk amount of hysteresis (in Ampere-per-meter)\nMs saturation magnetization (in Ampere-per-meter)\n\nA detailed discussion of the parameters can be found in D. C. Jiles and D. L. Atherton, “Theory of ferromagnetic hysteresis,” J. Magn. Magn. Mater., vol. 61, no. 1–2, pp. 48–60, Sep. 1986 and J. H. B. Deane, “Modeling the dynamics of nonlinear inductor circuits,” IEEE Trans. Magn., vol. 30, no. 5, pp. 2795–2801, 1994, where the definition of c is taken from the latter. The ACME implementation is discussed in M. Holters, U. Zölzer, \"Circuit Simulation with Inductors and Transformers Based on the Jiles-Atherton Model of Magnetization\".\n\nPins: 1 and 2 for primary winding, 3 and 4 for secondary winding, and so on\n\n\n\n"
+    "text": "transformer(Val{:JA}; D, A, ns, a, α, c, k, Ms)\n\nCreates a non-linear transformer based on the Jiles-Atherton model of magnetization assuming a toroidal core thin compared to its diameter. The parameters are set using named arguments:\n\nparameter description\nD Torus diameter (in meters)\nA Torus cross-sectional area (in square-meters)\nns Windings\' number of turns as a vector with one entry per winding\na Shape parameter of the anhysteretic magnetization curve (in Ampere-per-meter)\nα Inter-domain coupling\nc Ratio of the initial normal to the initial anhysteretic differential susceptibility\nk amount of hysteresis (in Ampere-per-meter)\nMs saturation magnetization (in Ampere-per-meter)\n\nA detailed discussion of the parameters can be found in D. C. Jiles and D. L. Atherton, “Theory of ferromagnetic hysteresis,” J. Magn. Magn. Mater., vol. 61, no. 1–2, pp. 48–60, Sep. 1986 and J. H. B. Deane, “Modeling the dynamics of nonlinear inductor circuits,” IEEE Trans. Magn., vol. 30, no. 5, pp. 2795–2801, 1994, where the definition of c is taken from the latter. The ACME implementation is discussed in M. Holters, U. Zölzer, \"Circuit Simulation with Inductors and Transformers Based on the Jiles-Atherton Model of Magnetization\".\n\nPins: 1 and 2 for primary winding, 3 and 4 for secondary winding, and so on\n\n\n\n\n\n"
 },
 
 {
@@ -237,7 +237,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Element Reference",
     "title": "ACME.voltagesource",
     "category": "function",
-    "text": "voltagesource(; rs=0)\nvoltagesource(v; rs=0)\n\nCreates a voltage source. The source voltage v has to be given in Volt. If omitted, the source voltage will be an input of the circuit. Optionally, an internal series resistance rs (in Ohm) can be given which defaults to zero.\n\nPins: + and - with v being measured from + to -\n\n\n\n"
+    "text": "voltagesource(; rs=0)\nvoltagesource(v; rs=0)\n\nCreates a voltage source. The source voltage v has to be given in Volt. If omitted, the source voltage will be an input of the circuit. Optionally, an internal series resistance rs (in Ohm) can be given which defaults to zero.\n\nPins: + and - with v being measured from + to -\n\n\n\n\n\n"
 },
 
 {
@@ -245,7 +245,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Element Reference",
     "title": "ACME.currentsource",
     "category": "function",
-    "text": "currentsource(; gp=0)\ncurrentsource(i; gp=0)\n\nCreates a current source. The source current i has to be given in Ampere. If omitted, the source current will be an input of the circuit. Optionally, an internal parallel conductance gp (in Ohm⁻¹) can be given which defaults to zero.\n\nPins: + and - where i measures the current leaving source at the + pin\n\n\n\n"
+    "text": "currentsource(; gp=0)\ncurrentsource(i; gp=0)\n\nCreates a current source. The source current i has to be given in Ampere. If omitted, the source current will be an input of the circuit. Optionally, an internal parallel conductance gp (in Ohm⁻¹) can be given which defaults to zero.\n\nPins: + and - where i measures the current leaving source at the + pin\n\n\n\n\n\n"
 },
 
 {
@@ -261,7 +261,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Element Reference",
     "title": "ACME.voltageprobe",
     "category": "function",
-    "text": "voltageprobe()\n\nCreates a voltage probe, providing the measured voltage as a circuit output. Optionally, an internal parallel conductance gp (in Ohm⁻¹) can be given which defaults to zero.\n\nPins: + and - with the output voltage being measured from + to -\n\n\n\n"
+    "text": "voltageprobe()\n\nCreates a voltage probe, providing the measured voltage as a circuit output. Optionally, an internal parallel conductance gp (in Ohm⁻¹) can be given which defaults to zero.\n\nPins: + and - with the output voltage being measured from + to -\n\n\n\n\n\n"
 },
 
 {
@@ -269,7 +269,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Element Reference",
     "title": "ACME.currentprobe",
     "category": "function",
-    "text": "currentprobe()\n\nCreates a current probe, providing the measured current as a circuit output. Optionally, an internal series resistance rs (in Ohm) can be given which defaults to zero.\n\nPins: + and - with the output current being the current entering the probe at +\n\n\n\n"
+    "text": "currentprobe()\n\nCreates a current probe, providing the measured current as a circuit output. Optionally, an internal series resistance rs (in Ohm) can be given which defaults to zero.\n\nPins: + and - with the output current being the current entering the probe at +\n\n\n\n\n\n"
 },
 
 {
@@ -309,7 +309,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Element Reference",
     "title": "ACME.opamp",
     "category": "method",
-    "text": "opamp()\n\nCreates an ideal operational amplifier. It enforces the voltage between the input pins to be zero without sourcing any current while sourcing arbitrary current on the output pins wihtout restricting their voltage.\n\nNote that the opamp has two output pins, one of which will typically be connected to a ground node and has to provide the current sourced on the other output pin.\n\nPins: in+ and in- for input, out+ and out- for output\n\n\n\n"
+    "text": "opamp()\n\nCreates an ideal operational amplifier. It enforces the voltage between the input pins to be zero without sourcing any current while sourcing arbitrary current on the output pins wihtout restricting their voltage.\n\nNote that the opamp has two output pins, one of which will typically be connected to a ground node and has to provide the current sourced on the other output pin.\n\nPins: in+ and in- for input, out+ and out- for output\n\n\n\n\n\n"
 },
 
 {
