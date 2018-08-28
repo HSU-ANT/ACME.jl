@@ -18,5 +18,5 @@ deploydocs(
     latest = "develop",
     deps = nothing,
     make = nothing,
-    julia = "0.6",
+    julia = "1.0",
 )
