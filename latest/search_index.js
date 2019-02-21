@@ -297,11 +297,19 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
+    "location": "elements.html#ACME.mosfet",
+    "page": "Element Reference",
+    "title": "ACME.mosfet",
+    "category": "function",
+    "text": "mosfet(typ; vt=0.7, α=2e-5)\n\nCreates a MOSFET transistor with the simple model\n\ni_D=begincases\n  0  textif  v_GS le v_T \n  alpha cdot (v_GS - v_T - tfrac12v_DS)cdot v_DS\n   textif  v_DS le v_GS - v_T cap v_GS  v_T \n  fracalpha2 cdot (v_GS - v_T)^2  textotherwise\nendcases\n\nThe typ parameter chooses between NMOS (:n) and PMOS (:p). The threshold voltage vt is given in Volt, α (in A/V²) in a constant depending on the physics and dimensions of the device.\n\nPins: gate, source, drain\n\n\n\n"
+},
+
+{
     "location": "elements.html#Semiconductors-1",
     "page": "Element Reference",
     "title": "Semiconductors",
     "category": "section",
-    "text": "diode\nbjt"
+    "text": "diode\nbjt\nmosfet"
 },
 
 {
