@@ -1,4 +1,4 @@
-# Copyright 2015, 2016, 2017, 2018 Martin Holters
+# Copyright 2015, 2016, 2017, 2018, 2019 Martin Holters
 # See accompanying license file.
 
 include("checklic.jl")
@@ -424,6 +424,20 @@ end
         model = DiscreteModel(circ, 1)
         output = run!(model, zeros(0,1))
         @test output[1:4,:] ≈ output[5:8,:]
+    end
+end
+
+@testset "MOSFET" begin
+    for (typ, pol) in ((:n, 1), (:p, -1))
+        circ = @circuit begin
+            vgs = voltagesource(), [-] == gnd
+            vds = voltagesource(), [-] == gnd
+            J = mosfet(typ, vt=1, α=1e-4), [gate] == vgs[+], [drain] == vds[+]
+            out = currentprobe(), [+] == J[source], [-] == gnd
+        end
+        model = DiscreteModel(circ, 1);
+        y = run!(model, pol*[0 1 2 2 2; 5 5 0.5 1 1.5])
+        @test y == pol*[0 0 1e-4*(1-0.5/2)*0.5 1e-4*(1-1/2)*1 1e-4/2*1^2]
     end
 end
 

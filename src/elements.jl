@@ -1,9 +1,9 @@
-# Copyright 2015, 2016, 2017, 2018 Martin Holters
+# Copyright 2015, 2016, 2017, 2018, 2019 Martin Holters
 # See accompanying license file.
 
 export resistor, potentiometer, capacitor, inductor, transformer,
        voltagesource, currentsource,
-       voltageprobe, currentprobe, diode, bjt, opamp
+       voltageprobe, currentprobe, diode, bjt, mosfet, opamp
 
 
 """
@@ -435,6 +435,56 @@ Pins: `base`, `emitter`, `collector`
                    mi = [-(re+rb) -rb; -rb -(rc+rb); 1 0; 0 1],
                    mq = Matrix{Int}(-polarity*I, 4, 4), nonlinear_eq = nonlinear_eq,
                    pins = [:base; :emitter; :base; :collector])
+end
+
+@doc doc"""
+    mosfet(typ; vt=0.7, α=2e-5)
+
+Creates a MOSFET transistor with the simple model
+
+$i_D=\begin{cases}
+  0 & \text{if } v_{GS} \le v_T \\
+  \alpha \cdot (v_{GS} - v_T - \tfrac{1}{2}v_{DS})\cdot v_{DS}
+  & \text{if } v_{DS} \le v_{GS} - v_T \cap v_{GS} > v_T \\
+  \frac{\alpha}{2} \cdot (v_{GS} - v_T)^2 & \text{otherwise.}
+\end{cases}$
+
+The `typ` parameter chooses between NMOS (`:n`) and PMOS (`:p`). The threshold
+voltage `vt` is given in Volt, `α` (in A/V²) in a constant depending on the
+physics and dimensions of the device.
+
+Pins: `gate`, `source`, `drain`
+""" function mosfet(typ; vt=0.7, α=2e-5)
+    if typ == :n
+        polarity = 1
+    elseif typ == :p
+        polarity = -1
+    else
+        throw(ArgumentError("Unknown mosfet type $(typ), must be :n or :p"))
+    end
+    return Element(mv=[-1 0; 0 -1; 0 0; 0 0],
+        mi=[0 0; 0 0; 0 -1; 1 0],
+        mq=polarity*[1 0 0; 0 1 0; 0 0 1; 0 0 0],
+        u0=polarity*[-vt; 0; 0; 0],
+        pins=[:gate, :source, :drain, :source],
+        nonlinear_eq=quote
+            let vg=q[1], vds=q[2], id=q[3] # vg = vgs-vt
+                if vg <= 0
+                    res[1] = -id
+                    J[1,1] = 0
+                    J[1,2] = 0
+                elseif vds <= vg
+                    res[1] = $α * (vg-0.5*vds)*vds - id
+                    J[1,1] = $α*vds
+                    J[1,2] = $α * (vg-vds)
+                else # 0 < vg < vds
+                    res[1] = $(α/2) * vg^2 - id
+                    J[1,1] = $α*vg
+                    J[1,2] = 0
+                end
+                J[1,3] = -1
+            end
+        end)
 end
 
 """
