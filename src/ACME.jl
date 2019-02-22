@@ -132,12 +132,12 @@ mutable struct DiscreteModel{Solvers}
     fy::Matrix{Float64}
     y0::Vector{Float64}
 
-    nonlinear_eqs::Vector{Expr}
+    nonlinear_eq_funcs::Vector
 
     solvers::Solvers
     x::Vector{Float64}
 
-    function DiscreteModel(mats::Dict{Symbol}, nonlinear_eqs::Vector{Expr},
+    function DiscreteModel(mats::Dict{Symbol}, nonlinear_eq_funcs::Vector,
             solvers::Solvers) where {Solvers}
         model = new{Solvers}()
 
@@ -145,7 +145,7 @@ mutable struct DiscreteModel{Solvers}
             setfield!(model, mat, convert(fieldtype(typeof(model), mat), mats[mat]))
         end
 
-        model.nonlinear_eqs = nonlinear_eqs
+        model.nonlinear_eq_funcs = nonlinear_eq_funcs
         model.solvers = solvers
         model.x = zeros(nx(model))
         return model
@@ -176,17 +176,6 @@ function DiscreteModel(circ::Circuit, t::Real, ::Type{Solver}=HomotopySolver{Cac
 
     reduce_pdims!(mats)
 
-    model_nonlinear_eqs = [quote
-        #copyto!(q, pfull + fq * z)
-        copyto!(q, pfull)
-        BLAS.gemv!('N',1.,fq,z,1.,q)
-        let J=Jq
-            $(nonlinear_eq(circ, nles))
-        end
-        #copyto!(J, Jq*model.fq)
-        BLAS.gemm!('N', 'N', 1., Jq, fq, 0., J)
-    end for nles in nl_elems]
-
     model_nps = size.(mats[:dqs], 1)
     model_nqs = size.(mats[:pexps], 1)
 
@@ -196,16 +185,26 @@ function DiscreteModel(circ::Circuit, t::Real, ::Type{Solver}=HomotopySolver{Cac
     fqs = Matrix{Float64}.(mats[:fqs])
     fqprev_fulls = Matrix{Float64}.(mats[:fqprev_fulls])
 
-    nonlinear_eq_funcs = [eval(quote
-        (res, J, scratch, z) ->
-            let pfull=scratch[1], Jq=scratch[2], q=$(zeros(nq)), fq=$fq
-                $(nonlinear_eq)
+    model_nonlinear_eq_funcs = [
+        let q = zeros(nq), circ_nl_func = nonlinear_eq_func(circ, nles)
+            @inline function(res, J, pfull, Jq, fq, z)
+                #copyto!(q, pfull + fq * z)
+                copyto!(q, pfull)
+                BLAS.gemv!('N', 1., fq, z, 1., q)
+                circ_nl_func(res, Jq, q)
+                #copyto!(J, Jq*model.fq)
+                BLAS.gemm!('N', 'N', 1., Jq, fq, 0., J)
                 return nothing
             end
-    end) for (nonlinear_eq, fq, nq) in zip(model_nonlinear_eqs, fqs, model_nqs)]
+        end for (nles, nq) in zip(nl_elems, model_nqs)]
+
+    nonlinear_eq_funcs = [
+        @inline function (res, J, scratch, z)
+            nleq(res, J, scratch[1], scratch[2], fq, z)
+        end for (nleq, fq) in zip(model_nonlinear_eq_funcs, fqs)]
 
     init_zs = [zeros(nn) for nn in model_nns]
-    for idx in eachindex(model_nonlinear_eqs)
+    for idx in eachindex(nonlinear_eq_funcs)
         q = q0s[idx] + fqprev_fulls[idx] * vcat(init_zs...)
         init_zs[idx] = Base.invokelatest(initial_solution,
                                          nonlinear_eq_funcs[idx], q, model_nns[idx])
@@ -229,7 +228,7 @@ function DiscreteModel(circ::Circuit, t::Real, ::Type{Solver}=HomotopySolver{Cac
         deleteat!(init_zs, const_idxs)
         deleteat!(model_nns, const_idxs)
         deleteat!(model_nqs, const_idxs)
-        deleteat!(model_nonlinear_eqs, const_idxs)
+        deleteat!(model_nonlinear_eq_funcs, const_idxs)
         deleteat!(nonlinear_eq_funcs, const_idxs)
         deleteat!(nl_elems, const_idxs)
         mats[:fy] = mats[:fy][:,varying_zidxs]
@@ -267,8 +266,8 @@ function DiscreteModel(circ::Circuit, t::Real, ::Type{Solver}=HomotopySolver{Cac
                                       (zeros(model_nqs[idx]), zeros(model_nns[idx], model_nqs[idx])),
                                       model_nns[idx], model_nps[idx]),
                                   zeros(model_nps[idx]), init_zs[idx])
-                for idx in eachindex(model_nonlinear_eqs))...,)
-    return DiscreteModel(mats, model_nonlinear_eqs, solvers)
+                for idx in eachindex(nonlinear_eq_funcs))...,)
+    return DiscreteModel(mats, model_nonlinear_eq_funcs, solvers)
 end
 
 function model_matrices(circ::Circuit, t::Rational{BigInt})
@@ -471,14 +470,10 @@ function steadystate(model::DiscreteModel, u=zeros(nu(model)))
         zoff_last = zoff+nn(model,idx)-1
         steady_q0 = model.q0s[idx] + model.pexps[idx]*((model.dqs[idx]/IA_LU*model.b + model.eqs[idx])*u + (model.dqs[idx]/IA_LU*model.c + model.fqprevs[idx])*steady_z) +
             model.pexps[idx]*model.dqs[idx]/IA_LU*model.x0
-        steady_nl_eq_func = eval(quote
-            (res, J, scratch, z) ->
-                let pfull=scratch[1], Jq=scratch[2], q=$(zeros(nq(model, idx))),
-                    fq=$(model.pexps[idx]*model.dqs[idx]/IA_LU*model.c[:,zoff:zoff_last] + model.fqs[idx])
-                    $(model.nonlinear_eqs[idx])
-                    return nothing
-                end
-        end)
+        fq = model.pexps[idx]*model.dqs[idx]/IA_LU*model.c[:,zoff:zoff_last] + model.fqs[idx]
+        nleq = model.nonlinear_eq_funcs[idx]
+        steady_nl_eq_func =
+            (res, J, scratch, z) -> nleq(res, J, scratch[1], scratch[2], fq, z)
         steady_nleq = ParametricNonLinEq(steady_nl_eq_func, nn(model, idx), nq(model, idx))
         steady_solver = Base.invokelatest(HomotopySolver{SimpleSolver}, steady_nleq, zeros(nq(model, idx)),
                                                      zeros(nn(model, idx)))
@@ -543,7 +538,7 @@ function linearize(model::DiscreteModel, usteady::AbstractVector{Float64}=zeros(
         :eqs => Matrix{Float64}[], :fqprevs => Matrix{Float64}[],
         :fqs => Matrix{Float64}[], :q0s => Vector{Float64}[],
         :dy => dy, :ey => ey, :fy => zeros(ny(model), 0), :x0 => x0, :y0 => y0)
-    return DiscreteModel(mats, Expr[], ())
+    return DiscreteModel(mats, [], ())
 end
 
 """
