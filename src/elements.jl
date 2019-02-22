@@ -21,22 +21,21 @@ potentiometer(r) =
     Element(mv=[Matrix{Int}(I, 2, 2); zeros(3, 2)],
             mi=[zeros(2, 2); Matrix{Int}(I, 2, 2); zeros(1, 2)],
             mq=Matrix{Int}(-I, 5, 5), mu=[zeros(4, 1); -1],
-            nonlinear_eq = quote
-                let v1=q[1], v2=q[2], i1=q[3], i2=q[4], pos=q[5]
-                    res[1] = v1 - $(r)*pos*i1
-                    res[2] = v2 - $(r)*(1-pos)*i2
+            nonlinear_eq =
+                @wrap_nleq(let v1=q[1], v2=q[2], i1=q[3], i2=q[4], pos=q[5]
+                    res[1] = v1 - r*pos*i1
+                    res[2] = v2 - r*(1-pos)*i2
                     J[1,1] = 1
                     J[1,2] = 0
-                    J[1,3] = $(-r)*pos
+                    J[1,3] = -r*pos
                     J[1,4] = 0
-                    J[1,5] = $(-r)*i1
+                    J[1,5] = -r*i1
                     J[2,1] = 0
                     J[2,2] = 1
                     J[2,3] = 0
-                    J[2,4] = $(-r)*(1-pos)
-                    J[2,5] = $(-r)*i2
-                end
-            end,
+                    J[2,4] = -r*(1-pos)
+                    J[2,5] = -r*i2
+                end),
             pins=[1, 2, 2, 3])
 
 """
@@ -108,7 +107,7 @@ on
 function transformer(::Type{Val{:JA}}; D=2.4e-2, A=4.54e-5, ns=[],
                      a=14.1, α=5e-5, c=0.55, k=17.8, Ms=2.75e5)
     μ0 = 1.2566370614e-6
-    nonlinear_eq = quote
+    nonlinear_eq = @wrap_nleq begin
         coth_q1 = coth(q[1])
         a_q1 = abs(q[1])
         L_q1 = a_q1 < 1e-4 ? q[1]/3 : coth_q1 - 1/q[1]
@@ -116,19 +115,19 @@ function transformer(::Type{Val{:JA}}; D=2.4e-2, A=4.54e-5, ns=[],
         Ld2_q1 = a_q1 < 1e-3 ? -2/15*q[1] : 2*coth_q1*(coth_q1^2 - 1) - 2/q[1]^3
         δ = q[3] > 0 ? 1.0 : -1.0
 
-        Man = $(Ms)*L_q1
+        Man = Ms*L_q1
         δM = sign(q[3]) == sign(Man - q[2]) ? 1.0 : 0.0
 
-        den = δ*$(k*(1-c))-$(α)*(Man-q[2])
+        den = δ*(k*(1-c))-α*(Man-q[2])
         # at present, the error needs to be scaled to be comparable to those of
         # the other elements, hence the factor 1e-4/Ms
-        res[1] = $(1e-4/Ms) * ($(1-c) * δM*(Man-q[2])/den * q[3]
-                               + $(c*Ms/a)*(q[3]+$(α)*q[4])*Ld_q1 - q[4])
-        J[1,1] = $(1e-4/Ms) * ($((1-c)^2*k*Ms) * δM*Ld_q1*δ/den^2 * q[3]
-                               + $(c*Ms/a)*(q[3]+$(α)*q[4])*Ld2_q1)
-        J[1,2] = $(1e-4/Ms) * -$((1-c)^2*k) * δM*δ/den^2 * q[3]
-        J[1,3] = $(1e-4/Ms) * ($(1-c) * δM*(Man-q[2])/den + $(c*Ms/a)*Ld_q1)
-        J[1,4] = $(1e-4/Ms) * ($(c * Ms/a * α)*Ld_q1 - 1)
+        res[1] = (1e-4/Ms) * ((1-c) * δM*(Man-q[2])/den * q[3]
+                               + (c*Ms/a)*(q[3]+α*q[4])*Ld_q1 - q[4])
+        J[1,1] = (1e-4/Ms) * (((1-c)^2*k*Ms) * δM*Ld_q1*δ/den^2 * q[3]
+                               + (c*Ms/a)*(q[3]+α*q[4])*Ld2_q1)
+        J[1,2] = (1e-4/Ms) * -(1-c)^2*k * δM*δ/den^2 * q[3]
+        J[1,3] = (1e-4/Ms) * ((1-c) * δM*(Man-q[2])/den + (c*Ms/a)*Ld_q1)
+        J[1,4] = (1e-4/Ms) * ((c * Ms/a * α)*Ld_q1 - 1)
     end
     Element(mv=[speye(length(ns)); spzeros(5, length(ns))],
             mi=[spzeros(length(ns), length(ns)); ns'; spzeros(4, length(ns))],
@@ -233,13 +232,11 @@ coefficient `η` is unitless.
 Pins: `+` (anode) and `-` (cathode)
 """ diode(;is::Real=1e-12, η::Real = 1) =
   Element(mv=[1;0], mi=[0;1], mq=[-1 0; 0 -1], pins=[:+; :-], nonlinear_eq =
-    quote
-      let v = q[1], i = q[2], ex = exp(v*$(1 / (25e-3 * η)))
-        res[1] = $(is) * (ex - 1) - i
-        J[1,1] = $(is/(25e-3 * η)) * ex
-        J[1,2] = -1
-      end
-    end
+        @wrap_nleq let v = q[1], i = q[2], ex = exp(v*(1 / (25e-3 * η)))
+            res[1] = is * (ex - 1) - i
+            J[1,1] = is/(25e-3 * η) * ex
+            J[1,2] = -1
+        end
   )
 
 @doc doc"""
@@ -316,94 +313,88 @@ Pins: `base`, `emitter`, `collector`
     end
 
     nonlinear_eq =
-        quote
-            let vE = q[1], vC = q[2], iE = q[3], iC = q[4],
-                expE=exp(vE*$(1/(25e-3*ηe))), expC=exp(vC*$(1/(25e-3*ηc)))
-
-                i_f = $(βf/(1+βf)*ise) * (expE - 1)
-                i_r = $(βr/(1+βr)*isc) * (expC - 1)
-                di_f1 = $(βf/(1+βf)*ise/(25e-3*ηe)) * expE
-                di_r2 = $(βr/(1+βr)*isc/(25e-3*ηc)) * expC
-
-                if $(var == Inf && vaf == Inf && ikf == Inf && ikr == Inf)
-                    i_cc = i_f-i_r
-                    di_cc1 = di_f1
-                    di_cc2 = -di_r2
-                elseif $((var ≠ Inf || vaf ≠ Inf) && ikf == Inf && ikr == Inf)
-                    # inverse Early voltage factor
-                    q₁⁻¹ = 1 - vE*$(1/var) - vC*$(1/vaf)
-                    i_cc = q₁⁻¹ * (i_f-i_r)
-                    # partial derivatives without high level injection effect
-                    dq₁⁻¹1 = $(-1/var)
-                    dq₁⁻¹2 = $(-1/vaf)
-                    di_cc1 = dq₁⁻¹1*(i_f-i_r) + q₁⁻¹*di_f1
-                    di_cc2 = dq₁⁻¹2*(i_f-i_r) - q₁⁻¹*di_r2
-                elseif $(var == Inf && vaf == Inf && (ikf ≠ Inf || ikr ≠ Inf))
-                    # high level injection effect
-                    q₂ = i_f*$(1/ikf) + i_r*$(1/ikr)
-                    qden = 1+sqrt(1+4q₂)
-                    qfact = 2/qden
-                    i_cc = qfact * (i_f-i_r)
-                    # partial derivatives without Early effect
-                    dq₂1 = di_f1*$(1/ikf)
-                    dq₂2 = di_r2*$(1/ikr)
-                    dqfact1 = -4dq₂1/(qden-1) / (qden^2)
-                    dqfact2 = -4dq₂2/(qden-1) / (qden^2)
-                    di_cc1 = dqfact1*(i_f-i_r) + qfact*di_f1
-                    di_cc2 = dqfact2*(i_f-i_r) - qfact*di_r2
-                else
-                    # inverse Early voltage factor
-                    q₁⁻¹ = 1 - vE*$(1/var) - vC*$(1/vaf)
-                    # high level injection effect
-                    q₂ = i_f*$(1/ikf) + i_r*$(1/ikr)
-                    qden = 1+sqrt(1+4q₂)
-                    qfact = 2q₁⁻¹/qden
-                    i_cc = qfact * (i_f-i_r)
-                    # partial derivatives with high level injection effect and Early effect
-                    dq₁⁻¹1 = $(-1/var)
-                    dq₁⁻¹2 = $(-1/vaf)
-                    dq₂1 = di_f1*$(1/ikf)
-                    dq₂2 = di_r2*$(1/ikr)
-                    dqfact1 = (2dq₁⁻¹1*qden - q₁⁻¹*4dq₂1/(qden-1)) / (qden^2)
-                    dqfact2 = (2dq₁⁻¹2*qden - q₁⁻¹*4dq₂2/(qden-1)) / (qden^2)
-                    di_cc1 = dqfact1*(i_f-i_r) + qfact*di_f1
-                    di_cc2 = dqfact2*(i_f-i_r) - qfact*di_r2
-                end
-
-                iBE = $(1/βf)*i_f
-                diBE1 = $(1/βf)*di_f1
-                if $(ile ≠ 0)
-                    if $(ηel ≠ ηe)
-                        expEl = exp(vE*$(1/(25e-3*ηel)))
-                    else
-                        expEl = expE
-                    end
-                    iBE += $ile*(expEl - 1)
-                    diBE1 += $(ile/(25e-3*ηe))*expEl
-                end
-                iBC = $(1/βr)*i_r
-                diBC2 = $(1/βr)*di_r2
-                if $(ilc ≠ 0)
-                    if $(ηcl ≠ ηc)
-                        expCl = exp(vC*$(1/(25e-3*ηcl)))
-                    else
-                        expCl = expC
-                    end
-                    iBC += $ilc*(expCl - 1)
-                    diBC2 += $(ilc/(25e-3*ηc))*expCl
-                end
-
-                res[1] = i_cc + iBE - iE
-                res[2] = -i_cc + iBC - iC
-                J[1,1] = di_cc1 + diBE1
-                J[1,2] = di_cc2
-                J[1,3] = -1.0
-                J[1,4] = 0.0
-                J[2,1] = -di_cc1
-                J[2,2] = -di_cc2 + diBC2
-                J[2,3] = 0.0
-                J[2,4] = -1.0
+        @wrap_nleq let vE = q[1], vC = q[2], iE = q[3], iC = q[4],
+            expE=exp(vE*(1/(25e-3*ηe))), expC=exp(vC*(1/(25e-3*ηc)))
+            i_f = (βf/(1+βf)*ise) * (expE - 1)
+            i_r = (βr/(1+βr)*isc) * (expC - 1)
+            di_f1 = (βf/(1+βf)*ise/(25e-3*ηe)) * expE
+            di_r2 = (βr/(1+βr)*isc/(25e-3*ηc)) * expC
+            if var == Inf && vaf == Inf && ikf == Inf && ikr == Inf
+                i_cc = i_f-i_r
+                di_cc1 = di_f1
+                di_cc2 = -di_r2
+            elseif (var ≠ Inf || vaf ≠ Inf) && ikf == Inf && ikr == Inf
+                # inverse Early voltage factor
+                q₁⁻¹ = 1 - vE*(1/var) - vC*(1/vaf)
+                i_cc = q₁⁻¹ * (i_f-i_r)
+                # partial derivatives without high level injection effect
+                dq₁⁻¹1 = (-1/var)
+                dq₁⁻¹2 = (-1/vaf)
+                di_cc1 = dq₁⁻¹1*(i_f-i_r) + q₁⁻¹*di_f1
+                di_cc2 = dq₁⁻¹2*(i_f-i_r) - q₁⁻¹*di_r2
+            elseif var == Inf && vaf == Inf && (ikf ≠ Inf || ikr ≠ Inf)
+                # high level injection effect
+                q₂ = i_f*(1/ikf) + i_r*(1/ikr)
+                qden = 1+sqrt(1+4q₂)
+                qfact = 2/qden
+                i_cc = qfact * (i_f-i_r)
+                # partial derivatives without Early effect
+                dq₂1 = di_f1*(1/ikf)
+                dq₂2 = di_r2*(1/ikr)
+                dqfact1 = -4dq₂1/(qden-1) / (qden^2)
+                dqfact2 = -4dq₂2/(qden-1) / (qden^2)
+                di_cc1 = dqfact1*(i_f-i_r) + qfact*di_f1
+                di_cc2 = dqfact2*(i_f-i_r) - qfact*di_r2
+            else
+                # inverse Early voltage factor
+                q₁⁻¹ = 1 - vE*(1/var) - vC*(1/vaf)
+                # high level injection effect
+                q₂ = i_f*(1/ikf) + i_r*(1/ikr)
+                qden = 1+sqrt(1+4q₂)
+                qfact = 2q₁⁻¹/qden
+                i_cc = qfact * (i_f-i_r)
+                # partial derivatives with high level injection effect and Early effect
+                dq₁⁻¹1 = -1/var
+                dq₁⁻¹2 = -1/vaf
+                dq₂1 = di_f1*(1/ikf)
+                dq₂2 = di_r2*(1/ikr)
+                dqfact1 = (2dq₁⁻¹1*qden - q₁⁻¹*4dq₂1/(qden-1)) / (qden^2)
+                dqfact2 = (2dq₁⁻¹2*qden - q₁⁻¹*4dq₂2/(qden-1)) / (qden^2)
+                di_cc1 = dqfact1*(i_f-i_r) + qfact*di_f1
+                di_cc2 = dqfact2*(i_f-i_r) - qfact*di_r2
             end
+            iBE = (1/βf)*i_f
+            diBE1 = (1/βf)*di_f1
+            if ile ≠ 0
+                if ηel ≠ ηe
+                    expEl = exp(vE*(1/(25e-3*ηel)))
+                else
+                    expEl = expE
+                end
+                iBE += ile*(expEl - 1)
+                diBE1 += (ile/(25e-3*ηe))*expEl
+            end
+            iBC = (1/βr)*i_r
+            diBC2 = (1/βr)*di_r2
+            if ilc ≠ 0
+                if ηcl ≠ ηc
+                    expCl = exp(vC*(1/(25e-3*ηcl)))
+                else
+                    expCl = expC
+                end
+                iBC += ilc*(expCl - 1)
+                diBC2 += (ilc/(25e-3*ηc))*expCl
+            end
+            res[1] = i_cc + iBE - iE
+            res[2] = -i_cc + iBC - iC
+            J[1,1] = di_cc1 + diBE1
+            J[1,2] = di_cc2
+            J[1,3] = -1.0
+            J[1,4] = 0.0
+            J[2,1] = -di_cc1
+            J[2,2] = -di_cc2 + diBC2
+            J[2,3] = 0.0
+            J[2,4] = -1.0
         end
     return Element(mv=[1 0; 0 1; 0 0; 0 0],
                    mi = [-(re+rb) -rb; -rb -(rc+rb); 1 0; 0 1],
@@ -441,23 +432,21 @@ Pins: `gate`, `source`, `drain`
         mq=polarity*[1 0 0; 0 1 0; 0 0 1; 0 0 0],
         u0=polarity*[-vt; 0; 0; 0],
         pins=[:gate, :source, :drain, :source],
-        nonlinear_eq=quote
-            let vg=q[1], vds=q[2], id=q[3] # vg = vgs-vt
-                if vg <= 0
-                    res[1] = -id
-                    J[1,1] = 0
-                    J[1,2] = 0
-                elseif vds <= vg
-                    res[1] = $α * (vg-0.5*vds)*vds - id
-                    J[1,1] = $α*vds
-                    J[1,2] = $α * (vg-vds)
-                else # 0 < vg < vds
-                    res[1] = $(α/2) * vg^2 - id
-                    J[1,1] = $α*vg
-                    J[1,2] = 0
-                end
-                J[1,3] = -1
+        nonlinear_eq=@wrap_nleq let vg=q[1], vds=q[2], id=q[3] # vg = vgs-vt
+            if vg <= 0
+                res[1] = -id
+                J[1,1] = 0
+                J[1,2] = 0
+            elseif vds <= vg
+                res[1] = α * (vg-0.5*vds)*vds - id
+                J[1,1] = α*vds
+                J[1,2] = α * (vg-vds)
+            else # 0 < vg < vds
+                res[1] = (α/2) * vg^2 - id
+                J[1,1] = α*vg
+                J[1,2] = 0
             end
+            J[1,3] = -1
         end)
 end
 
@@ -498,12 +487,10 @@ Pins: `in+` and `in-` for input, `out+` and `out-` for output
     offset = 0.5 * (vomin + vomax)
     scale = 0.5 * (vomax - vomin)
     nonlinear_eq =
-        quote
-            let vi = q[1], vo = q[2], vi_scaled = vi * $(gain/scale)
-                res[1] = tanh(vi_scaled) * $(scale) - vo
-                J[1,1] = $(gain) / cosh(vi_scaled)^2
-                J[1,2] = -1
-            end
+        @wrap_nleq let vi = q[1], vo = q[2], vi_scaled = vi * (gain/scale)
+            res[1] = tanh(vi_scaled) * scale - vo
+            J[1,1] = gain / cosh(vi_scaled)^2
+            J[1,2] = -1
         end
     return Element(mv=[0 0; 1 0; 0 1], mi=[1 0; 0 0; 0 0], mq=[0 0; -1 0; 0 -1],
                    u0=[0; 0; offset],

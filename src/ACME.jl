@@ -37,7 +37,7 @@ mutable struct Element
   px :: SparseMatrixCSC{Real,Int}
   pxd :: SparseMatrixCSC{Real,Int}
   pq :: SparseMatrixCSC{Real,Int}
-  nonlinear_eq :: Expr
+  nonlinear_eq
   pins :: Dict{Symbol, Vector{Tuple{Int, Int}}}
 
   function Element(;args...)
@@ -78,6 +78,9 @@ mutable struct Element
         update_sizes(val, mat_dims[key])
       elseif key == :pins
         val = make_pin_dict(val)
+      elseif key === :nonlinear_eq && val isa Expr
+          Base.depwarn("nonlinear_eq should be given as a function, not an expression", :Element)
+          val = @eval @wrap_nleq $val
       end
       setfield!(elem, key, val)
     end
@@ -87,7 +90,7 @@ mutable struct Element
       end
     end
     if !isdefined(elem, :nonlinear_eq)
-      elem.nonlinear_eq = Expr(:block)
+      elem.nonlinear_eq = (res, J, q, row_offset, col_offset) -> nothing
     end
     if !isdefined(elem, :pins)
       elem.pins = make_pin_dict(1:2nb(elem))
@@ -112,7 +115,9 @@ function getindex(e::Element, p)
     return (e, e.pins[Symbol(p)])
 end
 
-function nonlinear_eq_func(e::Element)
+nonlinear_eq_func(e::Element) = e.nonlinear_eq
+
+macro wrap_nleq(expr)
     index_offsets = Dict( :q => (:col_offset,),
                           :J => (:row_offset, :col_offset),
                           :res => (:row_offset,) )
@@ -141,9 +146,9 @@ function nonlinear_eq_func(e::Element)
 
     offset_indexes(x::Any) = x
 
-    return eval(quote
+    return esc(quote
         @inline function (res, J, q, row_offset, col_offset)
-            $(offset_indexes(e.nonlinear_eq))
+            $(offset_indexes(expr))
         end
     end)
 end
