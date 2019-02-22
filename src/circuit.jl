@@ -71,39 +71,22 @@ function nonlinear_eq_func(c::Circuit, elem_idxs=1:length(elements(c)))
     col_offset = 0
     funcs = Function[]
     for elem in collect(elements(c))[elem_idxs]
-        index_offsets = Dict( :q => (col_offset,),
-                              :J => (row_offset, col_offset),
-                              :res => (row_offset,) )
-
-        function offset_indexes(expr::Expr)
-            ret = Expr(expr.head)
-            if expr.head == :ref && haskey(index_offsets, expr.args[1])
-                push!(ret.args, expr.args[1])
-                offsets = index_offsets[expr.args[1]]
-                length(expr.args) == length(offsets) + 1 ||
-                    throw(ArgumentError(string(expr.args[1], " must be indexed with exactly ", length(offsets), " index(es)")))
-                for i in 1:length(offsets)
-                    push!(ret.args,
-                          :($(offsets[i]) + $(offset_indexes(expr.args[i+1]))))
+        if VERSION >= v"0.7"
+            push!(funcs,
+                let row_offset=row_offset, col_offset=col_offset,
+                    nleqfunc=nonlinear_eq_func(elem)
+                    @inline function (res, J, q)
+                        nleqfunc(res, J, q, row_offset, col_offset)
+                    end
+                end)
+        else
+            # needed to avoid allocation (during model execution) on Julia 0.6
+            push!(funcs, eval(quote
+                @inline function (res, J, q)
+                    $(nonlinear_eq_func(elem))(res, J, q, $row_offset, $col_offset)
                 end
-            else
-                append!(ret.args, offset_indexes.(expr.args))
-            end
-            ret
+            end))
         end
-
-        function offset_indexes(s::Symbol)
-            haskey(index_offsets, s) && throw(ArgumentError(string(s, " used without indexing expression")))
-            s
-        end
-
-        offset_indexes(x::Any) = x
-
-        push!(funcs, eval(quote
-            @inline function (res, J, q)
-                $(offset_indexes(elem.nonlinear_eq))
-            end
-        end))
 
         row_offset += nn(elem)
         col_offset += nq(elem)
