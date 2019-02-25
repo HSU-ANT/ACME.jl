@@ -9,15 +9,21 @@ struct CircuitNLFunc{Fs}
     fs::Fs
 end
 
-@inline function (cnlf::CircuitNLFunc{Fs})(res, J, q) where Fs
-    _apply_all(res, J, q, cnlf.fs...)
+@inline function (cnlf::CircuitNLFunc{Fs})(res´, J´, q) where Fs
+    (res, J) = _apply_all(q, cnlf.fs...)
+    res´ .= res
+    J´ .= J
 end
 
-_apply_all(res, J, q) = nothing
-@inline function _apply_all(res, J, q, f1::F, fs...) where F
-    f1(res, J, q)
-    _apply_all(res, J, q, fs...)
+_apply_all(q) = (SVector{0,Float64}(), SMatrix{0,0,Float64}())
+@inline function _apply_all(q, f1::F, fs...) where F
+    (res1, J1) = f1(q)
+    (resrem, Jrem) = _apply_all(q, fs...)
+    return ([res1; resrem], dcat(J1, Jrem))
 end
+
+dcat(a::SMatrix{Ma,Na,Ta}, b::SMatrix{Mb,Nb,Tb}) where {Ma,Na,Mb,Nb,Ta,Tb} =
+    [[a zeros(SMatrix{Ma,Nb,Ta})]; [zeros(SMatrix{Mb,Na,Tb}) b]]
 
 const Net = Vector{Tuple{Symbol,Symbol}} # pairs of element designator and pin name
 
@@ -73,17 +79,18 @@ function nonlinear_eq_func(c::Circuit, elem_idxs=1:length(elements(c)))
     for elem in collect(elements(c))[elem_idxs]
         if VERSION >= v"0.7"
             push!(funcs,
-                let row_offset=row_offset, col_offset=col_offset,
+                let q_indices=SVector{nq(elem)}(col_offset+1:col_offset+nq(elem)),
                     nleqfunc=nonlinear_eq_func(elem)
-                    @inline function (res, J, q)
-                        nleqfunc(res, J, q, row_offset, col_offset)
+                    @inline function (q)
+                        nleqfunc(q[q_indices])
                     end
                 end)
         else
             # needed to avoid allocation (during model execution) on Julia 0.6
+            q_indices=SVector{nq(elem)}(col_offset+1:col_offset+nq(elem))
             push!(funcs, eval(quote
-                @inline function (res, J, q)
-                    $(nonlinear_eq_func(elem))(res, J, q, $row_offset, $col_offset)
+                @inline function (q)
+                    $(nonlinear_eq_func(elem))(q[$q_indices])
                 end
             end))
         end

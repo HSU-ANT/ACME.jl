@@ -15,6 +15,7 @@ import Compat.LinearAlgebra.BLAS
 using ProgressMeter
 using IterTools
 using DataStructures
+using StaticArrays
 
 import Base.getindex
 
@@ -78,9 +79,6 @@ mutable struct Element
         update_sizes(val, mat_dims[key])
       elseif key == :pins
         val = make_pin_dict(val)
-      elseif key === :nonlinear_eq && val isa Expr
-          Base.depwarn("nonlinear_eq should be given as a function, not an expression", :Element)
-          val = @eval @wrap_nleq $val
       end
       setfield!(elem, key, val)
     end
@@ -90,7 +88,11 @@ mutable struct Element
       end
     end
     if !isdefined(elem, :nonlinear_eq)
-      elem.nonlinear_eq = (res, J, q, row_offset, col_offset) -> nothing
+      elem.nonlinear_eq = (q) -> (SVector{0,Float64}(), SMatrix{0,0,Float64}())
+    elseif elem.nonlinear_eq isa Expr
+        Base.depwarn("nonlinear_eq should be given as a function, not an expression", :Element)
+        nn = get(sizes, :nb, 0) + get(sizes, :nx, 0) + get(sizes, :nq, 0) - get(sizes, :nl, 0)
+        elem.nonlinear_eq = wrap_nleq_expr(nn, get(sizes, :nq, 0), elem.nonlinear_eq)
     end
     if !isdefined(elem, :pins)
       elem.pins = make_pin_dict(1:2nb(elem))
@@ -117,38 +119,34 @@ end
 
 nonlinear_eq_func(e::Element) = e.nonlinear_eq
 
-macro wrap_nleq(expr)
-    index_offsets = Dict( :q => (:col_offset,),
-                          :J => (:row_offset, :col_offset),
-                          :res => (:row_offset,) )
+function wrap_nleq_expr(nn, nq, expr)
+    res_symbs = [gensym("res_$n") for n in 1:nn]
+    J_symbs = [gensym("J_$(m)_$n") for m in 1:nn, n in 1:nq]
 
-    function offset_indexes(expr::Expr)
-        ret = Expr(expr.head)
-        if expr.head == :ref && haskey(index_offsets, expr.args[1])
-            push!(ret.args, expr.args[1])
-            offsets = index_offsets[expr.args[1]]
-            length(expr.args) == length(offsets) + 1 ||
-                throw(ArgumentError(string(expr.args[1], " must be indexed with exactly ", length(offsets), " index(es)")))
-            for i in 1:length(offsets)
-                push!(ret.args,
-                      :($(offsets[i]) + $(offset_indexes(expr.args[i+1]))))
+    function rewrite_refs(expr::Expr)
+        if expr.head == :ref
+            if expr.args[1] === :res
+                return res_symbs[expr.args[2]]
+            elseif expr.args[1] === :J
+                return J_symbs[expr.args[2], expr.args[3]]
             end
+            return expr
         else
-            append!(ret.args, offset_indexes.(expr.args))
+            return Expr(expr.head, rewrite_refs.(expr.args)...)
         end
-        ret
     end
 
-    function offset_indexes(s::Symbol)
-        haskey(index_offsets, s) && throw(ArgumentError(string(s, " used without indexing expression")))
-        s
-    end
+    rewrite_refs(x::Any) = x
 
-    offset_indexes(x::Any) = x
+    expr = rewrite_refs(expr)
 
-    return esc(quote
-        @inline function (res, J, q, row_offset, col_offset)
-            $(offset_indexes(expr))
+    return eval(quote
+        @inline function (q)
+            $(nn > 0 || nq > 0 ? Expr(:local, res_symbs..., J_symbs...) : nothing)
+            $(expr)
+            res = SVector{$nn}($(res_symbs...))
+            J = SMatrix{$nn,$nq}($(J_symbs...))
+            return (res, J)
         end
     end)
 end

@@ -22,19 +22,11 @@ potentiometer(r) =
             mi=[zeros(2, 2); Matrix{Int}(I, 2, 2); zeros(1, 2)],
             mq=Matrix{Int}(-I, 5, 5), mu=[zeros(4, 1); -1],
             nonlinear_eq =
-                @wrap_nleq(let v1=q[1], v2=q[2], i1=q[3], i2=q[4], pos=q[5]
-                    res[1] = v1 - r*pos*i1
-                    res[2] = v2 - r*(1-pos)*i2
-                    J[1,1] = 1
-                    J[1,2] = 0
-                    J[1,3] = -r*pos
-                    J[1,4] = 0
-                    J[1,5] = -r*i1
-                    J[2,1] = 0
-                    J[2,2] = 1
-                    J[2,3] = 0
-                    J[2,4] = -r*(1-pos)
-                    J[2,5] = -r*i2
+                (@inline function (q)
+                    v1, v2, i1, i2, pos=q
+                    res = @SVector [v1 - r*pos*i1, v2 - r*(1-pos)*i2]
+                    J = @SMatrix [1 0 -r*pos 0 -r*i1; 0 1 0 -r*(1-pos) -r*i2]
+                    return (res, J)
                 end),
             pins=[1, 2, 2, 3])
 
@@ -107,7 +99,7 @@ on
 function transformer(::Type{Val{:JA}}; D=2.4e-2, A=4.54e-5, ns=[],
                      a=14.1, α=5e-5, c=0.55, k=17.8, Ms=2.75e5)
     μ0 = 1.2566370614e-6
-    nonlinear_eq = @wrap_nleq begin
+    nonlinear_eq = @inline function (q)
         coth_q1 = coth(q[1])
         a_q1 = abs(q[1])
         L_q1 = a_q1 < 1e-4 ? q[1]/3 : coth_q1 - 1/q[1]
@@ -121,13 +113,14 @@ function transformer(::Type{Val{:JA}}; D=2.4e-2, A=4.54e-5, ns=[],
         den = δ*(k*(1-c))-α*(Man-q[2])
         # at present, the error needs to be scaled to be comparable to those of
         # the other elements, hence the factor 1e-4/Ms
-        res[1] = (1e-4/Ms) * ((1-c) * δM*(Man-q[2])/den * q[3]
-                               + (c*Ms/a)*(q[3]+α*q[4])*Ld_q1 - q[4])
-        J[1,1] = (1e-4/Ms) * (((1-c)^2*k*Ms) * δM*Ld_q1*δ/den^2 * q[3]
+        res = @SVector [(1e-4/Ms) * ((1-c) * δM*(Man-q[2])/den * q[3]
+                                     + (c*Ms/a)*(q[3]+α*q[4])*Ld_q1 - q[4])]
+        J_1_1 = (1e-4/Ms) * (((1-c)^2*k*Ms) * δM*Ld_q1*δ/den^2 * q[3]
                                + (c*Ms/a)*(q[3]+α*q[4])*Ld2_q1)
-        J[1,2] = (1e-4/Ms) * -(1-c)^2*k * δM*δ/den^2 * q[3]
-        J[1,3] = (1e-4/Ms) * ((1-c) * δM*(Man-q[2])/den + (c*Ms/a)*Ld_q1)
-        J[1,4] = (1e-4/Ms) * ((c * Ms/a * α)*Ld_q1 - 1)
+        J_1_2 = (1e-4/Ms) * -(1-c)^2*k * δM*δ/den^2 * q[3]
+        J_1_3 = (1e-4/Ms) * ((1-c) * δM*(Man-q[2])/den + (c*Ms/a)*Ld_q1)
+        J_1_4 = (1e-4/Ms) * ((c * Ms/a * α)*Ld_q1 - 1)
+        return (res, @SMatrix [J_1_1 J_1_2; J_2_1 J_2_2])
     end
     Element(mv=[speye(length(ns)); spzeros(5, length(ns))],
             mi=[spzeros(length(ns), length(ns)); ns'; spzeros(4, length(ns))],
@@ -232,10 +225,12 @@ coefficient `η` is unitless.
 Pins: `+` (anode) and `-` (cathode)
 """ diode(;is::Real=1e-12, η::Real = 1) =
   Element(mv=[1;0], mi=[0;1], mq=[-1 0; 0 -1], pins=[:+; :-], nonlinear_eq =
-        @wrap_nleq let v = q[1], i = q[2], ex = exp(v*(1 / (25e-3 * η)))
-            res[1] = is * (ex - 1) - i
-            J[1,1] = is/(25e-3 * η) * ex
-            J[1,2] = -1
+        @inline function(q)
+            v, i = q
+            ex = exp(v*(1 / (25e-3 * η)))
+            res = @SVector [is * (ex - 1) - i]
+            J = @SMatrix [is/(25e-3 * η) * ex -1]
+            return (res, J)
         end
   )
 
@@ -313,8 +308,10 @@ Pins: `base`, `emitter`, `collector`
     end
 
     nonlinear_eq =
-        @wrap_nleq let vE = q[1], vC = q[2], iE = q[3], iC = q[4],
-            expE=exp(vE*(1/(25e-3*ηe))), expC=exp(vC*(1/(25e-3*ηc)))
+        @inline function (q)
+            vE, vC, iE, iC = q
+            expE=exp(vE*(1/(25e-3*ηe)))
+            expC=exp(vC*(1/(25e-3*ηc)))
             i_f = (βf/(1+βf)*ise) * (expE - 1)
             i_r = (βr/(1+βr)*isc) * (expC - 1)
             di_f1 = (βf/(1+βf)*ise/(25e-3*ηe)) * expE
@@ -385,16 +382,10 @@ Pins: `base`, `emitter`, `collector`
                 iBC += ilc*(expCl - 1)
                 diBC2 += (ilc/(25e-3*ηc))*expCl
             end
-            res[1] = i_cc + iBE - iE
-            res[2] = -i_cc + iBC - iC
-            J[1,1] = di_cc1 + diBE1
-            J[1,2] = di_cc2
-            J[1,3] = -1.0
-            J[1,4] = 0.0
-            J[2,1] = -di_cc1
-            J[2,2] = -di_cc2 + diBC2
-            J[2,3] = 0.0
-            J[2,4] = -1.0
+            res = @SVector [i_cc + iBE - iE, -i_cc + iBC - iC]
+            J = @SMatrix [di_cc1 + diBE1 di_cc2          -1.0 0.0;
+                          -di_cc1        -di_cc2 + diBC2 0.0  -1.0]
+            return (res, J)
         end
     return Element(mv=[1 0; 0 1; 0 0; 0 0],
                    mi = [-(re+rb) -rb; -rb -(rc+rb); 1 0; 0 1],
@@ -432,21 +423,19 @@ Pins: `gate`, `source`, `drain`
         mq=polarity*[1 0 0; 0 1 0; 0 0 1; 0 0 0],
         u0=polarity*[-vt; 0; 0; 0],
         pins=[:gate, :source, :drain, :source],
-        nonlinear_eq=@wrap_nleq let vg=q[1], vds=q[2], id=q[3] # vg = vgs-vt
+        nonlinear_eq = @inline function (q)
+            vg, vds, id=q # vg = vgs-vt
             if vg <= 0
-                res[1] = -id
-                J[1,1] = 0
-                J[1,2] = 0
+                res = @SVector [-id]
+                J = @SMatrix [0.0 0.0 -1.0]
             elseif vds <= vg
-                res[1] = α * (vg-0.5*vds)*vds - id
-                J[1,1] = α*vds
-                J[1,2] = α * (vg-vds)
+                res = @SVector [α * (vg-0.5*vds)*vds - id]
+                J = @SMatrix [α*vds α*(vg-vds) -1.0]
             else # 0 < vg < vds
-                res[1] = (α/2) * vg^2 - id
-                J[1,1] = α*vg
-                J[1,2] = 0
+                res = @SVector [(α/2) * vg^2 - id]
+                J = @SMatrix [α*vg 0.0 -1.0]
             end
-            J[1,3] = -1
+            return (res, J)
         end)
 end
 
@@ -487,10 +476,11 @@ Pins: `in+` and `in-` for input, `out+` and `out-` for output
     offset = 0.5 * (vomin + vomax)
     scale = 0.5 * (vomax - vomin)
     nonlinear_eq =
-        @wrap_nleq let vi = q[1], vo = q[2], vi_scaled = vi * (gain/scale)
-            res[1] = tanh(vi_scaled) * scale - vo
-            J[1,1] = gain / cosh(vi_scaled)^2
-            J[1,2] = -1
+        @inline function (q)
+            vi, vo = q
+            vi_scaled = vi * (gain/scale)
+            res = @SVector [tanh(vi_scaled) * scale - vo]
+            J = @SMatrix [gain / cosh(vi_scaled)^2 -1.0]
         end
     return Element(mv=[0 0; 1 0; 0 1], mi=[1 0; 0 0; 0 0], mq=[0 0; -1 0; 0 -1],
                    u0=[0; 0; offset],
