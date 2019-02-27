@@ -9,11 +9,7 @@ struct CircuitNLFunc{Fs}
     fs::Fs
 end
 
-@inline function (cnlf::CircuitNLFunc{Fs})(res´, J´, q) where Fs
-    (res, J) = _apply_all(q, cnlf.fs...)
-    res´ .= res
-    J´ .= J
-end
+@inline (cnlf::CircuitNLFunc{Fs})(q) where {Fs} = _apply_all(q, cnlf.fs...)
 
 _apply_all(q) = (SVector{0,Float64}(), SMatrix{0,0,Float64}())
 @inline function _apply_all(q, f1::F, fs...) where F

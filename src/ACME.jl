@@ -230,7 +230,9 @@ function DiscreteModel(circ::Circuit, t::Real, ::Type{Solver}=HomotopySolver{Cac
                 #copyto!(q, pfull + fq * z)
                 copyto!(q, pfull)
                 BLAS.gemv!('N', 1., fq, z, 1., q)
-                circ_nl_func(res, Jq, q)
+                res´, Jq´ = circ_nl_func(q)
+                res .= res´
+                Jq .= Jq´
                 #copyto!(J, Jq*model.fq)
                 BLAS.gemm!('N', 'N', 1., Jq, fq, 0., J)
                 return nothing
