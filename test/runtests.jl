@@ -274,6 +274,98 @@ end
     @test y[1] ≈ y[2] ≈ 1e-12*(exp(1/25e-3)-1)
 end
 
+@testset "composite_element" begin
+    subcirc1() = composite_element(@circuit(begin
+       r1 = resistor(100e3)
+       r2 = resistor(1e3)
+       r1[2] == r2[1]
+       src = voltagesource(5), [+] == r1[1], [-] == r2[2]
+    end), [1 => (:r2, 1), 2 => (:r2, 2)])
+    circ = @circuit begin
+        U = subcirc1()
+        J = voltageprobe(gp=2), [+] == U[1], [-] == U[2]
+    end
+    model = DiscreteModel(circ, 1//44100)
+    y = run!(model, zeros(0, 100))
+    refcirc = @circuit begin
+        r1 = resistor(100e3)
+        r2 = resistor(1e3)
+        r1[2] == r2[1]
+        src = voltagesource(5), [+] == r1[1], [-] == r2[2]
+        J = voltageprobe(gp=2), [+] == r2[1], [-] == r2[2]
+    end
+    refmodel = DiscreteModel(refcirc, 1//44100)
+    yref = run!(refmodel, zeros(0, 100))
+    @test y ≈ yref
+
+    subcirc2() = composite_element(@circuit(begin
+       r1 = resistor(100e3)
+       r2 = resistor(1e3)
+       r1[2] == r2[1]
+       src = voltagesource(), [+] == r1[1], [-] == r2[2]
+    end), [1 => (:r2, 1), 2 => (:r2, 2)])
+    circ = @circuit begin
+        U = subcirc2()
+        J = voltageprobe(gp=2), [+] == U[1], [-] == U[2]
+    end
+    model = DiscreteModel(circ, 1//44100)
+    y = run!(model, 5*ones(1, 100))
+    yref = run!(refmodel, zeros(0, 100))
+    @test y ≈ yref
+
+    subcirc3() = composite_element(@circuit(begin
+       r1 = resistor(100e3)
+       r2 = resistor(1e3)
+       c = capacitor(1e-6), [1] == r2[1], [2] == r2[2]
+       r1[2] == r2[1]
+       src = voltagesource(5), [+] == r1[1], [-] == r2[2]
+    end), [1 => (:r2, 1), 2 => (:r2, 2)])
+    circ = @circuit begin
+        U = subcirc3()
+        J = voltageprobe(gp=2), [+] == U[1], [-] == U[2]
+    end
+    model = DiscreteModel(circ, 1//44100)
+    y = run!(model, zeros(0, 100))
+    refcirc = @circuit begin
+        r1 = resistor(100e3)
+        r2 = resistor(1e3)
+        c = capacitor(1e-6), [1] == r2[1], [2] == r2[2]
+        r1[2] == r2[1]
+        src = voltagesource(5), [+] == r1[1], [-] == r2[2]
+        J = voltageprobe(gp=2), [+] == r2[1], [-] == r2[2]
+    end
+    refmodel = DiscreteModel(refcirc, 1//44100)
+    yref = run!(refmodel, zeros(0, 100))
+    @test y ≈ yref
+
+    subcirc4() = composite_element(@circuit(begin
+       r1 = resistor(100e3)
+       r2 = resistor(1e3)
+       c = capacitor(1e-6), [1] == r2[1], [2] == r2[2]
+       d = diode(), [+] == r2[1], [-] == r2[2]
+       r1[2] == r2[1]
+       src = voltagesource(5), [+] == r1[1], [-] == r2[2]
+    end), [1 => (:r2, 1), 2 => (:r2, 2)])
+    circ = @circuit begin
+        U = subcirc4()
+        J = voltageprobe(gp=2), [+] == U[1], [-] == U[2]
+    end
+    model = DiscreteModel(circ, 1//44100)
+    y = run!(model, zeros(0, 100))
+    refcirc = @circuit begin
+        r1 = resistor(100e3)
+        r2 = resistor(1e3)
+        c = capacitor(1e-6), [1] == r2[1], [2] == r2[2]
+        d = diode(), [+] == r2[1], [-] == r2[2]
+        r1[2] == r2[1]
+        src = voltagesource(5), [+] == r1[1], [-] == r2[2]
+        J = voltageprobe(gp=2), [+] == r2[1], [-] == r2[2]
+    end
+    refmodel = DiscreteModel(refcirc, 1//44100)
+    yref = run!(refmodel, zeros(0, 100))
+    @test y ≈ yref
+end
+
 @testset "sources/probes" begin
 # sources and probes with internal resistance/conductance
     circ = @circuit begin

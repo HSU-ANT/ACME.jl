@@ -1,7 +1,7 @@
 # Copyright 2015, 2016, 2017, 2018, 2019 Martin Holters
 # See accompanying license file.
 
-export Circuit, add!, connect!, disconnect!, @circuit
+export Circuit, add!, connect!, disconnect!, @circuit, composite_element
 
 import Base: delete!
 
@@ -446,4 +446,88 @@ be put in quotes (e.g. `"in+"`, `"9V"`)
 
     push!(ccode.args, :(circ))
     return ccode
+end
+
+@doc doc"""
+    composite_element(circ, pins)
+
+Create a circuit element from the (sub-)circuit `circ`. The `pins` are given as
+a mapping from pin names of the element to be created to pins (or nets) in
+`circ`.
+
+# Example
+
+The following will create an element for a 2.5V source, created using a 5V
+source and a voltage divider, stabilized with a capacitor.
+
+```jldoctest; output = false, setup = :(using ACME), filter = r"(ACME\.)?Element\(.*"s
+circ = @circuit(begin
+   r1 = resistor(10e3)
+   r2 = resistor(10e3), [1] == r1[2]
+   c = capacitor(1e-6), [1] == r2[1], [2] == r2[2]
+   src = voltagesource(5), [+] == r1[1], [-] == r2[2]
+end
+
+composite_element(circ, [1 => (:r2, 1), 2 => (:r2, 2)])
+
+# output
+
+Element(...)
+```
+
+Note that the pins still implicitly specifiy ports, so an even number must be
+given, but the same pin may be given multiple times to be part of multiple
+ports.
+""" function composite_element(circ::Circuit, pins::Vector{<:Pair})
+    if ny(circ) > 0
+        throw(ArgumentError("creating composite elements from circuits with outputs is not supported"))
+    end
+    if isodd(length(pins))
+        throw(ArgumentError("`length(pins)`=$(length(pins)), but must be even"))
+    end
+    numports = length(pins) ÷ 2
+    # construct system matrix with norators for connection ports included
+    Mᵥ = blockdiag(mv(circ), spzeros(numports, numports))
+    Mᵢ = blockdiag(mi(circ), spzeros(numports, numports))
+    Mₓ = [mx(circ); spzeros(numports, nx(circ))]
+    Mₓ´ = [mxd(circ); spzeros(numports, nx(circ))]
+    Mq = [mq(circ); spzeros(numports, nq(circ))]
+    Mu = [mu(circ); spzeros(numports, nu(circ))]
+    u0 = [ACME.u0(circ); spzeros(numports)]
+    incid = [incidence(circ) spzeros(Int, length(circ.nets), numports)]
+    b = nb(circ)+1
+    p = 1
+    for pin_mapping in pins
+        net = netfor!(circ, pin_mapping[2])
+        row = findfirst(==(net), circ.nets)
+        incid[row, b] = p
+        if p == 1
+            p = -1
+        else
+            p = 1
+            b += 1
+        end
+    end
+    tv, ti = topomat!(incid)
+    S = SparseMatrixCSC{Rational{BigInt}}([Mᵥ Mᵢ Mₓ Mₓ´ Mq;
+        blockdiag(tv, ti) spzeros(nb(circ)+numports, 2nx(circ)+nq(circ))])
+    ũ, M = gensolve(S, SparseMatrixCSC{Rational{BigInt}}([Mu u0; spzeros(nb(circ)+numports, nu(circ)+1)]))
+    # [v' i' x' xd' q']' = ũ + My for arbitrary y
+    # now drop all rows concerning only internal voltages and currents
+    indices = vcat(consecranges([nb(circ), numports, nb(circ), numports+2nx(circ)+nq(circ)])[[2,4]]...)
+    ũ = ũ[indices,:]
+    M = M[indices,:]
+    S̃ = SparseMatrixCSC(gensolve(M', spzeros(size(M,2), 0))[2]') # output matrices p as RHS?
+    # S̃ spans nullspace of M', so that
+    #    S̃*[v' i' x' xd' q']' = S̃*ũ + S̃*My = S̃*ũ
+    # i.e. S̃ acts as a new system matrix
+    M̃ᵥ, M̃ᵢ, M̃ₓ, M̃ₓ´, M̃q =
+        matsplit(S̃, [size(S̃,1)], [numports, numports, nx(circ), nx(circ), nq(circ)])
+    M̃u = S̃*ũ[:, 1:nu(circ)]
+    ũ0 = S̃*ũ[:, end]
+    # note that we need to flip the sign of M̃ᵢ to view the ports from the other side
+    return Element(mv = M̃ᵥ, mi = -M̃ᵢ, mx = M̃ₓ, mxd = M̃ₓ´, mq = M̃q,
+        mu = M̃u, u0 = ũ0,
+        nonlinear_eq=nonlinear_eq_func(circ),
+        pins=[pin_mapping[1] for pin_mapping in pins])
 end
