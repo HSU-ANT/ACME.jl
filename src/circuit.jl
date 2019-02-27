@@ -73,9 +73,12 @@ function nonlinear_eq_func(c::Circuit, elem_idxs=1:length(elements(c)))
     col_offset = 0
     funcs = Function[]
     for elem in collect(elements(c))[elem_idxs]
+        if nn(elem) == 0 && nq(elem) == 0
+            continue
+        end
         if VERSION >= v"0.7"
             push!(funcs,
-                let q_indices=SVector{nq(elem)}(col_offset+1:col_offset+nq(elem)),
+                let q_indices=SVector{nq(elem),Int}(col_offset+1:col_offset+nq(elem)),
                     nleqfunc=nonlinear_eq_func(elem)
                     @inline function (q)
                         nleqfunc(q[q_indices])
@@ -83,7 +86,7 @@ function nonlinear_eq_func(c::Circuit, elem_idxs=1:length(elements(c)))
                 end)
         else
             # needed to avoid allocation (during model execution) on Julia 0.6
-            q_indices=SVector{nq(elem)}(col_offset+1:col_offset+nq(elem))
+            q_indices=SVector{nq(elem),Int}(col_offset+1:col_offset+nq(elem))
             push!(funcs, eval(quote
                 @inline function (q)
                     $(nonlinear_eq_func(elem))(q[$q_indices])
