@@ -498,7 +498,7 @@ ports.
     return Element(mv = M̃ᵥ, mi = -M̃ᵢ, mx = M̃ₓ, mxd = M̃ₓ´, mq = M̃q,
         mu = M̃u, u0 = ũ0,
         nonlinear_eq=nonlinear_eq_func(circ),
-        pins=vcat(collect.(ports)...))
+        ports=ports)
 end
 
 function ports_from_pinmap(pinmap)

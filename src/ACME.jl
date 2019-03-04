@@ -52,17 +52,6 @@ mutable struct Element
       end
     end
 
-    function make_pin_dict(syms)
-      dict = Dict{Symbol,Vector{Tuple{Int, Int}}}()
-      for i in 1:length(syms)
-        branch = (i+1) ÷ 2
-        polarity = 2(i % 2) - 1
-        push!(get!(dict, Symbol(syms[i]), []), (branch, polarity))
-      end
-      dict
-    end
-    make_pin_dict(dict::Dict) = dict
-
     mat_dims =
         Dict( :mv => (:nl,:nb), :mi => (:nl,:nb), :mx => (:nl,:nx),
               :mxd => (:nl,:nx), :mq => (:nl,:nq), :mu => (:nl,:nu),
@@ -75,8 +64,20 @@ mutable struct Element
       if haskey(mat_dims, key)
         val = convert(SparseMatrixCSC{Real,Int}, hcat(val)) # turn val into a sparse matrix whatever it is
         update_sizes(val, mat_dims[key])
-      elseif key == :pins
-        val = make_pin_dict(val)
+      else
+          if key === :pins && !(val isa Dict)
+              val = ports_from_old_pins(val)
+              key = :ports
+          end
+          if key === :ports
+              pins = Dict{Symbol,Vector{Tuple{Int, Int}}}()
+              for branch in 1:length(val)
+                  push!(get!(pins, Symbol(val[branch][1]), []), (branch, 1))
+                  push!(get!(pins, Symbol(val[branch][2]), []), (branch, -1))
+              end
+              val = pins
+              key = :pins
+          end
       end
       setfield!(elem, key, val)
     end
@@ -92,7 +93,7 @@ mutable struct Element
         elem.nonlinear_eq = wrap_nleq_expr(nn, get(sizes, :nq, 0), elem.nonlinear_eq)
     end
     if !isdefined(elem, :pins)
-      elem.pins = make_pin_dict(1:2nb(elem))
+        elem.pins = Dict(Symbol(i) => [((i+1) ÷ 2, 2(i % 2) - 1)] for i in 1:2nb(elem))
     end
     elem
   end

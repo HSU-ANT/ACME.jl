@@ -16,7 +16,7 @@ Pins: `1`, `2`
 resistor(r) = Element(mv=-1, mi=r)
 
 potentiometer(r, pos) = Element(mv=Matrix{Int}(-I, 2, 2), mi=[r*pos 0; 0 r*(1-pos)],
-                                pins=[1, 2, 2, 3])
+                                ports=[1 => 2, 2 => 3])
 potentiometer(r) =
     Element(mv=[Matrix{Int}(I, 2, 2); zeros(3, 2)],
             mi=[zeros(2, 2); Matrix{Int}(I, 2, 2); zeros(1, 2)],
@@ -28,7 +28,7 @@ potentiometer(r) =
                     J = @SMatrix [1 0 -r*pos 0 -r*i1; 0 1 0 -r*(1-pos) -r*i2]
                     return (res, J)
                 end),
-            pins=[1, 2, 2, 3])
+            ports=[1 => 2, 2 => 3])
 
 """
     capacitor(c)
@@ -64,7 +64,7 @@ transformer(l1, l2; coupling_coefficient=1,
     Element(mv=[1 0; 0 1; 0 0; 0 0],
             mi=[0 0; 0 0; l1 mutual_coupling; mutual_coupling l2],
             mx=[0 0; 0 0; -1 0; 0 -1], mxd=[-1 0; 0 -1; 0 0; 0 0],
-            pins=[:primary1; :primary2; :secondary1; :secondary2])
+            ports=[:primary1 => :primary2, :secondary1 => :secondary2])
 
 """
     transformer(Val{:JA}; D, A, ns, a, α, c, k, Ms)
@@ -173,8 +173,8 @@ internal series resistance `rs` (in Ohm) can be given which defaults to zero.
 Pins: `+` and `-` with `v` being measured from `+` to `-`
 """
 function voltagesource end
-voltagesource(v; rs=0) = Element(mv=1, mi=-rs, u0=v, pins=[:+; :-])
-voltagesource(; rs=0) = Element(mv=1, mi=-rs, mu=1, pins=[:+; :-])
+voltagesource(v; rs=0) = Element(mv=1, mi=-rs, u0=v, ports=[:+ => :-])
+voltagesource(; rs=0) = Element(mv=1, mi=-rs, mu=1, ports=[:+ => :-])
 
 """
     currentsource(; gp=0)
@@ -188,8 +188,8 @@ zero.
 Pins: `+` and `-` where `i` measures the current leaving source at the `+` pin
 """
 function currentsource end
-currentsource(i; gp=0) = Element(mv=gp, mi=-1, u0=i, pins=[:+; :-])
-currentsource(; gp=0) = Element(mv=gp, mi=-1, mu=1, pins=[:+; :-])
+currentsource(i; gp=0) = Element(mv=gp, mi=-1, u0=i, ports=[:+ => :-])
+currentsource(; gp=0) = Element(mv=gp, mi=-1, mu=1, ports=[:+ => :-])
 
 """
     voltageprobe()
@@ -200,7 +200,7 @@ defaults to zero.
 
 Pins: `+` and `-` with the output voltage being measured from `+` to `-`
 """
-voltageprobe(;gp=0) = Element(mv=-gp, mi=1, pv=1, pins=[:+; :-])
+voltageprobe(;gp=0) = Element(mv=-gp, mi=1, pv=1, ports=[:+ => :-])
 
 """
     currentprobe()
@@ -212,7 +212,7 @@ defaults to zero.
 Pins: `+` and `-` with the output current being the current entering the probe
 at `+`
 """
-currentprobe(;rs=0) = Element(mv=1, mi=-rs, pi=1, pins=[:+; :-])
+currentprobe(;rs=0) = Element(mv=1, mi=-rs, pi=1, ports=[:+ => :-])
 
 @doc doc"""
     diode(;is=1e-12, η = 1)
@@ -224,7 +224,7 @@ coefficient `η` is unitless.
 
 Pins: `+` (anode) and `-` (cathode)
 """ diode(;is::Real=1e-12, η::Real = 1) =
-  Element(mv=[1;0], mi=[0;1], mq=[-1 0; 0 -1], pins=[:+; :-], nonlinear_eq =
+  Element(mv=[1;0], mi=[0;1], mq=[-1 0; 0 -1], ports=[:+ => :-], nonlinear_eq =
         @inline function(q)
             v, i = q
             ex = exp(v*(1 / (25e-3 * η)))
@@ -390,7 +390,7 @@ Pins: `base`, `emitter`, `collector`
     return Element(mv=[1 0; 0 1; 0 0; 0 0],
                    mi = [-(re+rb) -rb; -rb -(rc+rb); 1 0; 0 1],
                    mq = Matrix{Int}(-polarity*I, 4, 4), nonlinear_eq = nonlinear_eq,
-                   pins = [:base; :emitter; :base; :collector])
+                   ports = [:base => :emitter, :base => :collector])
 end
 
 @doc doc"""
@@ -422,7 +422,7 @@ Pins: `gate`, `source`, `drain`
         mi=[0 0; 0 0; 0 -1; 1 0],
         mq=polarity*[1 0 0; 0 1 0; 0 0 1; 0 0 0],
         u0=polarity*[-vt; 0; 0; 0],
-        pins=[:gate, :source, :drain, :source],
+        ports=[:gate => :source, :drain => :source],
         nonlinear_eq = @inline function (q)
             vg, vds, id=q # vg = vgs-vt
             if vg <= 0
@@ -453,7 +453,7 @@ output pin.
 Pins: `in+` and `in-` for input, `out+` and `out-` for output
 """
 opamp() = Element(mv=[0 0; 1 0], mi=[1 0; 0 0],
-                  pins=["in+", "in-", "out+", "out-"])
+                  ports=["in+" => "in-", "out+" => "out-"])
 
 @doc doc"""
     opamp(Val{:macak}, gain, vomin, vomax)
@@ -485,5 +485,5 @@ Pins: `in+` and `in-` for input, `out+` and `out-` for output
     return Element(mv=[0 0; 1 0; 0 1], mi=[1 0; 0 0; 0 0], mq=[0 0; -1 0; 0 -1],
                    u0=[0; 0; offset],
                    nonlinear_eq = nonlinear_eq,
-                   pins=["in+", "in-", "out+", "out-"])
+                   ports=["in+" => "in-", "out+" => "out-"])
 end

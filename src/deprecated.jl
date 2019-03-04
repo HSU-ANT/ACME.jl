@@ -35,5 +35,11 @@ function wrap_nleq_expr(nn, nq, expr)
     end)
 end
 
+function ports_from_old_pins(pins)
+    ports = [pins[2i-1] => pins[2i] for i in 1:length(pins)÷2]
+    Base.depwarn("`Element(..., pins=$(repr(pins)))` is depreated, use `Element(..., ports=$(repr(ports, context=:typeinfo=>typeof(ports))))` instead", :Element)
+    return ports
+end
+
 Base.@deprecate(composite_element(circ::Circuit, pins::Vector{<:Pair}),
     composite_element(circ,  pinmap=Dict(pins...)))
