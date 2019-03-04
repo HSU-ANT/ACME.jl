@@ -487,6 +487,3 @@ Pins: `in+` and `in-` for input, `out+` and `out-` for output
                    nonlinear_eq = nonlinear_eq,
                    pins=["in+", "in-", "out+", "out-"])
 end
-
-@Base.deprecate(opamp_ideal, opamp)
-@Base.deprecate(opamp_macak(gain, vomin, vomax), opamp(Val{:macak}, gain, vomin, vomax))

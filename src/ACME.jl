@@ -17,8 +17,6 @@ using IterTools
 using DataStructures
 using StaticArrays
 
-import Base.getindex
-
 include("compat.jl")
 
 include("kdtree.jl")
@@ -108,15 +106,6 @@ nl(e::Element) = size(e.mv, 1)
 ny(e::Element) = size(e.pv, 1)
 nn(e::Element) = nb(e) + nx(e) + nq(e) - nl(e)
 
-# a Pin combines an element with a branch/polarity list
-const Pin = Tuple{Element, Vector{Tuple{Int,Int}}}
-
-# allow elem[:pin] notation to get an elements pin
-function getindex(e::Element, p)
-    Base.depwarn("element[$(repr(p))] is deprecated. When connecting pins, use (designator, $(repr(p))) instead", :getindex)
-    return (e, e.pins[Symbol(p)])
-end
-
 nonlinear_eq_func(e::Element) = e.nonlinear_eq
 
 function wrap_nleq_expr(nn, nq, expr)
@@ -189,12 +178,6 @@ mutable struct DiscreteModel{Solvers}
         model.x = zeros(nx(model))
         return model
     end
-end
-
-function DiscreteModel{Solver}(circ::Circuit, t::Float64) where {Solver}
-    Base.depwarn("DiscreteModel{Solver}(circ, t) is deprecated, use DiscreteModel(circ, t, Solver) instead.",
-                 :DiscreteModel)
-    DiscreteModel(circ, t, Solver)
 end
 
 function DiscreteModel(circ::Circuit, t::Real, ::Type{Solver}=HomotopySolver{CachingSolver{SimpleSolver}};

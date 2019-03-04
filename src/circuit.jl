@@ -166,20 +166,6 @@ function netfor!(c::Circuit, p::Tuple{Symbol,Symbol})
 end
 netfor!(c::Circuit, p::Tuple{Symbol,Any}) = netfor!(c, (p[1], Symbol(p[2])))
 
-function netfor!(c::Circuit, p::Pin)
-    Base.depwarn("pin specification $p is deprecated, use (refdes, pinname) instead", :netfor!)
-    element = p[1]
-    designator = add!(c, element)
-    local pinname
-    for (pname, pbps) in element.pins
-        if pbps == p[2]
-            pinname = pname
-            break
-        end
-    end
-    return netfor!(c, (designator, pinname))
-end
-
 function netfor!(c::Circuit, name::Symbol)
     haskey(c.net_names, name) || push!(c.nets, get!(c.net_names, name, []))
     c.net_names[name]
@@ -206,7 +192,7 @@ connect!(circ, (:src, -), (:r, 2), :gnd) # connect to gnd net
 
 ```
 """
-function connect!(c::Circuit, pins::Union{Pin,Symbol,Tuple{Symbol,Any}}...)
+function connect!(c::Circuit, pins::Union{Symbol,Tuple{Symbol,Any}}...)
     nets = unique([netfor!(c, pin) for pin in pins])
     for net in nets[2:end]
         append!(nets[1], net)
@@ -236,20 +222,6 @@ that if e.g. three pin `p1`, `p2`, and `p3` are connected then
 `p3` connected to each other.
 """
 disconnect!(c::Circuit, p::Tuple{Symbol,Any}) = disconnect!(c, (p[1], Symbol(p[2])))
-
-function disconnect!(c::Circuit, pin::Pin)
-    Base.depwarn("disconnect!(::Circuit, $p) is deprecated, use (refdes, pinname) to specify the the pin", :disconnect!)
-    element = pin[1]
-    designator = add!(c, element)
-    local pinname
-    for (pname, pbps) in element.pins
-        if pbps == pin[2]
-            pinname = pname
-            break
-        end
-    end
-    disconnect!(c, (designator, pinname))
-end
 
 function topomat!(incidence::SparseMatrixCSC{T}) where {T<:Integer}
     @assert all(x -> abs(x) == 1, nonzeros(incidence))
