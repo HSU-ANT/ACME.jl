@@ -449,11 +449,13 @@ be put in quotes (e.g. `"in+"`, `"9V"`)
 end
 
 @doc doc"""
-    composite_element(circ, pins)
+    composite_element(circ; pinmap=Dict(), ports)
 
-Create a circuit element from the (sub-)circuit `circ`. The `pins` are given as
-a mapping from pin names of the element to be created to pins (or nets) in
-`circ`.
+Create a circuit element from the (sub-)circuit `circ`. The `pinmap` defines
+the mapping from pin names of the element to be created to pins (or nets) in
+`circ`. Optionally, `ports` can be used to explicitly specify (as a list `Pair`s
+of pins) the ports to use. By default, a port will be created between one
+arbitrarily chosen pin and every other pin.
 
 # Example
 
@@ -468,7 +470,7 @@ circ = @circuit(begin
    src = voltagesource(5), [+] == r1[1], [-] == r2[2]
 end
 
-composite_element(circ, [1 => (:r2, 1), 2 => (:r2, 2)])
+composite_element(circ, pinmap=Dict(1 => (:r2, 1), 2 => (:r2, 2)))
 
 # output
 
@@ -478,14 +480,11 @@ Element(...)
 Note that the pins still implicitly specifiy ports, so an even number must be
 given, but the same pin may be given multiple times to be part of multiple
 ports.
-""" function composite_element(circ::Circuit, pins::Vector{<:Pair})
+""" function composite_element(circ::Circuit; pinmap=Dict(), ports=ports_from_pinmap(pinmap))
     if ny(circ) > 0
         throw(ArgumentError("creating composite elements from circuits with outputs is not supported"))
     end
-    if isodd(length(pins))
-        throw(ArgumentError("`length(pins)`=$(length(pins)), but must be even"))
-    end
-    numports = length(pins) ÷ 2
+    numports = length(ports)
     # construct system matrix with norators for connection ports included
     Mᵥ = blockdiag(mv(circ), spzeros(numports, numports))
     Mᵢ = blockdiag(mi(circ), spzeros(numports, numports))
@@ -495,19 +494,17 @@ ports.
     Mu = [mu(circ); spzeros(numports, nu(circ))]
     u0 = [ACME.u0(circ); spzeros(numports)]
     incid = [incidence(circ) spzeros(Int, length(circ.nets), numports)]
-    b = nb(circ)+1
-    p = 1
-    for pin_mapping in pins
-        net = netfor!(circ, pin_mapping[2])
+    for i in eachindex(ports)
+        port = ports[i]
+        net = netfor!(circ, pinmap[port[1]])
         row = findfirst(==(net), circ.nets)
-        incid[row, b] = p
-        if p == 1
-            p = -1
-        else
-            p = 1
-            b += 1
-        end
+        b = nb(circ)+i
+        incid[row, b] = 1
+        net = netfor!(circ, pinmap[port[2]])
+        row = findfirst(==(net), circ.nets)
+        incid[row, b] = -1
     end
+
     tv, ti = topomat!(incid)
     S = SparseMatrixCSC{Rational{BigInt}}([Mᵥ Mᵢ Mₓ Mₓ´ Mq;
         blockdiag(tv, ti) spzeros(nb(circ)+numports, 2nx(circ)+nq(circ))])
@@ -529,5 +526,15 @@ ports.
     return Element(mv = M̃ᵥ, mi = -M̃ᵢ, mx = M̃ₓ, mxd = M̃ₓ´, mq = M̃q,
         mu = M̃u, u0 = ũ0,
         nonlinear_eq=nonlinear_eq_func(circ),
-        pins=[pin_mapping[1] for pin_mapping in pins])
+        pins=vcat(collect.(ports)...))
 end
+
+function ports_from_pinmap(pinmap)
+    ks = keys(pinmap)
+    refpin = first(ks)
+    ks = Iterators.drop(ks, 1)
+    return [refpin => pin for pin in ks]
+end
+
+Base.@deprecate(composite_element(circ::Circuit, pins::Vector{<:Pair}),
+    composite_element(circ,  pinmap=Dict(pins...)))
