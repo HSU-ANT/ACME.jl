@@ -88,7 +88,6 @@ mutable struct Element
     if !isdefined(elem, :nonlinear_eq)
       elem.nonlinear_eq = (q) -> (SVector{0,Float64}(), SMatrix{0,0,Float64}())
     elseif elem.nonlinear_eq isa Expr
-        Base.depwarn("nonlinear_eq should be given as a function, not an expression", :Element)
         nn = get(sizes, :nb, 0) + get(sizes, :nx, 0) + get(sizes, :nq, 0) - get(sizes, :nl, 0)
         elem.nonlinear_eq = wrap_nleq_expr(nn, get(sizes, :nq, 0), elem.nonlinear_eq)
     end
@@ -107,38 +106,6 @@ ny(e::Element) = size(e.pv, 1)
 nn(e::Element) = nb(e) + nx(e) + nq(e) - nl(e)
 
 nonlinear_eq_func(e::Element) = e.nonlinear_eq
-
-function wrap_nleq_expr(nn, nq, expr)
-    res_symbs = [gensym("res_$n") for n in 1:nn]
-    J_symbs = [gensym("J_$(m)_$n") for m in 1:nn, n in 1:nq]
-
-    function rewrite_refs(expr::Expr)
-        if expr.head == :ref
-            if expr.args[1] === :res
-                return res_symbs[expr.args[2]]
-            elseif expr.args[1] === :J
-                return J_symbs[expr.args[2], expr.args[3]]
-            end
-            return expr
-        else
-            return Expr(expr.head, rewrite_refs.(expr.args)...)
-        end
-    end
-
-    rewrite_refs(x::Any) = x
-
-    expr = rewrite_refs(expr)
-
-    return eval(quote
-        @inline function (q)
-            $(nn > 0 || nq > 0 ? Expr(:local, res_symbs..., J_symbs...) : nothing)
-            $(expr)
-            res = SVector{$nn}($(res_symbs...))
-            J = SMatrix{$nn,$nq}($(J_symbs...))
-            return (res, J)
-        end
-    end)
-end
 
 include("elements.jl")
 
@@ -778,5 +745,7 @@ consecranges(lengths) = map((l, e) -> (e-l+1):e, lengths, cumsum(lengths))
 matsplit(v::AbstractVector, rowsizes) = [v[rs] for rs in consecranges(rowsizes)]
 matsplit(m::AbstractMatrix, rowsizes, colsizes=[size(m,2)]) =
     [m[rs, cs] for rs in consecranges(rowsizes), cs in consecranges(colsizes)]
+
+include("deprecated.jl")
 
 end # module

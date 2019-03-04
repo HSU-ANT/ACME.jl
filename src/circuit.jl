@@ -507,6 +507,3 @@ function ports_from_pinmap(pinmap)
     ks = Iterators.drop(ks, 1)
     return [refpin => pin for pin in ks]
 end
-
-Base.@deprecate(composite_element(circ::Circuit, pins::Vector{<:Pair}),
-    composite_element(circ,  pinmap=Dict(pins...)))
