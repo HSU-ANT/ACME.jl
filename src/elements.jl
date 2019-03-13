@@ -1,9 +1,9 @@
-# Copyright 2015, 2016, 2017, 2018 Martin Holters
+# Copyright 2015, 2016, 2017, 2018, 2019 Martin Holters
 # See accompanying license file.
 
 export resistor, potentiometer, capacitor, inductor, transformer,
        voltagesource, currentsource,
-       voltageprobe, currentprobe, diode, bjt, opamp
+       voltageprobe, currentprobe, diode, bjt, mosfet, opamp
 
 
 """
@@ -16,28 +16,19 @@ Pins: `1`, `2`
 resistor(r) = Element(mv=-1, mi=r)
 
 potentiometer(r, pos) = Element(mv=Matrix{Int}(-I, 2, 2), mi=[r*pos 0; 0 r*(1-pos)],
-                                pins=[1, 2, 2, 3])
+                                ports=[1 => 2, 2 => 3])
 potentiometer(r) =
     Element(mv=[Matrix{Int}(I, 2, 2); zeros(3, 2)],
             mi=[zeros(2, 2); Matrix{Int}(I, 2, 2); zeros(1, 2)],
             mq=Matrix{Int}(-I, 5, 5), mu=[zeros(4, 1); -1],
-            nonlinear_eq = quote
-                let v1=q[1], v2=q[2], i1=q[3], i2=q[4], pos=q[5]
-                    res[1] = v1 - $(r)*pos*i1
-                    res[2] = v2 - $(r)*(1-pos)*i2
-                    J[1,1] = 1
-                    J[1,2] = 0
-                    J[1,3] = $(-r)*pos
-                    J[1,4] = 0
-                    J[1,5] = $(-r)*i1
-                    J[2,1] = 0
-                    J[2,2] = 1
-                    J[2,3] = 0
-                    J[2,4] = $(-r)*(1-pos)
-                    J[2,5] = $(-r)*i2
-                end
-            end,
-            pins=[1, 2, 2, 3])
+            nonlinear_eq =
+                (@inline function (q)
+                    v1, v2, i1, i2, pos=q
+                    res = @SVector [v1 - r*pos*i1, v2 - r*(1-pos)*i2]
+                    J = @SMatrix [1 0 -r*pos 0 -r*i1; 0 1 0 -r*(1-pos) -r*i2]
+                    return (res, J)
+                end),
+            ports=[1 => 2, 2 => 3])
 
 """
     capacitor(c)
@@ -73,7 +64,7 @@ transformer(l1, l2; coupling_coefficient=1,
     Element(mv=[1 0; 0 1; 0 0; 0 0],
             mi=[0 0; 0 0; l1 mutual_coupling; mutual_coupling l2],
             mx=[0 0; 0 0; -1 0; 0 -1], mxd=[-1 0; 0 -1; 0 0; 0 0],
-            pins=[:primary1; :primary2; :secondary1; :secondary2])
+            ports=[:primary1 => :primary2, :secondary1 => :secondary2])
 
 """
     transformer(Val{:JA}; D, A, ns, a, α, c, k, Ms)
@@ -108,7 +99,7 @@ on
 function transformer(::Type{Val{:JA}}; D=2.4e-2, A=4.54e-5, ns=[],
                      a=14.1, α=5e-5, c=0.55, k=17.8, Ms=2.75e5)
     μ0 = 1.2566370614e-6
-    nonlinear_eq = quote
+    nonlinear_eq = @inline function (q)
         coth_q1 = coth(q[1])
         a_q1 = abs(q[1])
         L_q1 = a_q1 < 1e-4 ? q[1]/3 : coth_q1 - 1/q[1]
@@ -116,19 +107,20 @@ function transformer(::Type{Val{:JA}}; D=2.4e-2, A=4.54e-5, ns=[],
         Ld2_q1 = a_q1 < 1e-3 ? -2/15*q[1] : 2*coth_q1*(coth_q1^2 - 1) - 2/q[1]^3
         δ = q[3] > 0 ? 1.0 : -1.0
 
-        Man = $(Ms)*L_q1
+        Man = Ms*L_q1
         δM = sign(q[3]) == sign(Man - q[2]) ? 1.0 : 0.0
 
-        den = δ*$(k*(1-c))-$(α)*(Man-q[2])
+        den = δ*(k*(1-c))-α*(Man-q[2])
         # at present, the error needs to be scaled to be comparable to those of
         # the other elements, hence the factor 1e-4/Ms
-        res[1] = $(1e-4/Ms) * ($(1-c) * δM*(Man-q[2])/den * q[3]
-                               + $(c*Ms/a)*(q[3]+$(α)*q[4])*Ld_q1 - q[4])
-        J[1,1] = $(1e-4/Ms) * ($((1-c)^2*k*Ms) * δM*Ld_q1*δ/den^2 * q[3]
-                               + $(c*Ms/a)*(q[3]+$(α)*q[4])*Ld2_q1)
-        J[1,2] = $(1e-4/Ms) * -$((1-c)^2*k) * δM*δ/den^2 * q[3]
-        J[1,3] = $(1e-4/Ms) * ($(1-c) * δM*(Man-q[2])/den + $(c*Ms/a)*Ld_q1)
-        J[1,4] = $(1e-4/Ms) * ($(c * Ms/a * α)*Ld_q1 - 1)
+        res = @SVector [(1e-4/Ms) * ((1-c) * δM*(Man-q[2])/den * q[3]
+                                     + (c*Ms/a)*(q[3]+α*q[4])*Ld_q1 - q[4])]
+        J_1_1 = (1e-4/Ms) * (((1-c)^2*k*Ms) * δM*Ld_q1*δ/den^2 * q[3]
+                               + (c*Ms/a)*(q[3]+α*q[4])*Ld2_q1)
+        J_1_2 = (1e-4/Ms) * -(1-c)^2*k * δM*δ/den^2 * q[3]
+        J_1_3 = (1e-4/Ms) * ((1-c) * δM*(Man-q[2])/den + (c*Ms/a)*Ld_q1)
+        J_1_4 = (1e-4/Ms) * ((c * Ms/a * α)*Ld_q1 - 1)
+        return (res, @SMatrix [J_1_1 J_1_2; J_2_1 J_2_2])
     end
     Element(mv=[speye(length(ns)); spzeros(5, length(ns))],
             mi=[spzeros(length(ns), length(ns)); ns'; spzeros(4, length(ns))],
@@ -181,8 +173,8 @@ internal series resistance `rs` (in Ohm) can be given which defaults to zero.
 Pins: `+` and `-` with `v` being measured from `+` to `-`
 """
 function voltagesource end
-voltagesource(v; rs=0) = Element(mv=1, mi=-rs, u0=v, pins=[:+; :-])
-voltagesource(; rs=0) = Element(mv=1, mi=-rs, mu=1, pins=[:+; :-])
+voltagesource(v; rs=0) = Element(mv=1, mi=-rs, u0=v, ports=[:+ => :-])
+voltagesource(; rs=0) = Element(mv=1, mi=-rs, mu=1, ports=[:+ => :-])
 
 """
     currentsource(; gp=0)
@@ -196,8 +188,8 @@ zero.
 Pins: `+` and `-` where `i` measures the current leaving source at the `+` pin
 """
 function currentsource end
-currentsource(i; gp=0) = Element(mv=gp, mi=-1, u0=i, pins=[:+; :-])
-currentsource(; gp=0) = Element(mv=gp, mi=-1, mu=1, pins=[:+; :-])
+currentsource(i; gp=0) = Element(mv=gp, mi=-1, u0=i, ports=[:+ => :-])
+currentsource(; gp=0) = Element(mv=gp, mi=-1, mu=1, ports=[:+ => :-])
 
 """
     voltageprobe()
@@ -208,7 +200,7 @@ defaults to zero.
 
 Pins: `+` and `-` with the output voltage being measured from `+` to `-`
 """
-voltageprobe(;gp=0) = Element(mv=-gp, mi=1, pv=1, pins=[:+; :-])
+voltageprobe(;gp=0) = Element(mv=-gp, mi=1, pv=1, ports=[:+ => :-])
 
 """
     currentprobe()
@@ -220,7 +212,7 @@ defaults to zero.
 Pins: `+` and `-` with the output current being the current entering the probe
 at `+`
 """
-currentprobe(;rs=0) = Element(mv=1, mi=-rs, pi=1, pins=[:+; :-])
+currentprobe(;rs=0) = Element(mv=1, mi=-rs, pi=1, ports=[:+ => :-])
 
 @doc doc"""
     diode(;is=1e-12, η = 1)
@@ -232,14 +224,14 @@ coefficient `η` is unitless.
 
 Pins: `+` (anode) and `-` (cathode)
 """ diode(;is::Real=1e-12, η::Real = 1) =
-  Element(mv=[1;0], mi=[0;1], mq=[-1 0; 0 -1], pins=[:+; :-], nonlinear_eq =
-    quote
-      let v = q[1], i = q[2], ex = exp(v*$(1 / (25e-3 * η)))
-        res[1] = $(is) * (ex - 1) - i
-        J[1,1] = $(is/(25e-3 * η)) * ex
-        J[1,2] = -1
-      end
-    end
+  Element(mv=[1;0], mi=[0;1], mq=[-1 0; 0 -1], ports=[:+ => :-], nonlinear_eq =
+        @inline function(q)
+            v, i = q
+            ex = exp(v*(1 / (25e-3 * η)))
+            res = @SVector [is * (ex - 1) - i]
+            J = @SMatrix [is/(25e-3 * η) * ex -1]
+            return (res, J)
+        end
   )
 
 @doc doc"""
@@ -314,127 +306,137 @@ Pins: `base`, `emitter`, `collector`
         throw(ArgumentError(string("Unknown bjt type ", typ,
                                    ", must be :npn or :pnp")))
     end
-    kernel = quote
-        i_f = $(βf/(1+βf)*ise) * (expE - 1)
-        i_r = $(βr/(1+βr)*isc) * (expC - 1)
-        di_f1 = $(βf/(1+βf)*ise/(25e-3*ηe)) * expE
-        di_r2 = $(βr/(1+βr)*isc/(25e-3*ηc)) * expC
-    end
-    if var == Inf && vaf == Inf && ikf == Inf && ikr == Inf
-        append!(kernel.args, (quote
-            i_cc = i_f-i_r
-            di_cc1 = di_f1
-            di_cc2 = -di_r2
-        end).args)
-    elseif (var ≠ Inf || vaf ≠ Inf) && ikf == Inf && ikr == Inf
-        append!(kernel.args, (quote
-            # inverse Early voltage factor
-            q₁⁻¹ = 1 - vE*$(1/var) - vC*$(1/vaf)
-            i_cc = q₁⁻¹ * (i_f-i_r)
-            # partial derivatives without high level injection effect
-            dq₁⁻¹1 = $(-1/var)
-            dq₁⁻¹2 = $(-1/vaf)
-            di_cc1 = dq₁⁻¹1*(i_f-i_r) + q₁⁻¹*di_f1
-            di_cc2 = dq₁⁻¹2*(i_f-i_r) - q₁⁻¹*di_r2
-        end).args)
-    elseif var == Inf && vaf == Inf && (ikf ≠ Inf || ikr ≠ Inf)
-        append!(kernel.args, (quote
-            # high level injection effect
-            q₂ = i_f*$(1/ikf) + i_r*$(1/ikr)
-            qden = 1+sqrt(1+4q₂)
-            qfact = 2/qden
-            i_cc = qfact * (i_f-i_r)
-            # partial derivatives without Early effect
-            dq₂1 = di_f1*$(1/ikf)
-            dq₂2 = di_r2*$(1/ikr)
-            dqfact1 = -4dq₂1/(qden-1) / (qden^2)
-            dqfact2 = -4dq₂2/(qden-1) / (qden^2)
-            di_cc1 = dqfact1*(i_f-i_r) + qfact*di_f1
-            di_cc2 = dqfact2*(i_f-i_r) - qfact*di_r2
-        end).args)
-    else
-        append!(kernel.args, (quote
-            # inverse Early voltage factor
-            q₁⁻¹ = 1 - vE*$(1/var) - vC*$(1/vaf)
-            # high level injection effect
-            q₂ = i_f*$(1/ikf) + i_r*$(1/ikr)
-            qden = 1+sqrt(1+4q₂)
-            qfact = 2q₁⁻¹/qden
-            i_cc = qfact * (i_f-i_r)
-            # partial derivatives with high level injection effect and Early effect
-            dq₁⁻¹1 = $(-1/var)
-            dq₁⁻¹2 = $(-1/vaf)
-            dq₂1 = di_f1*$(1/ikf)
-            dq₂2 = di_r2*$(1/ikr)
-            dqfact1 = (2dq₁⁻¹1*qden - q₁⁻¹*4dq₂1/(qden-1)) / (qden^2)
-            dqfact2 = (2dq₁⁻¹2*qden - q₁⁻¹*4dq₂2/(qden-1)) / (qden^2)
-            di_cc1 = dqfact1*(i_f-i_r) + qfact*di_f1
-            di_cc2 = dqfact2*(i_f-i_r) - qfact*di_r2
-        end).args)
-    end
-
-    if ile ≠ 0
-        if ηel ≠ ηe
-            append!(kernel.args, (quote
-                expEl = exp(vE*$(1/(25e-3*ηel)))
-                iBE = $(1/βf)*i_f + $ile*(expEl - 1)
-                diBE1 = $(1/βf)*di_f1 + $(ile/(25e-3*ηe))*expEl
-            end).args)
-        else
-            append!(kernel.args, (quote
-                iBE = $(1/βf)*i_f + $ile*(expE - 1)
-                diBE1 = $(1/βf)*di_f1 + $(ile/(25e-3*ηe))*expE
-            end).args)
-        end
-    else
-        append!(kernel.args, (quote
-            iBE = $(1/βf)*i_f
-            diBE1 = $(1/βf)*di_f1
-        end).args)
-    end
-    if ilc ≠ 0
-        if ηcl ≠ ηc
-            append!(kernel.args, (quote
-                expCl = exp(vC*$(1/(25e-3*ηcl)))
-                iBC = $(1/βr)*i_r + $ilc*(expCl - 1)
-                diBC2 = $(1/βr)*di_r2 + $(ilc/(25e-3*ηc))*expCl
-            end).args)
-        else
-            append!(kernel.args, (quote
-                iBC = $(1/βr)*i_r + $ilc*(expC - 1)
-                diBC2 = $(1/βr)*di_r2 + $(ilc/(25e-3*ηc))*expC
-            end).args)
-        end
-    else
-        append!(kernel.args, (quote
-            iBC = $(1/βr)*i_r
-            diBC2 = $(1/βr)*di_r2
-        end).args)
-    end
 
     nonlinear_eq =
-        quote
-            let vE = q[1], vC = q[2], iE = q[3], iC = q[4],
-                expE=exp(vE*$(1/(25e-3*ηe))), expC=exp(vC*$(1/(25e-3*ηc)))
-
-                $kernel
-
-                res[1] = i_cc + iBE - iE
-                res[2] = -i_cc + iBC - iC
-                J[1,1] = di_cc1 + diBE1
-                J[1,2] = di_cc2
-                J[1,3] = -1.0
-                J[1,4] = 0.0
-                J[2,1] = -di_cc1
-                J[2,2] = -di_cc2 + diBC2
-                J[2,3] = 0.0
-                J[2,4] = -1.0
+        @inline function (q)
+            vE, vC, iE, iC = q
+            expE=exp(vE*(1/(25e-3*ηe)))
+            expC=exp(vC*(1/(25e-3*ηc)))
+            i_f = (βf/(1+βf)*ise) * (expE - 1)
+            i_r = (βr/(1+βr)*isc) * (expC - 1)
+            di_f1 = (βf/(1+βf)*ise/(25e-3*ηe)) * expE
+            di_r2 = (βr/(1+βr)*isc/(25e-3*ηc)) * expC
+            if var == Inf && vaf == Inf && ikf == Inf && ikr == Inf
+                i_cc = i_f-i_r
+                di_cc1 = di_f1
+                di_cc2 = -di_r2
+            elseif (var ≠ Inf || vaf ≠ Inf) && ikf == Inf && ikr == Inf
+                # inverse Early voltage factor
+                q₁⁻¹ = 1 - vE*(1/var) - vC*(1/vaf)
+                i_cc = q₁⁻¹ * (i_f-i_r)
+                # partial derivatives without high level injection effect
+                dq₁⁻¹1 = (-1/var)
+                dq₁⁻¹2 = (-1/vaf)
+                di_cc1 = dq₁⁻¹1*(i_f-i_r) + q₁⁻¹*di_f1
+                di_cc2 = dq₁⁻¹2*(i_f-i_r) - q₁⁻¹*di_r2
+            elseif var == Inf && vaf == Inf && (ikf ≠ Inf || ikr ≠ Inf)
+                # high level injection effect
+                q₂ = i_f*(1/ikf) + i_r*(1/ikr)
+                qden = 1+sqrt(1+4q₂)
+                qfact = 2/qden
+                i_cc = qfact * (i_f-i_r)
+                # partial derivatives without Early effect
+                dq₂1 = di_f1*(1/ikf)
+                dq₂2 = di_r2*(1/ikr)
+                dqfact1 = -4dq₂1/(qden-1) / (qden^2)
+                dqfact2 = -4dq₂2/(qden-1) / (qden^2)
+                di_cc1 = dqfact1*(i_f-i_r) + qfact*di_f1
+                di_cc2 = dqfact2*(i_f-i_r) - qfact*di_r2
+            else
+                # inverse Early voltage factor
+                q₁⁻¹ = 1 - vE*(1/var) - vC*(1/vaf)
+                # high level injection effect
+                q₂ = i_f*(1/ikf) + i_r*(1/ikr)
+                qden = 1+sqrt(1+4q₂)
+                qfact = 2q₁⁻¹/qden
+                i_cc = qfact * (i_f-i_r)
+                # partial derivatives with high level injection effect and Early effect
+                dq₁⁻¹1 = -1/var
+                dq₁⁻¹2 = -1/vaf
+                dq₂1 = di_f1*(1/ikf)
+                dq₂2 = di_r2*(1/ikr)
+                dqfact1 = (2dq₁⁻¹1*qden - q₁⁻¹*4dq₂1/(qden-1)) / (qden^2)
+                dqfact2 = (2dq₁⁻¹2*qden - q₁⁻¹*4dq₂2/(qden-1)) / (qden^2)
+                di_cc1 = dqfact1*(i_f-i_r) + qfact*di_f1
+                di_cc2 = dqfact2*(i_f-i_r) - qfact*di_r2
             end
+            iBE = (1/βf)*i_f
+            diBE1 = (1/βf)*di_f1
+            if ile ≠ 0
+                if ηel ≠ ηe
+                    expEl = exp(vE*(1/(25e-3*ηel)))
+                else
+                    expEl = expE
+                end
+                iBE += ile*(expEl - 1)
+                diBE1 += (ile/(25e-3*ηe))*expEl
+            end
+            iBC = (1/βr)*i_r
+            diBC2 = (1/βr)*di_r2
+            if ilc ≠ 0
+                if ηcl ≠ ηc
+                    expCl = exp(vC*(1/(25e-3*ηcl)))
+                else
+                    expCl = expC
+                end
+                iBC += ilc*(expCl - 1)
+                diBC2 += (ilc/(25e-3*ηc))*expCl
+            end
+            res = @SVector [i_cc + iBE - iE, -i_cc + iBC - iC]
+            J = @SMatrix [di_cc1 + diBE1 di_cc2          -1.0 0.0;
+                          -di_cc1        -di_cc2 + diBC2 0.0  -1.0]
+            return (res, J)
         end
     return Element(mv=[1 0; 0 1; 0 0; 0 0],
                    mi = [-(re+rb) -rb; -rb -(rc+rb); 1 0; 0 1],
                    mq = Matrix{Int}(-polarity*I, 4, 4), nonlinear_eq = nonlinear_eq,
-                   pins = [:base; :emitter; :base; :collector])
+                   ports = [:base => :emitter, :base => :collector])
+end
+
+@doc doc"""
+    mosfet(typ; vt=0.7, α=2e-5)
+
+Creates a MOSFET transistor with the simple model
+
+$i_D=\begin{cases}
+  0 & \text{if } v_{GS} \le v_T \\
+  \alpha \cdot (v_{GS} - v_T - \tfrac{1}{2}v_{DS})\cdot v_{DS}
+  & \text{if } v_{DS} \le v_{GS} - v_T \cap v_{GS} > v_T \\
+  \frac{\alpha}{2} \cdot (v_{GS} - v_T)^2 & \text{otherwise.}
+\end{cases}$
+
+The `typ` parameter chooses between NMOS (`:n`) and PMOS (`:p`). The threshold
+voltage `vt` is given in Volt, `α` (in A/V²) in a constant depending on the
+physics and dimensions of the device.
+
+Pins: `gate`, `source`, `drain`
+""" function mosfet(typ; vt=0.7, α=2e-5)
+    if typ == :n
+        polarity = 1
+    elseif typ == :p
+        polarity = -1
+    else
+        throw(ArgumentError("Unknown mosfet type $(typ), must be :n or :p"))
+    end
+    return Element(mv=[-1 0; 0 -1; 0 0; 0 0],
+        mi=[0 0; 0 0; 0 -1; 1 0],
+        mq=polarity*[1 0 0; 0 1 0; 0 0 1; 0 0 0],
+        u0=polarity*[-vt; 0; 0; 0],
+        ports=[:gate => :source, :drain => :source],
+        nonlinear_eq = @inline function (q)
+            vg, vds, id=q # vg = vgs-vt
+            if vg <= 0
+                res = @SVector [-id]
+                J = @SMatrix [0.0 0.0 -1.0]
+            elseif vds <= vg
+                res = @SVector [α * (vg-0.5*vds)*vds - id]
+                J = @SMatrix [α*vds α*(vg-vds) -1.0]
+            else # 0 < vg < vds
+                res = @SVector [(α/2) * vg^2 - id]
+                J = @SMatrix [α*vg 0.0 -1.0]
+            end
+            return (res, J)
+        end)
 end
 
 """
@@ -451,7 +453,7 @@ output pin.
 Pins: `in+` and `in-` for input, `out+` and `out-` for output
 """
 opamp() = Element(mv=[0 0; 1 0], mi=[1 0; 0 0],
-                  pins=["in+", "in-", "out+", "out-"])
+                  ports=["in+" => "in-", "out+" => "out-"])
 
 @doc doc"""
     opamp(Val{:macak}, gain, vomin, vomax)
@@ -474,18 +476,14 @@ Pins: `in+` and `in-` for input, `out+` and `out-` for output
     offset = 0.5 * (vomin + vomax)
     scale = 0.5 * (vomax - vomin)
     nonlinear_eq =
-        quote
-            let vi = q[1], vo = q[2], vi_scaled = vi * $(gain/scale)
-                res[1] = tanh(vi_scaled) * $(scale) - vo
-                J[1,1] = $(gain) / cosh(vi_scaled)^2
-                J[1,2] = -1
-            end
+        @inline function (q)
+            vi, vo = q
+            vi_scaled = vi * (gain/scale)
+            res = @SVector [tanh(vi_scaled) * scale - vo]
+            J = @SMatrix [gain / cosh(vi_scaled)^2 -1.0]
         end
     return Element(mv=[0 0; 1 0; 0 1], mi=[1 0; 0 0; 0 0], mq=[0 0; -1 0; 0 -1],
                    u0=[0; 0; offset],
                    nonlinear_eq = nonlinear_eq,
-                   pins=["in+", "in-", "out+", "out-"])
+                   ports=["in+" => "in-", "out+" => "out-"])
 end
-
-@Base.deprecate(opamp_ideal, opamp)
-@Base.deprecate(opamp_macak(gain, vomin, vomax), opamp(Val{:macak}, gain, vomin, vomax))

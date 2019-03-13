@@ -1,4 +1,4 @@
-# Copyright 2016, 2017, 2018 Martin Holters
+# Copyright 2016, 2017, 2018, 2019 Martin Holters
 # See accompanying license file.
 
 export SimpleSolver, HomotopySolver, CachingSolver
@@ -402,13 +402,6 @@ set_extrapolation_origin(solver::CachingSolver, p, z) =
 
 get_extrapolation_jacobian(solver::CachingSolver) =
     get_extrapolation_jacobian(solver.basesolver)
-
-
-function set_resabs2tol!(solver, tol)
-    Base.depwarn(string("set_resabs2tol!(solver, tol) is deprecated, use set_resabstol!(solver, sqrt(tol)) instead."),
-                 :set_resabs2tol!)
-    set_resabstol!(solver, sqrt(tol))
-end
 
 function linearize(solver, p::AbstractVector{Float64})
     z = solve(solver, p)

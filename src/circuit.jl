@@ -1,9 +1,25 @@
-# Copyright 2015, 2016, 2017, 2018 Martin Holters
+# Copyright 2015, 2016, 2017, 2018, 2019 Martin Holters
 # See accompanying license file.
 
-export Circuit, add!, connect!, disconnect!, @circuit
+export Circuit, add!, connect!, disconnect!, @circuit, composite_element
 
 import Base: delete!
+
+struct CircuitNLFunc{Fs}
+    fs::Fs
+end
+
+@inline (cnlf::CircuitNLFunc{Fs})(q) where {Fs} = _apply_all(q, cnlf.fs...)
+
+_apply_all(q) = (SVector{0,Float64}(), SMatrix{0,0,Float64}())
+@inline function _apply_all(q, f1::F, fs...) where F
+    (res1, J1) = f1(q)
+    (resrem, Jrem) = _apply_all(q, fs...)
+    return ([res1; resrem], dcat(J1, Jrem))
+end
+
+dcat(a::SMatrix{Ma,Na,Ta}, b::SMatrix{Mb,Nb,Tb}) where {Ma,Na,Mb,Nb,Ta,Tb} =
+    [[a zeros(SMatrix{Ma,Nb,Ta})]; [zeros(SMatrix{Mb,Na,Tb}) b]]
 
 const Net = Vector{Tuple{Symbol,Symbol}} # pairs of element designator and pin name
 
@@ -52,49 +68,36 @@ function incidence(c::Circuit)
     dropzeros!(sparse(i, j, v, length(c.nets), nb(c)))
 end
 
-function nonlinear_eq(c::Circuit, elem_idxs=1:length(elements(c)))
-    # construct a block expression containing all element's expressions after
-    # offsetting their indexes into q, J and res
-
+function nonlinear_eq_func(c::Circuit, elem_idxs=1:length(elements(c)))
     row_offset = 0
     col_offset = 0
-    nl_expr = Expr(:block)
+    funcs = Function[]
     for elem in collect(elements(c))[elem_idxs]
-        index_offsets = Dict( :q => (col_offset,),
-                              :J => (row_offset, col_offset),
-                              :res => (row_offset,) )
-
-        function offset_indexes(expr::Expr)
-            ret = Expr(expr.head)
-            if expr.head == :ref && haskey(index_offsets, expr.args[1])
-                push!(ret.args, expr.args[1])
-                offsets = index_offsets[expr.args[1]]
-                length(expr.args) == length(offsets) + 1 ||
-                    throw(ArgumentError(string(expr.args[1], " must be indexed with exactly ", length(offsets), " index(es)")))
-                for i in 1:length(offsets)
-                    push!(ret.args,
-                          :($(offsets[i]) + $(offset_indexes(expr.args[i+1]))))
+        if nn(elem) == 0 && nq(elem) == 0
+            continue
+        end
+        if VERSION >= v"0.7"
+            push!(funcs,
+                let q_indices=SVector{nq(elem),Int}(col_offset+1:col_offset+nq(elem)),
+                    nleqfunc=nonlinear_eq_func(elem)
+                    @inline function (q)
+                        nleqfunc(q[q_indices])
+                    end
+                end)
+        else
+            # needed to avoid allocation (during model execution) on Julia 0.6
+            q_indices=SVector{nq(elem),Int}(col_offset+1:col_offset+nq(elem))
+            push!(funcs, eval(quote
+                @inline function (q)
+                    $(nonlinear_eq_func(elem))(q[$q_indices])
                 end
-            else
-                append!(ret.args, offset_indexes.(expr.args))
-            end
-            ret
+            end))
         end
-
-        function offset_indexes(s::Symbol)
-            haskey(index_offsets, s) && throw(ArgumentError(string(s, " used without indexing expression")))
-            s
-        end
-
-        offset_indexes(x::Any) = x
-
-        # wrap into a let to keep variables local
-        push!(nl_expr.args, :( let; $(offset_indexes(elem.nonlinear_eq)) end))
 
         row_offset += nn(elem)
         col_offset += nq(elem)
     end
-    nl_expr
+    return CircuitNLFunc((funcs...,))
 end
 
 """
@@ -163,20 +166,6 @@ function netfor!(c::Circuit, p::Tuple{Symbol,Symbol})
 end
 netfor!(c::Circuit, p::Tuple{Symbol,Any}) = netfor!(c, (p[1], Symbol(p[2])))
 
-function netfor!(c::Circuit, p::Pin)
-    Base.depwarn("pin specification $p is deprecated, use (refdes, pinname) instead", :netfor!)
-    element = p[1]
-    designator = add!(c, element)
-    local pinname
-    for (pname, pbps) in element.pins
-        if pbps == p[2]
-            pinname = pname
-            break
-        end
-    end
-    return netfor!(c, (designator, pinname))
-end
-
 function netfor!(c::Circuit, name::Symbol)
     haskey(c.net_names, name) || push!(c.nets, get!(c.net_names, name, []))
     c.net_names[name]
@@ -203,7 +192,7 @@ connect!(circ, (:src, -), (:r, 2), :gnd) # connect to gnd net
 
 ```
 """
-function connect!(c::Circuit, pins::Union{Pin,Symbol,Tuple{Symbol,Any}}...)
+function connect!(c::Circuit, pins::Union{Symbol,Tuple{Symbol,Any}}...)
     nets = unique([netfor!(c, pin) for pin in pins])
     for net in nets[2:end]
         append!(nets[1], net)
@@ -233,20 +222,6 @@ that if e.g. three pin `p1`, `p2`, and `p3` are connected then
 `p3` connected to each other.
 """
 disconnect!(c::Circuit, p::Tuple{Symbol,Any}) = disconnect!(c, (p[1], Symbol(p[2])))
-
-function disconnect!(c::Circuit, pin::Pin)
-    Base.depwarn("disconnect!(::Circuit, $p) is deprecated, use (refdes, pinname) to specify the the pin", :disconnect!)
-    element = pin[1]
-    designator = add!(c, element)
-    local pinname
-    for (pname, pbps) in element.pins
-        if pbps == pin[2]
-            pinname = pname
-            break
-        end
-    end
-    disconnect!(c, (designator, pinname))
-end
 
 function topomat!(incidence::SparseMatrixCSC{T}) where {T<:Integer}
     @assert all(x -> abs(x) == 1, nonzeros(incidence))
@@ -443,4 +418,92 @@ be put in quotes (e.g. `"in+"`, `"9V"`)
 
     push!(ccode.args, :(circ))
     return ccode
+end
+
+@doc doc"""
+    composite_element(circ; pinmap=Dict(), ports)
+
+Create a circuit element from the (sub-)circuit `circ`. The `pinmap` defines
+the mapping from pin names of the element to be created to pins (or nets) in
+`circ`. Optionally, `ports` can be used to explicitly specify (as a list `Pair`s
+of pins) the ports to use. By default, a port will be created between one
+arbitrarily chosen pin and every other pin.
+
+# Example
+
+The following will create an element for a 2.5V source, created using a 5V
+source and a voltage divider, stabilized with a capacitor.
+
+```jldoctest; output = false, setup = :(using ACME), filter = r"(ACME\.)?Element\(.*"s
+circ = @circuit(begin
+   r1 = resistor(10e3)
+   r2 = resistor(10e3), [1] == r1[2]
+   c = capacitor(1e-6), [1] == r2[1], [2] == r2[2]
+   src = voltagesource(5), [+] == r1[1], [-] == r2[2]
+end
+
+composite_element(circ, pinmap=Dict(1 => (:r2, 1), 2 => (:r2, 2)))
+
+# output
+
+Element(...)
+```
+
+Note that the pins still implicitly specifiy ports, so an even number must be
+given, but the same pin may be given multiple times to be part of multiple
+ports.
+""" function composite_element(circ::Circuit; pinmap=Dict(), ports=ports_from_pinmap(pinmap))
+    if ny(circ) > 0
+        throw(ArgumentError("creating composite elements from circuits with outputs is not supported"))
+    end
+    numports = length(ports)
+    # construct system matrix with norators for connection ports included
+    Mᵥ = blockdiag(mv(circ), spzeros(numports, numports))
+    Mᵢ = blockdiag(mi(circ), spzeros(numports, numports))
+    Mₓ = [mx(circ); spzeros(numports, nx(circ))]
+    Mₓ´ = [mxd(circ); spzeros(numports, nx(circ))]
+    Mq = [mq(circ); spzeros(numports, nq(circ))]
+    Mu = [mu(circ); spzeros(numports, nu(circ))]
+    u0 = [ACME.u0(circ); spzeros(numports)]
+    incid = [incidence(circ) spzeros(Int, length(circ.nets), numports)]
+    for i in eachindex(ports)
+        port = ports[i]
+        net = netfor!(circ, pinmap[port[1]])
+        row = findfirst(==(net), circ.nets)
+        b = nb(circ)+i
+        incid[row, b] = 1
+        net = netfor!(circ, pinmap[port[2]])
+        row = findfirst(==(net), circ.nets)
+        incid[row, b] = -1
+    end
+
+    tv, ti = topomat!(incid)
+    S = SparseMatrixCSC{Rational{BigInt}}([Mᵥ Mᵢ Mₓ Mₓ´ Mq;
+        blockdiag(tv, ti) spzeros(nb(circ)+numports, 2nx(circ)+nq(circ))])
+    ũ, M = gensolve(S, SparseMatrixCSC{Rational{BigInt}}([Mu u0; spzeros(nb(circ)+numports, nu(circ)+1)]))
+    # [v' i' x' xd' q']' = ũ + My for arbitrary y
+    # now drop all rows concerning only internal voltages and currents
+    indices = vcat(consecranges([nb(circ), numports, nb(circ), numports+2nx(circ)+nq(circ)])[[2,4]]...)
+    ũ = ũ[indices,:]
+    M = M[indices,:]
+    S̃ = SparseMatrixCSC(gensolve(M', spzeros(size(M,2), 0))[2]') # output matrices p as RHS?
+    # S̃ spans nullspace of M', so that
+    #    S̃*[v' i' x' xd' q']' = S̃*ũ + S̃*My = S̃*ũ
+    # i.e. S̃ acts as a new system matrix
+    M̃ᵥ, M̃ᵢ, M̃ₓ, M̃ₓ´, M̃q =
+        matsplit(S̃, [size(S̃,1)], [numports, numports, nx(circ), nx(circ), nq(circ)])
+    M̃u = S̃*ũ[:, 1:nu(circ)]
+    ũ0 = S̃*ũ[:, end]
+    # note that we need to flip the sign of M̃ᵢ to view the ports from the other side
+    return Element(mv = M̃ᵥ, mi = -M̃ᵢ, mx = M̃ₓ, mxd = M̃ₓ´, mq = M̃q,
+        mu = M̃u, u0 = ũ0,
+        nonlinear_eq=nonlinear_eq_func(circ),
+        ports=ports)
+end
+
+function ports_from_pinmap(pinmap)
+    ks = keys(pinmap)
+    refpin = first(ks)
+    ks = Iterators.drop(ks, 1)
+    return [refpin => pin for pin in ks]
 end

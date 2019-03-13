@@ -1,4 +1,4 @@
-# Copyright 2015, 2016, 2017, 2018 Martin Holters
+# Copyright 2015, 2016, 2017, 2018, 2019 Martin Holters
 # See accompanying license file.
 
 VERSION < v"0.7.0-beta2.199" && __precompile__()
@@ -15,8 +15,7 @@ import Compat.LinearAlgebra.BLAS
 using ProgressMeter
 using IterTools
 using DataStructures
-
-import Base.getindex
+using StaticArrays
 
 include("compat.jl")
 
@@ -37,7 +36,7 @@ mutable struct Element
   px :: SparseMatrixCSC{Real,Int}
   pxd :: SparseMatrixCSC{Real,Int}
   pq :: SparseMatrixCSC{Real,Int}
-  nonlinear_eq :: Expr
+  nonlinear_eq
   pins :: Dict{Symbol, Vector{Tuple{Int, Int}}}
 
   function Element(;args...)
@@ -53,17 +52,6 @@ mutable struct Element
       end
     end
 
-    function make_pin_dict(syms)
-      dict = Dict{Symbol,Vector{Tuple{Int, Int}}}()
-      for i in 1:length(syms)
-        branch = (i+1) ÷ 2
-        polarity = 2(i % 2) - 1
-        push!(get!(dict, Symbol(syms[i]), []), (branch, polarity))
-      end
-      dict
-    end
-    make_pin_dict(dict::Dict) = dict
-
     mat_dims =
         Dict( :mv => (:nl,:nb), :mi => (:nl,:nb), :mx => (:nl,:nx),
               :mxd => (:nl,:nx), :mq => (:nl,:nq), :mu => (:nl,:nu),
@@ -76,8 +64,20 @@ mutable struct Element
       if haskey(mat_dims, key)
         val = convert(SparseMatrixCSC{Real,Int}, hcat(val)) # turn val into a sparse matrix whatever it is
         update_sizes(val, mat_dims[key])
-      elseif key == :pins
-        val = make_pin_dict(val)
+      else
+          if key === :pins && !(val isa Dict)
+              val = ports_from_old_pins(val)
+              key = :ports
+          end
+          if key === :ports
+              pins = Dict{Symbol,Vector{Tuple{Int, Int}}}()
+              for branch in 1:length(val)
+                  push!(get!(pins, Symbol(val[branch][1]), []), (branch, 1))
+                  push!(get!(pins, Symbol(val[branch][2]), []), (branch, -1))
+              end
+              val = pins
+              key = :pins
+          end
       end
       setfield!(elem, key, val)
     end
@@ -87,10 +87,13 @@ mutable struct Element
       end
     end
     if !isdefined(elem, :nonlinear_eq)
-      elem.nonlinear_eq = Expr(:block)
+      elem.nonlinear_eq = (q) -> (SVector{0,Float64}(), SMatrix{0,0,Float64}())
+    elseif elem.nonlinear_eq isa Expr
+        nn = get(sizes, :nb, 0) + get(sizes, :nx, 0) + get(sizes, :nq, 0) - get(sizes, :nl, 0)
+        elem.nonlinear_eq = wrap_nleq_expr(nn, get(sizes, :nq, 0), elem.nonlinear_eq)
     end
     if !isdefined(elem, :pins)
-      elem.pins = make_pin_dict(1:2nb(elem))
+        elem.pins = Dict(Symbol(i) => [((i+1) ÷ 2, 2(i % 2) - 1)] for i in 1:2nb(elem))
     end
     elem
   end
@@ -103,14 +106,7 @@ nl(e::Element) = size(e.mv, 1)
 ny(e::Element) = size(e.pv, 1)
 nn(e::Element) = nb(e) + nx(e) + nq(e) - nl(e)
 
-# a Pin combines an element with a branch/polarity list
-const Pin = Tuple{Element, Vector{Tuple{Int,Int}}}
-
-# allow elem[:pin] notation to get an elements pin
-function getindex(e::Element, p)
-    Base.depwarn("element[$(repr(p))] is deprecated. When connecting pins, use (designator, $(repr(p))) instead", :getindex)
-    return (e, e.pins[Symbol(p)])
-end
+nonlinear_eq_func(e::Element) = e.nonlinear_eq
 
 include("elements.jl")
 
@@ -132,12 +128,12 @@ mutable struct DiscreteModel{Solvers}
     fy::Matrix{Float64}
     y0::Vector{Float64}
 
-    nonlinear_eqs::Vector{Expr}
+    nonlinear_eq_funcs::Vector
 
     solvers::Solvers
     x::Vector{Float64}
 
-    function DiscreteModel(mats::Dict{Symbol}, nonlinear_eqs::Vector{Expr},
+    function DiscreteModel(mats::Dict{Symbol}, nonlinear_eq_funcs::Vector,
             solvers::Solvers) where {Solvers}
         model = new{Solvers}()
 
@@ -145,17 +141,11 @@ mutable struct DiscreteModel{Solvers}
             setfield!(model, mat, convert(fieldtype(typeof(model), mat), mats[mat]))
         end
 
-        model.nonlinear_eqs = nonlinear_eqs
+        model.nonlinear_eq_funcs = nonlinear_eq_funcs
         model.solvers = solvers
         model.x = zeros(nx(model))
         return model
     end
-end
-
-function DiscreteModel{Solver}(circ::Circuit, t::Float64) where {Solver}
-    Base.depwarn("DiscreteModel{Solver}(circ, t) is deprecated, use DiscreteModel(circ, t, Solver) instead.",
-                 :DiscreteModel)
-    DiscreteModel(circ, t, Solver)
 end
 
 function DiscreteModel(circ::Circuit, t::Real, ::Type{Solver}=HomotopySolver{CachingSolver{SimpleSolver}};
@@ -176,17 +166,6 @@ function DiscreteModel(circ::Circuit, t::Real, ::Type{Solver}=HomotopySolver{Cac
 
     reduce_pdims!(mats)
 
-    model_nonlinear_eqs = [quote
-        #copyto!(q, pfull + fq * z)
-        copyto!(q, pfull)
-        BLAS.gemv!('N',1.,fq,z,1.,q)
-        let J=Jq
-            $(nonlinear_eq(circ, nles))
-        end
-        #copyto!(J, Jq*model.fq)
-        BLAS.gemm!('N', 'N', 1., Jq, fq, 0., J)
-    end for nles in nl_elems]
-
     model_nps = size.(mats[:dqs], 1)
     model_nqs = size.(mats[:pexps], 1)
 
@@ -196,10 +175,31 @@ function DiscreteModel(circ::Circuit, t::Real, ::Type{Solver}=HomotopySolver{Cac
     fqs = Matrix{Float64}.(mats[:fqs])
     fqprev_fulls = Matrix{Float64}.(mats[:fqprev_fulls])
 
+    model_nonlinear_eq_funcs = [
+        let q = zeros(nq), circ_nl_func = nonlinear_eq_func(circ, nles)
+            @inline function(res, J, pfull, Jq, fq, z)
+                #copyto!(q, pfull + fq * z)
+                copyto!(q, pfull)
+                BLAS.gemv!('N', 1., fq, z, 1., q)
+                res´, Jq´ = circ_nl_func(q)
+                res .= res´
+                Jq .= Jq´
+                #copyto!(J, Jq*model.fq)
+                BLAS.gemm!('N', 'N', 1., Jq, fq, 0., J)
+                return nothing
+            end
+        end for (nles, nq) in zip(nl_elems, model_nqs)]
+
+    nonlinear_eq_funcs = [
+        @inline function (res, J, scratch, z)
+            nleq(res, J, scratch[1], scratch[2], fq, z)
+        end for (nleq, fq) in zip(model_nonlinear_eq_funcs, fqs)]
+
     init_zs = [zeros(nn) for nn in model_nns]
-    for idx in eachindex(model_nonlinear_eqs)
+    for idx in eachindex(nonlinear_eq_funcs)
         q = q0s[idx] + fqprev_fulls[idx] * vcat(init_zs...)
-        init_zs[idx] = initial_solution(model_nonlinear_eqs[idx], q, fqs[idx])
+        init_zs[idx] = Base.invokelatest(initial_solution,
+                                         nonlinear_eq_funcs[idx], q, model_nns[idx])
     end
 
     while any(np -> np == 0, model_nps)
@@ -220,7 +220,8 @@ function DiscreteModel(circ::Circuit, t::Real, ::Type{Solver}=HomotopySolver{Cac
         deleteat!(init_zs, const_idxs)
         deleteat!(model_nns, const_idxs)
         deleteat!(model_nqs, const_idxs)
-        deleteat!(model_nonlinear_eqs, const_idxs)
+        deleteat!(model_nonlinear_eq_funcs, const_idxs)
+        deleteat!(nonlinear_eq_funcs, const_idxs)
         deleteat!(nl_elems, const_idxs)
         mats[:fy] = mats[:fy][:,varying_zidxs]
         mats[:c] = mats[:c][:,varying_zidxs]
@@ -233,13 +234,6 @@ function DiscreteModel(circ::Circuit, t::Real, ::Type{Solver}=HomotopySolver{Cac
     fqprev_fulls = Array{Float64}.(mats[:fqprev_fulls])
     pexps = Array{Float64}.(mats[:pexps])
 
-    nonlinear_eq_funcs = [eval(quote
-        (res, J, scratch, z) ->
-            let pfull=scratch[1], Jq=scratch[2], q=$(zeros(nq)), fq=$fq
-                $(nonlinear_eq)
-                return nothing
-            end
-    end) for (nonlinear_eq, fq, nq) in zip(model_nonlinear_eqs, fqs, model_nqs)]
     nonlinear_eq_set_ps = [
         function(scratch, p)
             pfull = scratch[1]
@@ -257,14 +251,15 @@ function DiscreteModel(circ::Circuit, t::Real, ::Type{Solver}=HomotopySolver{Cac
             return nothing
         end
         for pexp in pexps]
-    solvers = ((eval(:($Solver(ParametricNonLinEq($nonlinear_eq_funcs[$idx],
-                                          $nonlinear_eq_set_ps[$idx],
-                                          $nonlinear_eq_calc_Jps[$idx],
-                                          (zeros($model_nqs[$idx]), zeros($model_nns[$idx], $model_nqs[$idx])),
-                                          $model_nns[$idx], $model_nps[$idx]),
-                       zeros($model_nps[$idx]), $init_zs[$idx])))
-                for idx in eachindex(model_nonlinear_eqs))...,)
-    return DiscreteModel(mats, model_nonlinear_eqs, solvers)
+    solvers = ((Base.invokelatest(Solver,
+                                  ParametricNonLinEq(nonlinear_eq_funcs[idx],
+                                      nonlinear_eq_set_ps[idx],
+                                      nonlinear_eq_calc_Jps[idx],
+                                      (zeros(model_nqs[idx]), zeros(model_nns[idx], model_nqs[idx])),
+                                      model_nns[idx], model_nps[idx]),
+                                  zeros(model_nps[idx]), init_zs[idx])
+                for idx in eachindex(nonlinear_eq_funcs))...,)
+    return DiscreteModel(mats, model_nonlinear_eq_funcs, solvers)
 end
 
 function model_matrices(circ::Circuit, t::Rational{BigInt})
@@ -434,24 +429,17 @@ function reduce_pdims!(mats::Dict)
     end
 end
 
-function initial_solution(nleq, q0, fq)
+function initial_solution(init_nl_eq_func::Function, q0, nn)
     # determine an initial solution with a homotopy solver that may vary q0
     # between 0 and the true q0 -> q0 takes the role of p
-    nq, nn = size(fq)
-    return eval(quote
-        init_nl_eq_func = (res, J, scratch, z) ->
-            let pfull=scratch[1], Jq=scratch[2], q=$(zeros(nq)), fq=$(fq)
-                $(nleq)
-                return nothing
-            end
-        init_nleq = ParametricNonLinEq(init_nl_eq_func, $nn, $nq)
-        init_solver = HomotopySolver{SimpleSolver}(init_nleq, zeros($nq), zeros($nn))
-        init_z = solve(init_solver, $q0)
-        if !hasconverged(init_solver)
-            error("Failed to find initial solution")
-        end
-        return init_z
-    end)
+    nq = length(q0)
+    init_nleq = ParametricNonLinEq(init_nl_eq_func, nn, nq)
+    init_solver = HomotopySolver{SimpleSolver}(init_nleq, zeros(nq), zeros(nn))
+    init_z = solve(init_solver, q0)
+    if !hasconverged(init_solver)
+        error("Failed to find initial solution")
+    end
+    return init_z
 end
 
 nx(model::DiscreteModel) = length(model.x0)
@@ -474,23 +462,18 @@ function steadystate(model::DiscreteModel, u=zeros(nu(model)))
         zoff_last = zoff+nn(model,idx)-1
         steady_q0 = model.q0s[idx] + model.pexps[idx]*((model.dqs[idx]/IA_LU*model.b + model.eqs[idx])*u + (model.dqs[idx]/IA_LU*model.c + model.fqprevs[idx])*steady_z) +
             model.pexps[idx]*model.dqs[idx]/IA_LU*model.x0
-        steady_z[zoff:zoff_last] = eval(quote
-            steady_nl_eq_func = (res, J, scratch, z) ->
-                let pfull=scratch[1], Jq=scratch[2], q=$(zeros(nq(model, idx))),
-                    fq=$(model.pexps[idx]*model.dqs[idx]/IA_LU*model.c[:,zoff:zoff_last] + model.fqs[idx])
-                    $(model.nonlinear_eqs[idx])
-                    return nothing
-                end
-            steady_nleq = ParametricNonLinEq(steady_nl_eq_func, nn($model, $idx), nq($model, $idx))
-            steady_solver = HomotopySolver{SimpleSolver}(steady_nleq, zeros(nq($model, $idx)),
-                                                         zeros(nn($model, $idx)))
-            set_resabstol!(steady_solver, 1e-15)
-            steady_z = solve(steady_solver, $steady_q0)
-            if !hasconverged(steady_solver)
-                error("Failed to find steady state solution")
-            end
-            return steady_z
-        end)
+        fq = model.pexps[idx]*model.dqs[idx]/IA_LU*model.c[:,zoff:zoff_last] + model.fqs[idx]
+        nleq = model.nonlinear_eq_funcs[idx]
+        steady_nl_eq_func =
+            (res, J, scratch, z) -> nleq(res, J, scratch[1], scratch[2], fq, z)
+        steady_nleq = ParametricNonLinEq(steady_nl_eq_func, nn(model, idx), nq(model, idx))
+        steady_solver = Base.invokelatest(HomotopySolver{SimpleSolver}, steady_nleq, zeros(nq(model, idx)),
+                                                     zeros(nn(model, idx)))
+        set_resabstol!(steady_solver, 1e-15)
+        steady_z[zoff:zoff_last] = Base.invokelatest(solve, steady_solver, steady_q0)
+        if !hasconverged(steady_solver)
+            error("Failed to find steady state solution")
+        end
         zoff += nn(model,idx)
     end
     return IA_LU\(model.b*u + model.c*steady_z + model.x0)
@@ -547,7 +530,7 @@ function linearize(model::DiscreteModel, usteady::AbstractVector{Float64}=zeros(
         :eqs => Matrix{Float64}[], :fqprevs => Matrix{Float64}[],
         :fqs => Matrix{Float64}[], :q0s => Vector{Float64}[],
         :dy => dy, :ey => ey, :fy => zeros(ny(model), 0), :x0 => x0, :y0 => y0)
-    return DiscreteModel(mats, Expr[], ())
+    return DiscreteModel(mats, [], ())
 end
 
 """
@@ -763,5 +746,7 @@ consecranges(lengths) = map((l, e) -> (e-l+1):e, lengths, cumsum(lengths))
 matsplit(v::AbstractVector, rowsizes) = [v[rs] for rs in consecranges(rowsizes)]
 matsplit(m::AbstractMatrix, rowsizes, colsizes=[size(m,2)]) =
     [m[rs, cs] for rs in consecranges(rowsizes), cs in consecranges(colsizes)]
+
+include("deprecated.jl")
 
 end # module

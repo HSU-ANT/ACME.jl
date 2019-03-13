@@ -26,6 +26,7 @@ currentprobe
 ```@docs
 diode
 bjt
+mosfet
 ```
 
 ## Integrated Circuits
