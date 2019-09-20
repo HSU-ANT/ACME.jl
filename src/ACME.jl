@@ -12,7 +12,7 @@ using Markdown: @doc_str
 
 using ProgressMeter
 using IterTools
-using DataStructures
+using OrderedCollections: OrderedDict
 using StaticArrays
 
 include("kdtree.jl")
