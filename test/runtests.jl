@@ -4,11 +4,9 @@
 include("checklic.jl")
 
 using ACME
-using Compat: argmin, range
-import Compat.Test
-using Compat.Test: @test, @test_broken, @test_throws, @test_warn, @testset
+using Test: @test, @test_broken, @test_logs, @test_throws, @testset
 using ProgressMeter
-using Compat.SparseArrays: sparse, spzeros
+using SparseArrays: sparse, spzeros
 
 @testset "topomat" begin
     tv, ti = ACME.topomat(sparse([1 -1 1; -1 1 -1]))
@@ -134,11 +132,7 @@ end
             r = resistor(0)
             probe = currentprobe(), [+] ⟷ r[1], [-] ⟷ r[2]
         end
-        @static if VERSION ≥ v"0.7.0-DEV.2988"
-            Test.@test_logs (:warn, "Model output depends on indeterminate quantity") DiscreteModel(circ, 1)
-        else
-            @test_warn "output depends on indeterminate quantity" DiscreteModel(circ, 1)
-        end
+        @test_logs (:warn, "Model output depends on indeterminate quantity") DiscreteModel(circ, 1)
     end
 
     @testset "no solution" begin
@@ -153,11 +147,7 @@ end
         @test size(y) == (1, 2)
         @test y[1,1] == y[1,2]
         @test_throws ErrorException run!(model, hcat([Inf]))
-        @static if VERSION ≥ v"0.7.0-DEV.2988"
-            @test(size(Test.@test_logs((:warn, "Failed to converge while solving non-linear equation."), run!(model, hcat([-1.0])))) == (1, 1))
-        else
-            @test_warn("Failed to converge", @test size(run!(model, hcat([-1.0]))) == (1, 1))
-        end
+        @test(size(@test_logs((:warn, "Failed to converge while solving non-linear equation."), run!(model, hcat([-1.0])))) == (1, 1))
     end
 end
 
@@ -176,11 +166,7 @@ end
         ps = rand(6, 10000)
         t = ACME.KDTree(ps)
         p = rand(6)
-        if VERSION ≥ v"0.7.0-DEV.4064"
-            best_p = ps[:,argmin(vec(sum(abs2, ps .- p, dims=1)))]
-        else
-            best_p = ps[:,argmin(vec(sum(abs2, ps .- p, 1)))]
-        end
+        best_p = ps[:,argmin(vec(sum(abs2, ps .- p, dims=1)))]
         idx = ACME.indnearest(t, p)
         @test sum(abs2, p - best_p) ≈ sum(abs2, p - ps[:, idx])
     end

@@ -1,10 +1,10 @@
-# Copyright 2016, 2017, 2018 Martin Holters
+# Copyright 2016, 2017, 2018, 2019 Martin Holters
 # See accompanying license file.
 
 import Base.deleteat!
 import Base.isless
 import Base.isempty
-using Compat.Statistics: mean, var
+using Statistics: mean, var
 
 mutable struct KDTree{Tcv<:AbstractVector,Tp<:AbstractMatrix}
     cut_dim::Vector{Int}
@@ -38,11 +38,7 @@ function KDTree(p::AbstractMatrix, Np=size(p,2))
         return KDTree{typeof(cut_val),typeof(p)}(cut_dim, cut_val, [1], p)
     end
 
-    @static if VERSION ≥ v"0.7.0-DEV.4064"
-        dim = argmax(vec(var(p[:,1:Np], dims=2)))
-    else
-        dim = argmax(vec(Base.var(p[:,1:Np], 2)))
-    end
+    dim = argmax(vec(var(p[:,1:Np], dims=2)))
     p_idx = sortperm(vec(p[dim,:]))
 
     min_idx[1] = 1
@@ -60,11 +56,7 @@ function KDTree(p::AbstractMatrix, Np=size(p,2))
             min_idx[n] = cut_idx[parent_n]+1
             max_idx[n] = max_idx[parent_n]
         end
-        @static if VERSION ≥ v"0.7.0-DEV.4064"
-            dim = argmax(vec(var(p[:,p_idx[min_idx[n]:max_idx[n]]], dims=2)))
-        else
-            dim = argmax(vec(Base.var(p[:,p_idx[min_idx[n]:max_idx[n]]], 2)))
-        end
+        dim = argmax(vec(var(p[:,p_idx[min_idx[n]:max_idx[n]]], dims=2)))
         idx = sortperm(vec(p[dim,p_idx[min_idx[n]:max_idx[n]]]))
         p_idx[min_idx[n]:max_idx[n]] = p_idx[idx .+ min_idx[n] .- 1]
         cut_idx[n] = calc_cut_idx(min_idx[n], max_idx[n])
