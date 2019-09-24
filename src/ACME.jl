@@ -1,23 +1,19 @@
 # Copyright 2015, 2016, 2017, 2018, 2019 Martin Holters
 # See accompanying license file.
 
-VERSION < v"0.7.0-beta2.199" && __precompile__()
-
 module ACME
 
 export DiscreteModel, run!, steadystate, steadystate!, linearize, ModelRunner
 
-using Compat.SparseArrays: SparseMatrixCSC, dropzeros!, findnz,
+using SparseArrays: SparseMatrixCSC, blockdiag, dropzeros!, findnz,
     nonzeros, sparse, spzeros
-using Compat.LinearAlgebra: I, axpy!
-import Compat.LinearAlgebra.BLAS
+using LinearAlgebra: BLAS, I, axpy!, lu, rmul!
+using Markdown: @doc_str
 
 using ProgressMeter
 using IterTools
-using DataStructures
+using OrderedCollections: OrderedDict
 using StaticArrays
-
-include("compat.jl")
 
 include("kdtree.jl")
 include("solvers.jl")
@@ -60,7 +56,7 @@ mutable struct Element
               :pxd => (:ny,:nx), :pq => (:ny,:nq) )
 
     elem = new()
-    for (key, val) in kwargs_pairs(args)
+    for (key, val) in args
       if haskey(mat_dims, key)
         val = convert(SparseMatrixCSC{Real,Int}, hcat(val)) # turn val into a sparse matrix whatever it is
         update_sizes(val, mat_dims[key])
@@ -448,14 +444,10 @@ np(model::DiscreteModel, subidx) = size(model.dqs[subidx], 1)
 nu(model::DiscreteModel) = size(model.b, 2)
 ny(model::DiscreteModel) = length(model.y0)
 nn(model::DiscreteModel, subidx) = size(model.fqs[subidx], 2)
-nn(model::DiscreteModel) = Compat.reduce(+, init=0, size(fq, 2) for fq in model.fqs)
+nn(model::DiscreteModel) = reduce(+, init=0, size(fq, 2) for fq in model.fqs)
 
 function steadystate(model::DiscreteModel, u=zeros(nu(model)))
-    @static if VERSION < v"0.7.0-DEV.5211"
-        IA_LU = Compat.LinearAlgebra.lufact(I-model.a)
-    else
-        IA_LU = Compat.LinearAlgebra.lu(I-model.a)
-    end
+    IA_LU = lu(I-model.a)
     steady_z = zeros(nn(model))
     zoff = 1
     for idx in 1:length(model.solvers)
@@ -511,8 +503,8 @@ function linearize(model::DiscreteModel, usteady::AbstractVector{Float64}=zeros(
 
         zranges[idx] = zoff:zoff+length(zsub)-1
         fqdzdps = [model.fqprevs[idx][:,zranges[n]] * dzdps[n] for n in 1:idx-1]
-        dqlins[idx] = Compat.reduce(+, init=model.dqs[idx], fqdzdps .* dqlins[1:idx-1])
-        eqlins[idx] = Compat.reduce(+, init=model.eqs[idx], fqdzdps .* eqlins[1:idx-1])
+        dqlins[idx] = reduce(+, init=model.dqs[idx], fqdzdps .* dqlins[1:idx-1])
+        eqlins[idx] = reduce(+, init=model.eqs[idx], fqdzdps .* eqlins[1:idx-1])
 
         x0 += model.c[:,zranges[idx]] * (zsub - dzdps[idx]*psteady)
         a += model.c[:,zranges[idx]] * dzdps[idx] * dqlins[idx]
@@ -706,7 +698,7 @@ function gensolve(a, b, x, h, thresh=0.1)
         s = ait * h;
         jnz, nz_vals = findnz(s')
         nz_abs_vals = abs.(nz_vals)
-        max_abs_val = Compat.reduce(max, init=zero(eltype(s)), nz_abs_vals)
+        max_abs_val = reduce(max, init=zero(eltype(s)), nz_abs_vals)
         if max_abs_val ≤ tol # cosidered numerical zero
             continue
         end

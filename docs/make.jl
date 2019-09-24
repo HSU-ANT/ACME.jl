@@ -2,7 +2,6 @@ using Documenter, ACME
 
 makedocs(
     modules = [ACME],
-    format = :html,
     sitename = "ACME.jl",
     pages = Any[
         "Home" => "index.md",
@@ -12,11 +11,9 @@ makedocs(
     ],
 )
 
-deploydocs(
-    target = "build",
-    repo = "github.com/HSU-ANT/ACME.jl.git",
-    latest = "develop",
-    deps = nothing,
-    make = nothing,
-    julia = "1.0",
-)
+if v"1.0" ≤ VERSION < v"1.1" # deploy from 1.0
+    deploydocs(
+        repo = "github.com/HSU-ANT/ACME.jl.git",
+        devbranch = "develop",
+    )
+end
