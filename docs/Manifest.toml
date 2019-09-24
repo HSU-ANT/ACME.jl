@@ -21,26 +21,20 @@ version = "0.8.0"
     Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [[Documenter]]
-git-tree-sha1 = "a8c41ba3d0861240dbec942ee1d0f86c57c37c1c"
+deps = ["Base64", "DocStringExtensions", "InteractiveUtils", "JSON", "LibGit2", "Logging", "Markdown", "REPL", "Test", "Unicode"]
+git-tree-sha1 = "1b6ae3796f60311e39cd1770566140d2c056e87f"
 uuid = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
-version = "0.21.5"
-
-    [Documenter.deps]
-    Base64 = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
-    DocStringExtensions = "ffbed154-4ef7-542d-bbb7-c09d3a79fcae"
-    InteractiveUtils = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
-    LibGit2 = "76f85450-5226-5b5a-8eaa-529ad045b433"
-    Logging = "56ddb016-857b-54e1-b83d-db4d58db5568"
-    Markdown = "d6f4376e-aef5-505a-96c1-9c027394607a"
-    Pkg = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
-    REPL = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
-    Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
-    Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
-    Unicode = "4ec0a83e-493e-50e2-b9ac-8f72acf5a8f5"
+version = "0.23.3"
 
 [[InteractiveUtils]]
 deps = ["LinearAlgebra", "Markdown"]
 uuid = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
+
+[[JSON]]
+deps = ["Dates", "Mmap", "Parsers", "Unicode"]
+git-tree-sha1 = "b34d7cef7b337321e97d22242c3c2b91f476748e"
+uuid = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
+version = "0.21.0"
 
 [[LibGit2]]
 uuid = "76f85450-5226-5b5a-8eaa-529ad045b433"
@@ -59,6 +53,14 @@ uuid = "56ddb016-857b-54e1-b83d-db4d58db5568"
 deps = ["Base64"]
 uuid = "d6f4376e-aef5-505a-96c1-9c027394607a"
 
+[[Mmap]]
+uuid = "a63ad114-7e13-5084-954f-fe012c677804"
+
+[[Parsers]]
+deps = ["Dates", "Test"]
+git-tree-sha1 = "ef0af6c8601db18c282d092ccbd2f01f3f0cd70b"
+uuid = "69de0a69-1ddd-5017-9359-2bf0b02dc9f0"
+version = "0.3.7"
 
 [[Pkg]]
 deps = ["Dates", "LibGit2", "Markdown", "Printf", "REPL", "Random", "SHA", "UUIDs"]
