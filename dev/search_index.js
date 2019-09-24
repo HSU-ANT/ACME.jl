@@ -1,7 +1,7 @@
 var documenterSearchIndex = {"docs": [
 
 {
-    "location": "index.html#",
+    "location": "#",
     "page": "Home",
     "title": "Home",
     "category": "page",
@@ -9,7 +9,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "index.html#ACME.jl-Analog-Circuit-Modeling-and-Emulation-for-Julia-1",
+    "location": "#ACME.jl-Analog-Circuit-Modeling-and-Emulation-for-Julia-1",
     "page": "Home",
     "title": "ACME.jl - Analog Circuit Modeling and Emulation for Julia",
     "category": "section",
@@ -17,7 +17,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "gettingstarted.html#",
+    "location": "gettingstarted/#",
     "page": "Getting Started",
     "title": "Getting Started",
     "category": "page",
@@ -25,7 +25,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "gettingstarted.html#Getting-Started-1",
+    "location": "gettingstarted/#Getting-Started-1",
     "page": "Getting Started",
     "title": "Getting Started",
     "category": "section",
@@ -33,7 +33,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "gettingstarted.html#Installation-1",
+    "location": "gettingstarted/#Installation-1",
     "page": "Getting Started",
     "title": "Installation",
     "category": "section",
@@ -41,7 +41,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "gettingstarted.html#First-Steps-1",
+    "location": "gettingstarted/#First-Steps-1",
     "page": "Getting Started",
     "title": "First Steps",
     "category": "section",
@@ -49,7 +49,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "ug.html#",
+    "location": "ug/#",
     "page": "User Guide",
     "title": "User Guide",
     "category": "page",
@@ -57,7 +57,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "ug.html#User-Guide-1",
+    "location": "ug/#User-Guide-1",
     "page": "User Guide",
     "title": "User Guide",
     "category": "section",
@@ -65,7 +65,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "ug.html#Element-Creation-1",
+    "location": "ug/#Element-Creation-1",
     "page": "User Guide",
     "title": "Element Creation",
     "category": "section",
@@ -73,7 +73,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "ug.html#ACME.@circuit",
+    "location": "ug/#ACME.@circuit",
     "page": "User Guide",
     "title": "ACME.@circuit",
     "category": "macro",
@@ -81,7 +81,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "ug.html#ACME.add!",
+    "location": "ug/#ACME.add!",
     "page": "User Guide",
     "title": "ACME.add!",
     "category": "function",
@@ -89,7 +89,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "ug.html#Base.delete!",
+    "location": "ug/#Base.delete!",
     "page": "User Guide",
     "title": "Base.delete!",
     "category": "function",
@@ -97,7 +97,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "ug.html#ACME.connect!",
+    "location": "ug/#ACME.connect!",
     "page": "User Guide",
     "title": "ACME.connect!",
     "category": "function",
@@ -105,7 +105,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "ug.html#ACME.disconnect!",
+    "location": "ug/#ACME.disconnect!",
     "page": "User Guide",
     "title": "ACME.disconnect!",
     "category": "function",
@@ -113,7 +113,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "ug.html#Circuit-Description-1",
+    "location": "ug/#Circuit-Description-1",
     "page": "User Guide",
     "title": "Circuit Description",
     "category": "section",
@@ -121,7 +121,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "ug.html#Model-Creation-and-Use-1",
+    "location": "ug/#Model-Creation-and-Use-1",
     "page": "User Guide",
     "title": "Model Creation and Use",
     "category": "section",
@@ -129,7 +129,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "ug.html#ACME.SimpleSolver",
+    "location": "ug/#ACME.SimpleSolver",
     "page": "User Guide",
     "title": "ACME.SimpleSolver",
     "category": "type",
@@ -137,7 +137,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "ug.html#ACME.HomotopySolver",
+    "location": "ug/#ACME.HomotopySolver",
     "page": "User Guide",
     "title": "ACME.HomotopySolver",
     "category": "type",
@@ -145,7 +145,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "ug.html#ACME.CachingSolver",
+    "location": "ug/#ACME.CachingSolver",
     "page": "User Guide",
     "title": "ACME.CachingSolver",
     "category": "type",
@@ -153,7 +153,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "ug.html#Solvers-1",
+    "location": "ug/#Solvers-1",
     "page": "User Guide",
     "title": "Solvers",
     "category": "section",
@@ -161,7 +161,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "elements.html#",
+    "location": "elements/#",
     "page": "Element Reference",
     "title": "Element Reference",
     "category": "page",
@@ -169,7 +169,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "elements.html#Element-Reference-1",
+    "location": "elements/#Element-Reference-1",
     "page": "Element Reference",
     "title": "Element Reference",
     "category": "section",
@@ -177,7 +177,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "elements.html#ACME.resistor",
+    "location": "elements/#ACME.resistor",
     "page": "Element Reference",
     "title": "ACME.resistor",
     "category": "function",
@@ -185,7 +185,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "elements.html#ACME.capacitor",
+    "location": "elements/#ACME.capacitor",
     "page": "Element Reference",
     "title": "ACME.capacitor",
     "category": "function",
@@ -193,7 +193,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "elements.html#ACME.inductor-Tuple{Any}",
+    "location": "elements/#ACME.inductor-Tuple{Any}",
     "page": "Element Reference",
     "title": "ACME.inductor",
     "category": "method",
@@ -201,7 +201,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "elements.html#ACME.inductor-Tuple{Type{Val{:JA}}}",
+    "location": "elements/#ACME.inductor-Tuple{Type{Val{:JA}}}",
     "page": "Element Reference",
     "title": "ACME.inductor",
     "category": "method",
@@ -209,7 +209,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "elements.html#ACME.transformer-Tuple{Any,Any}",
+    "location": "elements/#ACME.transformer-Tuple{Any,Any}",
     "page": "Element Reference",
     "title": "ACME.transformer",
     "category": "method",
@@ -217,7 +217,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "elements.html#ACME.transformer-Tuple{Type{Val{:JA}}}",
+    "location": "elements/#ACME.transformer-Tuple{Type{Val{:JA}}}",
     "page": "Element Reference",
     "title": "ACME.transformer",
     "category": "method",
@@ -225,7 +225,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "elements.html#Passives-1",
+    "location": "elements/#Passives-1",
     "page": "Element Reference",
     "title": "Passives",
     "category": "section",
@@ -233,7 +233,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "elements.html#ACME.voltagesource",
+    "location": "elements/#ACME.voltagesource",
     "page": "Element Reference",
     "title": "ACME.voltagesource",
     "category": "function",
@@ -241,7 +241,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "elements.html#ACME.currentsource",
+    "location": "elements/#ACME.currentsource",
     "page": "Element Reference",
     "title": "ACME.currentsource",
     "category": "function",
@@ -249,7 +249,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "elements.html#Independent-Sources-1",
+    "location": "elements/#Independent-Sources-1",
     "page": "Element Reference",
     "title": "Independent Sources",
     "category": "section",
@@ -257,7 +257,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "elements.html#ACME.voltageprobe",
+    "location": "elements/#ACME.voltageprobe",
     "page": "Element Reference",
     "title": "ACME.voltageprobe",
     "category": "function",
@@ -265,7 +265,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "elements.html#ACME.currentprobe",
+    "location": "elements/#ACME.currentprobe",
     "page": "Element Reference",
     "title": "ACME.currentprobe",
     "category": "function",
@@ -273,7 +273,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "elements.html#Probes-1",
+    "location": "elements/#Probes-1",
     "page": "Element Reference",
     "title": "Probes",
     "category": "section",
@@ -281,7 +281,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "elements.html#ACME.diode",
+    "location": "elements/#ACME.diode",
     "page": "Element Reference",
     "title": "ACME.diode",
     "category": "function",
@@ -289,7 +289,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "elements.html#ACME.bjt",
+    "location": "elements/#ACME.bjt",
     "page": "Element Reference",
     "title": "ACME.bjt",
     "category": "function",
@@ -297,7 +297,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "elements.html#ACME.mosfet",
+    "location": "elements/#ACME.mosfet",
     "page": "Element Reference",
     "title": "ACME.mosfet",
     "category": "function",
@@ -305,7 +305,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "elements.html#Semiconductors-1",
+    "location": "elements/#Semiconductors-1",
     "page": "Element Reference",
     "title": "Semiconductors",
     "category": "section",
@@ -313,7 +313,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "elements.html#ACME.opamp-Tuple{}",
+    "location": "elements/#ACME.opamp-Tuple{}",
     "page": "Element Reference",
     "title": "ACME.opamp",
     "category": "method",
@@ -321,7 +321,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "elements.html#ACME.opamp-Tuple{Type{Val{:macak}},Any,Any,Any}",
+    "location": "elements/#ACME.opamp-Tuple{Type{Val{:macak}},Any,Any,Any}",
     "page": "Element Reference",
     "title": "ACME.opamp",
     "category": "method",
@@ -329,7 +329,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "elements.html#Integrated-Circuits-1",
+    "location": "elements/#Integrated-Circuits-1",
     "page": "Element Reference",
     "title": "Integrated Circuits",
     "category": "section",
