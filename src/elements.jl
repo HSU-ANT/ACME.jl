@@ -439,21 +439,41 @@ Pins: `gate`, `source`, `drain`
         end)
 end
 
-"""
-    opamp()
+@doc doc"""
+    opamp(;maxgain=Inf, gain_bw_prod=Inf)
 
-Creates an ideal operational amplifier. It enforces the voltage between the
-input pins to be zero without sourcing any current while sourcing arbitrary
-current on the output pins wihtout restricting their voltage.
+Creates a linear operational amplifier as a voltage-controlled voltage source.
+The input current is zero while the input voltage is mapped to the output
+voltage according to the transfer function
 
-Note that the opamp has two output pins, one of which will typically be
-connected to a ground node and has to provide the current sourced on the other
-output pin.
+$H(f) = \frac{A_\text{max}}{\sqrt{A_\text{max}^2-1} i \frac{f}{f_\text{UG}} + 1}$
+
+where $f$ is the signal frequency, $A_\text{max}$ (`maxgain`) is the maximum
+open loop gain and $f_\text{UG}$ (`gain_bw_prod`) is the gain/bandwidth
+product (unity gain bandwidth). For `gain_bw_prod=Inf` (the default), this
+corresponds to a frequency-independent gain of `maxgain`. For `maxgain=Inf`
+(the default), the amplifier behaves as a perfect integrator.
+
+For both `maxgain=Inf` and `gain_bw_prod=Inf`, i.e. just `opamp()`, an ideal
+operational amplifier is obtained that enforces the voltage between the input
+pins to be zero while sourcing arbitrary current on the output pins without
+restricting their voltage.
+
+Note that the opamp has two output pins, where the negative one will typically
+be connected to a ground node and has to provide the current sourced on the
+positive one.
 
 Pins: `in+` and `in-` for input, `out+` and `out-` for output
-"""
-opamp() = Element(mv=[0 0; 1 0], mi=[1 0; 0 0],
-                  ports=["in+" => "in-", "out+" => "out-"])
+""" function opamp(;maxgain=Inf, gain_bw_prod=Inf)
+    if gain_bw_prod==Inf # special case to avoid unnecessary state
+        Element(mv=[0 0; 1 -1/maxgain], mi=[1 0; 0 0],
+                ports=["in+" => "in-", "out+" => "out-"])
+    else
+        Element(mv=[0 0; -1/sqrt(1-1/maxgain^2) 0; 0 -1], mi=[1 0; 0 0; 0 0],
+                mx=[0; 1/sqrt(maxgain^2-1); 1], mxd=[0; 1/(2π*gain_bw_prod); 0],
+                ports=["in+" => "in-", "out+" => "out-"])
+    end
+end
 
 @doc doc"""
     opamp(Val{:macak}, gain, vomin, vomax)
