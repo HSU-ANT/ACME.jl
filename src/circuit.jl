@@ -421,7 +421,7 @@ The following will create an element for a 2.5V source, created using a 5V
 source and a voltage divider, stabilized with a capacitor.
 
 ```jldoctest; output = false, setup = :(using ACME), filter = r"(ACME\.)?Element\(.*"s
-circ = @circuit(begin
+circ = @circuit begin
    r1 = resistor(10e3)
    r2 = resistor(10e3), [1] == r1[2]
    c = capacitor(1e-6), [1] == r2[1], [2] == r2[2]
