@@ -11,4 +11,9 @@ Method for the Derivation of Non-Linear State-Space Models from Circuit
 Schematics"](http://www.eurasip.org/Proceedings/Eusipco/Eusipco2015/papers/1570103545.pdf).
 
 ```@contents
+Pages = [
+      "gettingstarted.md",
+      "ug.md",
+      "elements.md",
+  ]
 ```

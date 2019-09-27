@@ -33,7 +33,7 @@ end
 elements(c::Circuit) = values(c.elements)
 
 for n in [:nb; :nx; :nq; :nu; :nl; :ny; :nn]
-    @eval ($n)(c::Circuit) = Compat.reduce(+, init=0, $n(elem) for elem in elements(c))
+    @eval ($n)(c::Circuit) = reduce(+, init=0, $n(elem) for elem in elements(c))
 end
 
 for mat in [:mv; :mi; :mx; :mxd; :mq; :mu; :pv; :pi; :px; :pxd; :pq]
@@ -76,23 +76,13 @@ function nonlinear_eq_func(c::Circuit, elem_idxs=1:length(elements(c)))
         if nn(elem) == 0 && nq(elem) == 0
             continue
         end
-        if VERSION >= v"0.7"
-            push!(funcs,
-                let q_indices=SVector{nq(elem),Int}(col_offset+1:col_offset+nq(elem)),
-                    nleqfunc=nonlinear_eq_func(elem)
-                    @inline function (q)
-                        nleqfunc(q[q_indices])
-                    end
-                end)
-        else
-            # needed to avoid allocation (during model execution) on Julia 0.6
-            q_indices=SVector{nq(elem),Int}(col_offset+1:col_offset+nq(elem))
-            push!(funcs, eval(quote
+        push!(funcs,
+            let q_indices=SVector{nq(elem),Int}(col_offset+1:col_offset+nq(elem)),
+                nleqfunc=nonlinear_eq_func(elem)
                 @inline function (q)
-                    $(nonlinear_eq_func(elem))(q[$q_indices])
+                    nleqfunc(q[q_indices])
                 end
-            end))
-        end
+            end)
 
         row_offset += nn(elem)
         col_offset += nq(elem)
@@ -225,11 +215,7 @@ disconnect!(c::Circuit, p::Tuple{Symbol,Any}) = disconnect!(c, (p[1], Symbol(p[2
 
 function topomat!(incidence::SparseMatrixCSC{T}) where {T<:Integer}
     @assert all(x -> abs(x) == 1, nonzeros(incidence))
-    @static if VERSION ≥ v"0.7.0-DEV.4064"
-        @assert all(sum(incidence, dims=1) .== 0)
-    else
-        @assert all(sum(incidence, 1) .== 0)
-    end
+    @assert all(sum(incidence, dims=1) .== 0)
 
     t = falses(size(incidence)[2]);
 
@@ -435,7 +421,7 @@ The following will create an element for a 2.5V source, created using a 5V
 source and a voltage divider, stabilized with a capacitor.
 
 ```jldoctest; output = false, setup = :(using ACME), filter = r"(ACME\.)?Element\(.*"s
-circ = @circuit(begin
+circ = @circuit begin
    r1 = resistor(10e3)
    r2 = resistor(10e3), [1] == r1[2]
    c = capacitor(1e-6), [1] == r2[1], [2] == r2[2]

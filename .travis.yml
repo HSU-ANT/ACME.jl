@@ -1,9 +1,9 @@
 language: julia
 julia:
-  - 0.6
-  - 0.7
   - 1.0
   - 1.1
+  - 1.2
+  - 1.3
   - nightly
 notifications:
   email: false
@@ -24,17 +24,10 @@ jobs:
         - julia --project=docs/ -e 'using Pkg; Pkg.instantiate(); Pkg.develop(PackageSpec(path=pwd()))'
         - julia --project=docs/ docs/make.jl
     - <<: *docs
-      julia: 0.7
-      script:
-        - julia --project=docs/ -e 'using Pkg; Pkg.instantiate()'
-        - julia -e 'using Pkg; Pkg.develop(PackageSpec(path=pwd()))'
-        - julia --project=docs/ docs/make.jl
-    - <<: *docs
       julia: 1.1
     - <<: *docs
-      julia: nightly
+      julia: 1.2
     - <<: *docs
-      julia: 0.6
-      script:
-        - julia -e 'Pkg.add("Documenter", v"0.19.6", v"0.19.6+"); Pkg.clone(pwd())'
-        - julia docs/make.jl
+      julia: 1.3
+    - <<: *docs
+      julia: nightly
