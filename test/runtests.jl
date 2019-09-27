@@ -5,6 +5,7 @@ include("checklic.jl")
 
 using ACME
 using Test: @test, @test_broken, @test_logs, @test_throws, @testset
+using FFTW: rfft
 using ProgressMeter
 using SparseArrays: sparse, spzeros
 
@@ -516,6 +517,33 @@ end
         model = DiscreteModel(circ, 1);
         y = run!(model, pol*[0 1 2 2 2; 5 5 0.5 1 1.5])
         @test y == pol*[0 0 1e-4*(1-0.5/2)*0.5 1e-4*(1-1/2)*1 1e-4/2*1^2]
+    end
+end
+
+@testset "op amp" begin
+    for Amax in (10, Inf), GBP in (50e3, Inf)
+        # test circuit: non-inverting amplifier in high shelving configuration
+        circ = @circuit begin
+            input = voltagesource(), [-] ⟷ gnd
+            op = opamp(maxgain=Amax, gain_bw_prod=GBP), ["in+"] ⟷ input[+], ["out-"] ⟷ gnd
+            r1 = resistor(109e3), [1] ⟷ op["out+"], [2] ⟷ op["in-"]
+            r2 = resistor(1e3), [1] ⟷ op["in-"]
+            c = capacitor(22e-9), [1] ⟷ r2[2], [2] ⟷ gnd
+            output = voltageprobe(), [+] ⟷ op["out+"], [-] ⟷ gnd
+        end
+        model = DiscreteModel(circ, 1/44100)
+        # obtain impulse response / transfer function
+        u = [1; zeros(4095)]'
+        y = run!(model, u)[1,:]
+        Y = rfft(y)
+        # inverse of op amp transfer function
+        G⁻¹(s) = sqrt(1-1/Amax^2)*s/(2π*GBP) + 1/Amax
+        #  feedback transfer function
+        H(s) = (1e3*22e-9*s + 1) / ((109e3+1e3)*22e-9*s + 1)
+        # overall transfer function evaluated taking frequency warping of
+        # bilinear transform into account
+        Yref = [let ω=2*44100*tan(π*k/length(y)); 1/(G⁻¹(im*ω) + H(im*ω)); end for k in eachindex(Y).-1]
+        @test Y ≈ Yref
     end
 end
 
