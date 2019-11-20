@@ -61,10 +61,6 @@ mutable struct Element
         val = convert(SparseMatrixCSC{Real,Int}, hcat(val)) # turn val into a sparse matrix whatever it is
         update_sizes(val, mat_dims[key])
       else
-          if key === :pins && !(val isa Dict)
-              val = ports_from_old_pins(val)
-              key = :ports
-          end
           if key === :ports
               pins = Dict{Symbol,Vector{Tuple{Int, Int}}}()
               for branch in 1:length(val)
@@ -84,9 +80,6 @@ mutable struct Element
     end
     if !isdefined(elem, :nonlinear_eq)
       elem.nonlinear_eq = (q) -> (SVector{0,Float64}(), SMatrix{0,0,Float64}())
-    elseif elem.nonlinear_eq isa Expr
-        nn = get(sizes, :nb, 0) + get(sizes, :nx, 0) + get(sizes, :nq, 0) - get(sizes, :nl, 0)
-        elem.nonlinear_eq = wrap_nleq_expr(nn, get(sizes, :nq, 0), elem.nonlinear_eq)
     end
     if !isdefined(elem, :pins)
         elem.pins = Dict(Symbol(i) => [((i+1) ÷ 2, 2(i % 2) - 1)] for i in 1:2nb(elem))
