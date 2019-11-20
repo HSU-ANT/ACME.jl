@@ -55,9 +55,8 @@ function incidence(c::Circuit)
     j = sizehint!(Int[], 2nb(c))
     v = sizehint!(Int[], 2nb(c))
     for (row, pins) in enumerate(c.nets), (elemname, pinname) in pins
-        elem = c.elements[elemname]
-        offset = branch_offset(c, elem)
-        bps = elem.pins[pinname]
+        offset = branch_offset(c, elemname)
+        bps = c.elements[elemname].pins[pinname]
         for (branch, polarity) in bps
             push!(i, row)
             push!(j, offset + branch)
@@ -139,10 +138,10 @@ function delete!(c::Circuit, designator::Symbol)
     delete!(c.elements, designator)
 end
 
-function branch_offset(c::Circuit, elem::Element)
+function branch_offset(c::Circuit, designator::Symbol)
     offset = 0
-    for el in elements(c)
-        el == elem && return offset
+    for (eldes, el) in c.elements
+        eldes == designator && return offset
         offset += nb(el)
     end
     throw(ArgumentError("Element not found in circuit"))
