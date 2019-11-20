@@ -5,7 +5,7 @@ module ACME
 
 export DiscreteModel, run!, steadystate, steadystate!, linearize, ModelRunner
 
-using SparseArrays: SparseMatrixCSC, blockdiag, dropzeros!, findnz,
+using SparseArrays: SparseMatrixCSC, SparseVector, blockdiag, dropzeros!, findnz,
     nonzeros, sparse, spzeros
 using LinearAlgebra: BLAS, I, axpy!, lu, rmul!
 using Markdown: @doc_str
@@ -20,28 +20,28 @@ include("solvers.jl")
 
 
 struct Element
-  mv :: SparseMatrixCSC{Real,Int}
-  mi :: SparseMatrixCSC{Real,Int}
-  mx :: SparseMatrixCSC{Real,Int}
-  mxd :: SparseMatrixCSC{Real,Int}
-  mq :: SparseMatrixCSC{Real,Int}
-  mu :: SparseMatrixCSC{Real,Int}
-  u0 :: SparseMatrixCSC{Real,Int}
-  pv :: SparseMatrixCSC{Real,Int}
-  pi :: SparseMatrixCSC{Real,Int}
-  px :: SparseMatrixCSC{Real,Int}
-  pxd :: SparseMatrixCSC{Real,Int}
-  pq :: SparseMatrixCSC{Real,Int}
-  nonlinear_eq
-  pins :: Dict{Symbol, Vector{Tuple{Int, Int}}}
+    mv::SparseMatrixCSC{Real,Int}
+    mi::SparseMatrixCSC{Real,Int}
+    mx::SparseMatrixCSC{Real,Int}
+    mxd::SparseMatrixCSC{Real,Int}
+    mq::SparseMatrixCSC{Real,Int}
+    mu::SparseMatrixCSC{Real,Int}
+    u0::SparseVector{Real,Int}
+    pv::SparseMatrixCSC{Real,Int}
+    pi::SparseMatrixCSC{Real,Int}
+    px::SparseMatrixCSC{Real,Int}
+    pxd::SparseMatrixCSC{Real,Int}
+    pq::SparseMatrixCSC{Real,Int}
+    nonlinear_eq
+    pins::Dict{Symbol, Vector{Tuple{Int, Int}}}
 end
 
 function Element(;args...)
-    sizes = Dict{Symbol,Int}(:n0 => 1)
+    sizes = Dict{Symbol,Int}()
 
     mat_dims = Dict(
         :mv => (:nl, :nb), :mi => (:nl, :nb), :mx => (:nl, :nx), :mxd => (:nl, :nx),
-        :mq => (:nl, :nq), :mu => (:nl, :nu), :u0 => (:nl, :n0),
+        :mq => (:nl, :nq), :mu => (:nl, :nu), :u0 => (:nl,),
         :pv => (:ny, :nb), :pi => (:ny, :nb), :px => (:ny, :nx), :pxd => (:ny, :nx),
         :pq => (:ny, :nq)
     )
@@ -49,9 +49,15 @@ function Element(;args...)
     constr_params = Dict{Symbol,Any}()
     for (key, val) in args
         if haskey(mat_dims, key)
-             # turn val into a sparse matrix whatever it is
-            val = convert(SparseMatrixCSC{Real,Int}, hcat(val))
-            for (sym, s) in zip(mat_dims[key], size(val))
+            dims = mat_dims[key]
+            if length(dims) == 2
+                # turn val into a sparse matrix whatever it is
+                val = convert(SparseMatrixCSC{Real,Int}, hcat(val))
+            else
+                # turn val into a sparse vector whatever it is
+                val = sparse(convert(AbstractVector{Real}, vcat(val)))
+            end
+            for (sym, s) in zip(dims, size(val))
                 if !haskey(sizes, sym)
                     sizes[sym] = s
                 elseif sizes[sym] ≠ s
@@ -73,7 +79,7 @@ function Element(;args...)
     end
     for (m, ns) in mat_dims
         if !haskey(constr_params, m)
-            constr_params[m] = spzeros(Real, get!(sizes, ns[1], 0), get!(sizes, ns[2], 0))
+            constr_params[m] = spzeros(Real, get!.(Ref(sizes), ns, 0)...)
         end
     end
     if !haskey(constr_params, :nonlinear_eq)
