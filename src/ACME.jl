@@ -19,7 +19,7 @@ include("kdtree.jl")
 include("solvers.jl")
 
 
-mutable struct Element
+struct Element
   mv :: SparseMatrixCSC{Real,Int}
   mi :: SparseMatrixCSC{Real,Int}
   mx :: SparseMatrixCSC{Real,Int}
@@ -34,58 +34,62 @@ mutable struct Element
   pq :: SparseMatrixCSC{Real,Int}
   nonlinear_eq
   pins :: Dict{Symbol, Vector{Tuple{Int, Int}}}
+end
 
-  function Element(;args...)
+function Element(;args...)
     sizes = Dict{Symbol,Int}(:n0 => 1)
 
     function update_sizes(mat, syms)
-      for (sym, s) in zip(syms, size(mat))
-        if !haskey(sizes, sym)
-          sizes[sym] = s
-        elseif sizes[sym] ≠ s
-          error("Inconsistent sizes for ", sym)
+        for (sym, s) in zip(syms, size(mat))
+            if !haskey(sizes, sym)
+                sizes[sym] = s
+            elseif sizes[sym] ≠ s
+                error("Inconsistent sizes for ", sym)
+            end
         end
-      end
     end
 
-    mat_dims =
-        Dict( :mv => (:nl,:nb), :mi => (:nl,:nb), :mx => (:nl,:nx),
-              :mxd => (:nl,:nx), :mq => (:nl,:nq), :mu => (:nl,:nu),
-              :u0 => (:nl, :n0),
-              :pv => (:ny,:nb), :pi => (:ny,:nb), :px => (:ny,:nx),
-              :pxd => (:ny,:nx), :pq => (:ny,:nq) )
+    mat_dims = Dict(
+        :mv => (:nl, :nb), :mi => (:nl, :nb), :mx => (:nl, :nx), :mxd => (:nl, :nx),
+        :mq => (:nl, :nq), :mu => (:nl, :nu), :u0 => (:nl, :n0),
+        :pv => (:ny, :nb), :pi => (:ny, :nb), :px => (:ny, :nx), :pxd => (:ny, :nx),
+        :pq => (:ny, :nq)
+    )
 
-    elem = new()
+    constr_params = Dict{Symbol,Any}()
     for (key, val) in args
-      if haskey(mat_dims, key)
-        val = convert(SparseMatrixCSC{Real,Int}, hcat(val)) # turn val into a sparse matrix whatever it is
-        update_sizes(val, mat_dims[key])
-      else
-          if key === :ports
-              pins = Dict{Symbol,Vector{Tuple{Int, Int}}}()
-              for branch in 1:length(val)
-                  push!(get!(pins, Symbol(val[branch][1]), []), (branch, 1))
-                  push!(get!(pins, Symbol(val[branch][2]), []), (branch, -1))
-              end
-              val = pins
-              key = :pins
-          end
-      end
-      setfield!(elem, key, val)
+        if haskey(mat_dims, key)
+             # turn val into a sparse matrix whatever it is
+            val = convert(SparseMatrixCSC{Real,Int}, hcat(val))
+            update_sizes(val, mat_dims[key])
+        else
+            if key === :ports
+                pins = Dict{Symbol,Vector{Tuple{Int, Int}}}()
+                for branch in 1:length(val)
+                    push!(get!(pins, Symbol(val[branch][1]), []), (branch, 1))
+                    push!(get!(pins, Symbol(val[branch][2]), []), (branch, -1))
+                end
+                val = pins
+                key = :pins
+            end
+        end
+        constr_params[key] = val
     end
     for (m, ns) in mat_dims
-      if !isdefined(elem, m)
-        setfield!(elem, m, spzeros(Real, get(sizes, ns[1], 0), get(sizes, ns[2], 0)))
-      end
+        if !haskey(constr_params, m)
+            constr_params[m] = spzeros(Real, get(sizes, ns[1], 0), get(sizes, ns[2], 0))
+        end
     end
-    if !isdefined(elem, :nonlinear_eq)
-      elem.nonlinear_eq = (q) -> (SVector{0,Float64}(), SMatrix{0,0,Float64}())
+    if !haskey(constr_params, :nonlinear_eq)
+        constr_params[:nonlinear_eq] =
+            (q) -> (SVector{0,Float64}(), SMatrix{0,0,Float64}())
     end
-    if !isdefined(elem, :pins)
-        elem.pins = Dict(Symbol(i) => [((i+1) ÷ 2, 2(i % 2) - 1)] for i in 1:2nb(elem))
+    if !haskey(constr_params, :pins)
+        constr_params[:pins] = Dict(
+            Symbol(i) => [((i+1) ÷ 2, 2(i % 2) - 1)] for i in 1:2get(sizes, :nb, 0)
+        )
     end
-    elem
-  end
+    return Element(getindex.(Ref(constr_params), fieldnames(Element))...)
 end
 
 for (n,m) in Dict(:nb => :mv, :nx => :mx, :nq => :mq, :nu => :mu)
