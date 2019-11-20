@@ -39,16 +39,6 @@ end
 function Element(;args...)
     sizes = Dict{Symbol,Int}(:n0 => 1)
 
-    function update_sizes(mat, syms)
-        for (sym, s) in zip(syms, size(mat))
-            if !haskey(sizes, sym)
-                sizes[sym] = s
-            elseif sizes[sym] ≠ s
-                error("Inconsistent sizes for ", sym)
-            end
-        end
-    end
-
     mat_dims = Dict(
         :mv => (:nl, :nb), :mi => (:nl, :nb), :mx => (:nl, :nx), :mxd => (:nl, :nx),
         :mq => (:nl, :nq), :mu => (:nl, :nu), :u0 => (:nl, :n0),
@@ -61,7 +51,13 @@ function Element(;args...)
         if haskey(mat_dims, key)
              # turn val into a sparse matrix whatever it is
             val = convert(SparseMatrixCSC{Real,Int}, hcat(val))
-            update_sizes(val, mat_dims[key])
+            for (sym, s) in zip(mat_dims[key], size(val))
+                if !haskey(sizes, sym)
+                    sizes[sym] = s
+                elseif sizes[sym] ≠ s
+                    error("Inconsistent sizes for ", sym)
+                end
+            end
         else
             if key === :ports
                 pins = Dict{Symbol,Vector{Tuple{Int, Int}}}()
@@ -77,7 +73,7 @@ function Element(;args...)
     end
     for (m, ns) in mat_dims
         if !haskey(constr_params, m)
-            constr_params[m] = spzeros(Real, get(sizes, ns[1], 0), get(sizes, ns[2], 0))
+            constr_params[m] = spzeros(Real, get!(sizes, ns[1], 0), get!(sizes, ns[2], 0))
         end
     end
     if !haskey(constr_params, :nonlinear_eq)
@@ -86,7 +82,7 @@ function Element(;args...)
     end
     if !haskey(constr_params, :pins)
         constr_params[:pins] = Dict(
-            Symbol(i) => [((i+1) ÷ 2, 2(i % 2) - 1)] for i in 1:2get(sizes, :nb, 0)
+            Symbol(i) => [((i+1) ÷ 2, 2(i % 2) - 1)] for i in 1:2sizes[:nb]
         )
     end
     return Element(getindex.(Ref(constr_params), fieldnames(Element))...)
