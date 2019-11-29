@@ -2,7 +2,7 @@
 
 [![Join the chat at https://gitter.im/HSU-ANT/ACME.jl](https://badges.gitter.im/HSU-ANT/ACME.jl.svg)](https://gitter.im/HSU-ANT/ACME.jl?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 [![Documentation](https://img.shields.io/badge/docs-stable-blue.svg)](https://hsu-ant.github.io/ACME.jl/stable)
-[![Documentation](https://img.shields.io/badge/docs-latest-blue.svg)](https://hsu-ant.github.io/ACME.jl/latest)
+[![Documentation](https://img.shields.io/badge/docs-dev-blue.svg)](https://hsu-ant.github.io/ACME.jl/dev/)
 [![DOI](https://zenodo.org/badge/48224425.svg)](https://zenodo.org/badge/latestdoi/48224425)
 
 [![Build Status](https://travis-ci.org/HSU-ANT/ACME.jl.svg?branch=develop)](https://travis-ci.org/HSU-ANT/ACME.jl)
@@ -128,7 +128,7 @@ fail to run altogether.
 
 ## Moving on
 
-There is some [documentation](https://hsu-ant.github.io/ACME.jl/latest)
+There is some [documentation](https://hsu-ant.github.io/ACME.jl/dev/)
 available for how
 to use ACME. Additionally, you can take a look at the examples that can be found
 in the `examples` directory below `Pkg.dir("ACME")`.
