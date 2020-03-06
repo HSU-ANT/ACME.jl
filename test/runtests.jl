@@ -1,9 +1,10 @@
-# Copyright 2015, 2016, 2017, 2018, 2019 Martin Holters
+# Copyright 2015, 2016, 2017, 2018, 2019, 2020 Martin Holters
 # See accompanying license file.
 
 include("checklic.jl")
 
 using ACME
+using Compat: evalpoly, only
 using Test: @test, @test_broken, @test_logs, @test_throws, @testset
 using FFTW: rfft
 using ProgressMeter
@@ -517,6 +518,28 @@ end
         model = DiscreteModel(circ, 1);
         y = run!(model, pol*[0 1 2 2 2; 5 5 0.5 1 1.5])
         @test y == pol*[0 0 1e-4*(1-0.5/2)*0.5 1e-4*(1-1/2)*1 1e-4/2*1^2]
+    end
+    for (typ, pol) in ((:n, 1), (:p, -1)), α in (1e-4, (0.0205, -0.0017)),
+        vt in (1, (1.2078, 0.3238), (-1.2454, -0.199, -0.0483))
+        circ = @circuit begin
+            vgs = voltagesource(), [-] == gnd
+            vds = voltagesource(), [-] == gnd
+            J = mosfet(typ, vt=vt, α=α, λ=0.05), [gate] == vgs[+], [drain] == vds[+]
+            out = currentprobe(), [+] == J[source], [-] == gnd
+        end
+        model = DiscreteModel(circ, 1);
+        for vgs in range(0, stop=5, length=10), vds in range(0, stop=5, length=10)
+            y = only(run!(model, pol*hcat([vgs; vds])))
+            α´ = evalpoly(pol*vgs, (α...,))
+            vt´ = evalpoly(pol*vgs, (vt...,))
+            if vgs ≤ vt´
+                @test y == 0
+            elseif vds ≤ vgs - vt´
+                @test y ≈ pol * α´ * (vgs - vt´ - vds / 2) * vds * (1 + 0.05 * vds)
+            else
+                @test y ≈ pol * α´ / 2 * (vgs - vt´)^2 * (1 + 0.05 * vds)
+            end
+        end
     end
 end
 

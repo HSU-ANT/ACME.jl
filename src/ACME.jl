@@ -1,10 +1,11 @@
-# Copyright 2015, 2016, 2017, 2018, 2019 Martin Holters
+# Copyright 2015, 2016, 2017, 2018, 2019, 2020 Martin Holters
 # See accompanying license file.
 
 module ACME
 
 export DiscreteModel, run!, steadystate, steadystate!, linearize, ModelRunner
 
+using Compat: evalpoly
 using SparseArrays: SparseMatrixCSC, blockdiag, dropzeros!, findnz,
     nonzeros, sparse, spzeros
 using LinearAlgebra: BLAS, I, axpy!, lu, rmul!
