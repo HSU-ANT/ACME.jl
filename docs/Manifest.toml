@@ -1,14 +1,24 @@
 [[ACME]]
-deps = ["IterTools", "LinearAlgebra", "Markdown", "OrderedCollections", "ProgressMeter", "SparseArrays", "StaticArrays", "Statistics"]
+deps = ["Compat", "IterTools", "LinearAlgebra", "Markdown", "OrderedCollections", "ProgressMeter", "SparseArrays", "StaticArrays", "Statistics"]
 path = ".."
 uuid = "ca8b7239-ccd3-5cce-807f-2072f3f0d108"
 
 [[Base64]]
 uuid = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
 
+[[Compat]]
+deps = ["Base64", "Dates", "DelimitedFiles", "Distributed", "InteractiveUtils", "LibGit2", "Libdl", "LinearAlgebra", "Markdown", "Mmap", "Pkg", "Printf", "REPL", "Random", "SHA", "Serialization", "SharedArrays", "Sockets", "SparseArrays", "Statistics", "Test", "UUIDs", "Unicode"]
+git-tree-sha1 = "2e23d71ad695ec28ca58ddd44869f07afa33cc76"
+uuid = "34da2185-b29b-5c13-b0c7-acf172513d20"
+version = "3.7.0"
+
 [[Dates]]
 deps = ["Printf"]
 uuid = "ade2ca70-3891-5945-98fb-dc099432e06a"
+
+[[DelimitedFiles]]
+deps = ["Mmap"]
+uuid = "8bb1440f-4735-579b-a4ab-409b98df4dab"
 
 [[Distributed]]
 deps = ["LinearAlgebra", "Random", "Serialization", "Sockets"]
@@ -100,6 +110,10 @@ uuid = "ea8e919c-243c-51af-8825-aaa63cd721ce"
 
 [[Serialization]]
 uuid = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
+
+[[SharedArrays]]
+deps = ["Distributed", "Mmap", "Random", "Serialization"]
+uuid = "1a1011a3-84de-559e-8e89-a11a2f7dc383"
 
 [[Sockets]]
 uuid = "6462fe0b-24de-5631-8697-dd941f90decc"
