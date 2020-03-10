@@ -1,7 +1,7 @@
 # ACME.jl - Analog Circuit Modeling and Emulation for Julia
 
 [![Join the chat at https://gitter.im/HSU-ANT/ACME.jl](https://badges.gitter.im/HSU-ANT/ACME.jl.svg)](https://gitter.im/HSU-ANT/ACME.jl?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
-[![Documentation](https://img.shields.io/badge/docs-v0.9.2-blue.svg)](https://hsu-ant.github.io/ACME.jl/v0.9.2/)
+[![Documentation](https://img.shields.io/badge/docs-v0.9.3-blue.svg)](https://hsu-ant.github.io/ACME.jl/v0.9.3/)
 [![DOI](https://zenodo.org/badge/48224425.svg)](https://zenodo.org/badge/latestdoi/48224425)
 
 ACME is a [Julia](http://julialang.org/) package for the simulation of
@@ -18,7 +18,7 @@ Schematics"](http://www.eurasip.org/Proceedings/Eusipco/Eusipco2015/papers/15701
 ## Installation
 
 If you have not done so already, [download and install
-Julia](http://julialang.org/downloads/). (Any version starting with 0.6 should
+Julia](http://julialang.org/downloads/). (Any version starting with 1.0 should
 be fine; earlier ACME versions support Julia starting with version 0.3.)
 
 To install ACME, start Julia and run:
@@ -104,7 +104,7 @@ row per input (just one in the example) and one column per sample. So for a
 sinusoid at 1 kHz lasting one second, we do
 
 ```Julia
-y = run!(model, sin(2π*1000/44100*(0:44099).'))
+y = run!(model, [sin(2π*1000/44100*n) for c in 1:1, n in 0:44099])
 ```
 
 The output `y` now likewise is a matrix with one row for the one probe we have
@@ -123,7 +123,7 @@ fail to run altogether.
 
 ## Moving on
 
-There is some [documentation](https://hsu-ant.github.io/ACME.jl/v0.9.2/)
+There is some [documentation](https://hsu-ant.github.io/ACME.jl/v0.9.3/)
 available for how
 to use ACME. Additionally, you can take a look at the examples that can be found
 in the `examples` directory below `Pkg.dir("ACME")`.
