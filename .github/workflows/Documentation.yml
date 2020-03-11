@@ -6,6 +6,7 @@ on:
       - develop
     tags: '*'
   pull_request:
+  release:
 
 jobs:
   build:
