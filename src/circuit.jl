@@ -1,4 +1,4 @@
-# Copyright 2015, 2016, 2017, 2018, 2019 Martin Holters
+# Copyright 2015, 2016, 2017, 2018, 2019, 2020 Martin Holters
 # See accompanying license file.
 
 export Circuit, add!, connect!, disconnect!, @circuit, composite_element
@@ -69,7 +69,6 @@ function incidence(c::Circuit)
 end
 
 function nonlinear_eq_func(c::Circuit, elem_idxs=1:length(elements(c)))
-    row_offset = 0
     col_offset = 0
     funcs = Function[]
     for elem in collect(elements(c))[elem_idxs]
@@ -84,7 +83,6 @@ function nonlinear_eq_func(c::Circuit, elem_idxs=1:length(elements(c)))
                 end
             end)
 
-        row_offset += nn(elem)
         col_offset += nq(elem)
     end
     return CircuitNLFunc((funcs...,))
