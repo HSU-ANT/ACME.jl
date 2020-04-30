@@ -109,14 +109,20 @@ include("elements.jl")
 
 include("circuit.jl")
 
-struct ModelNonlinearEquation{F}
+struct ModelNonlinearEquation{F,Tpexp<:SMatrix,Tq0<:SVector,Tfq<:SMatrix}
     func::F
-    pexp::Matrix{Float64}
-    q0::Vector{Float64}
-    fq::Matrix{Float64}
+    pexp::Tpexp
+    q0::Tq0
+    fq::Tfq
 end
-ModelNonlinearEquation(func::F, pexp, q0, fq) where {F} =
-    ModelNonlinearEquation{F}(func, pexp, q0, fq)
+function ModelNonlinearEquation(func, pexp, q0, fq)
+    return ModelNonlinearEquation(
+        func,
+        SMatrix{size(pexp,1),size(pexp,2),Float64}(pexp),
+        SVector{length(q0),Float64}(q0),
+        SMatrix{size(fq,1),size(fq,2),Float64}(fq)
+    )
+end
 
 nn(nleq::ModelNonlinearEquation) = size(nleq.fq, 2)
 np(nleq::ModelNonlinearEquation) = size(nleq.pexp, 2)
@@ -186,25 +192,19 @@ function DiscreteModel(circ::Circuit, t::Real, ::Type{Solver}=HomotopySolver{Cac
     fqprev_fulls = Matrix{Float64}.(mats[:fqprev_fulls])
 
     nonlinear_eq_funcs = [
-        let q = zeros(nq), circ_nl_func = nonlinear_eq_func(circ, nles)
-            @inline function(res, J, pfull, Jq, fq, z)
-                #copyto!(q, pfull + fq * z)
-                copyto!(q, pfull)
-                BLAS.gemv!('N', 1., fq, z, 1., q)
-                res´, Jq´ = circ_nl_func(q)
-                res .= res´
-                Jq .= Jq´
-                #copyto!(J, Jq*model.fq)
-                BLAS.gemm!('N', 'N', 1., Jq, fq, 0., J)
-                return nothing
+        let circ_nl_func = nonlinear_eq_func(circ, nles)
+            @inline function(pfull, fq, z)
+                q = pfull + fq * z
+                res, Jq = circ_nl_func(q)
+                J = Jq * fq
+                return (res, J, Jq)
             end
-        end for (nles, nq) in zip(nl_elems, model_nqs)]
+        end for nles in nl_elems]
 
     init_zs = [zeros(nn) for nn in model_nns]
     for idx in eachindex(nonlinear_eq_funcs)
-        func = function(res, J, scratch, z)
-            return nonlinear_eq_funcs[idx](res, J, scratch[1], scratch[2], fqs[idx], z)
-        end
+        fq = SMatrix{model_nqs[idx], model_nns[idx], Float64}(fqs[idx])
+        func = (pfull, z) -> nonlinear_eq_funcs[idx](pfull, fq, z)
         q = q0s[idx] + fqprev_fulls[idx] * vcat(init_zs...)
         init_zs[idx] = initial_solution(func, q, model_nns[idx])
     end
@@ -244,21 +244,13 @@ function DiscreteModel(circ::Circuit, t::Real, ::Type{Solver}=HomotopySolver{Cac
 
     solvers = Tuple(
         Solver(
-            ParametricNonLinEq(
-                function (res, J, scratch, z)
-                    nleq.func(res, J, scratch[1], scratch[2], nleq.fq, z)
-                end,
-                function (scratch, p)
-                    copyto!(scratch[1], nleq.q0)
-                    BLAS.gemv!('N', 1., nleq.pexp, p, 1., scratch[1])
-                end,
-                (scratch, Jp) -> BLAS.gemm!('N', 'N', 1., scratch[2], nleq.pexp, 0., Jp),
-                (zeros(nq(nleq)), zeros(nn(nleq), nq(nleq))),
-                nn(nleq),
-                np(nleq)
+            ParametricNonLinEq{nn(nleq), np(nleq), nq(nleq)}(
+                (pfull, z) -> nleq.func(pfull, nleq.fq, z),
+                (p) -> nleq.q0 + nleq.pexp * p,
+                (Jq) -> Jq * nleq.pexp,
             ),
             zeros(np(nleq)),
-            init_z
+            init_z,
         )
         for (nleq, init_z) in zip(nonlinear_eqs, init_zs)
     )
@@ -436,7 +428,7 @@ function initial_solution(init_nl_eq_func::Function, q0, nn)
     # determine an initial solution with a homotopy solver that may vary q0
     # between 0 and the true q0 -> q0 takes the role of p
     nq = length(q0)
-    init_nleq = ParametricNonLinEq(init_nl_eq_func, nn, nq)
+    init_nleq = ParametricNonLinEq{nn,nq}(init_nl_eq_func)
     init_solver = HomotopySolver{SimpleSolver}(init_nleq, zeros(nq), zeros(nn))
     init_z = solve(init_solver, q0)
     if !hasconverged(init_solver)
@@ -463,9 +455,8 @@ function steadystate(model::DiscreteModel, u=zeros(nu(model)))
             model.nonlinear_eqs[idx].pexp*model.dqs[idx]/IA_LU*model.x0
         fq = model.nonlinear_eqs[idx].pexp*model.dqs[idx]/IA_LU*model.c[:,zoff:zoff_last] + model.nonlinear_eqs[idx].fq
         nleq = model.nonlinear_eqs[idx].func
-        steady_nl_eq_func =
-            (res, J, scratch, z) -> nleq(res, J, scratch[1], scratch[2], fq, z)
-        steady_nleq = ParametricNonLinEq(steady_nl_eq_func, nn(model, idx), nq(model, idx))
+        steady_nl_eq_func = (pfull, z) -> nleq(pfull, fq, z)
+        steady_nleq = ParametricNonLinEq{nn(model, idx), nq(model, idx)}(steady_nl_eq_func)
         steady_solver = HomotopySolver{SimpleSolver}(steady_nleq, zeros(nq(model, idx)),
                                                      zeros(nn(model, idx)))
         set_resabstol!(steady_solver, 1e-15)
