@@ -573,8 +573,8 @@ end
 
 function checksteady!(model)
     x_steady = steadystate!(model)
-    for s in model.solvers
-        ACME.set_resabstol!(s, 1e-13)
+    for nleq in model.nonlinear_eqs
+        ACME.set_resabstol!(nleq.solver, 1e-13)
     end
     run!(model, zeros(1, 1))
     return model.x ≈ x_steady
@@ -628,8 +628,8 @@ end
     @testset "birdie" begin
         include(joinpath(dirname(@__FILE__), "..", "examples", "birdie.jl"))
         model=birdie(vol=0.8)
-        ACME.solve(model.solvers[1], [0.003, -0.0002])
-        @assert all(ACME.hasconverged, model.solvers)
+        ACME.solve(model.nonlinear_eqs[1].solver, [0.003, -0.0002])
+        @assert all((nleq) -> ACME.hasconverged(nleq.solver), model.nonlinear_eqs)
         println("Running birdie with fixed vol")
         @test ACME.np(model, 1) == 2
         y = run!(model, sin.(2π*1000/44100*(0:44099)'); showprogress=false)
