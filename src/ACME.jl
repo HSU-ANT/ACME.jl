@@ -195,8 +195,7 @@ function DiscreteModel(circ::Circuit, t::Real, ::Type{Solver}=HomotopySolver{Cac
     init_zs = [zeros(nn) for nn in model_nns]
     for idx in eachindex(nonlinear_eq_funcs)
         q = q0s[idx] + fqprev_fulls[idx] * vcat(init_zs...)
-        init_zs[idx] = Base.invokelatest(initial_solution,
-                                         nonlinear_eq_funcs[idx], q, model_nns[idx])
+        init_zs[idx] = initial_solution(nonlinear_eq_funcs[idx], q, model_nns[idx])
     end
 
     while any(np -> np == 0, model_nps)
@@ -248,7 +247,7 @@ function DiscreteModel(circ::Circuit, t::Real, ::Type{Solver}=HomotopySolver{Cac
             return nothing
         end
         for pexp in pexps]
-    solvers = ((Base.invokelatest(Solver,
+    solvers = ((Solver(
                                   ParametricNonLinEq(nonlinear_eq_funcs[idx],
                                       nonlinear_eq_set_ps[idx],
                                       nonlinear_eq_calc_Jps[idx],
@@ -460,10 +459,10 @@ function steadystate(model::DiscreteModel, u=zeros(nu(model)))
         steady_nl_eq_func =
             (res, J, scratch, z) -> nleq(res, J, scratch[1], scratch[2], fq, z)
         steady_nleq = ParametricNonLinEq(steady_nl_eq_func, nn(model, idx), nq(model, idx))
-        steady_solver = Base.invokelatest(HomotopySolver{SimpleSolver}, steady_nleq, zeros(nq(model, idx)),
+        steady_solver = HomotopySolver{SimpleSolver}(steady_nleq, zeros(nq(model, idx)),
                                                      zeros(nn(model, idx)))
         set_resabstol!(steady_solver, 1e-15)
-        steady_z[zoff:zoff_last] = Base.invokelatest(solve, steady_solver, steady_q0)
+        steady_z[zoff:zoff_last] = solve(steady_solver, steady_q0)
         if !hasconverged(steady_solver)
             error("Failed to find steady state solution")
         end
@@ -498,8 +497,7 @@ function linearize(model::DiscreteModel, usteady::AbstractVector{Float64}=zeros(
     for idx in 1:length(model.solvers)
         psteady = model.dqs[idx] * xsteady + model.eqs[idx] * usteady +
                   model.fqprevs[idx] * zsteady
-        zsub, dzdps[idx] =
-            Base.invokelatest(linearize, model.solvers[idx], psteady)
+        zsub, dzdps[idx] = linearize(model.solvers[idx], psteady)
         copyto!(zsteady, zoff, zsub, 1, length(zsub))
 
         zranges[idx] = zoff:zoff+length(zsub)-1
