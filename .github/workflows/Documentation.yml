@@ -12,6 +12,7 @@ jobs:
     name: build on Julia ${{ matrix.julia-version }}
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         julia-version: ['1.0', '1.1', '1.2', '1.3', 'nightly']
     steps:
