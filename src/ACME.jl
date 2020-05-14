@@ -109,7 +109,10 @@ include("elements.jl")
 
 include("circuit.jl")
 
-struct ModelNonlinearEquation{F,Solver,Tpexp<:SMatrix,Tq0<:SVector,Tfq<:SMatrix}
+struct ModelNonlinearEquation{
+    Nn, Np, Nq, F, Solver,
+    Tpexp<:SMatrix{Nq,Np,Float64}, Tq0<:SVector{Nq,Float64}, Tfq<:SMatrix{Nq,Nn,Float64},
+}
     func::F
     pexp::Tpexp
     q0::Tq0
@@ -147,9 +150,9 @@ function ModelNonlinearEquation(func, pexp′, q0′, dq, eq, fqprev, fq′, ::T
     )
 end
 
-nn(nleq::ModelNonlinearEquation) = size(nleq.fq, 2)
-np(nleq::ModelNonlinearEquation) = size(nleq.pexp, 2)
-nq(nleq::ModelNonlinearEquation) = size(nleq.pexp, 1)
+nn(nleq::ModelNonlinearEquation{Nn,Np,Nq}) where {Nn,Np,Nq} = Nn
+np(nleq::ModelNonlinearEquation{Nn,Np,Nq}) where {Nn,Np,Nq} = Np
+nq(nleq::ModelNonlinearEquation{Nn,Np,Nq}) where {Nn,Np,Nq} = Nq
 
 mutable struct DiscreteModel{NLEQs}
     a::Matrix{Float64}
