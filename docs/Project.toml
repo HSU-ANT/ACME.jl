@@ -3,4 +3,4 @@ ACME = "ca8b7239-ccd3-5cce-807f-2072f3f0d108"
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
 
 [compat]
-Documenter = "=0.24.3"
+Documenter = "=0.24.11"
