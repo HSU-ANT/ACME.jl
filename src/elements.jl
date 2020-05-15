@@ -214,7 +214,7 @@ at `+`
 """
 currentprobe(;rs=0) = Element(mv=1, mi=-rs, pi=1, ports=[:+ => :-])
 
-@doc doc"""
+@doc raw"""
     diode(;is=1e-12, η = 1)
 
 Creates a diode obeying Shockley's law
@@ -234,7 +234,7 @@ Pins: `+` (anode) and `-` (cathode)
         end
   )
 
-@doc doc"""
+@doc raw"""
     bjt(typ; is=1e-12, η=1, isc=is, ise=is, ηc=η, ηe=η, βf=1000, βr=10,
         ile=0, ilc=0, ηcl=ηc, ηel=ηe, vaf=Inf, var=Inf, ikf=Inf, ikr=Inf)
 
@@ -393,7 +393,7 @@ Pins: `base`, `emitter`, `collector`
                    ports = [:base => :emitter, :base => :collector])
 end
 
-@doc doc"""
+@doc raw"""
     mosfet(typ; vt=0.7, α=2e-5, λ=0)
 
 Creates a MOSFET transistor with the simple model
@@ -465,7 +465,7 @@ Pins: `gate`, `source`, `drain`
     end
 end
 
-@doc doc"""
+@doc raw"""
     opamp(;maxgain=Inf, gain_bw_prod=Inf)
 
 Creates a linear operational amplifier as a voltage-controlled voltage source.
@@ -501,7 +501,7 @@ Pins: `in+` and `in-` for input, `out+` and `out-` for output
     end
 end
 
-@doc doc"""
+@doc raw"""
     opamp(Val{:macak}, gain, vomin, vomax)
 
 Creates a clipping operational amplifier where input and output voltage are

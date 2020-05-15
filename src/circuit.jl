@@ -257,7 +257,7 @@ end
 topomat(incidence::SparseMatrixCSC{<:Integer}) = topomat!(copy(incidence))
 topomat(c::Circuit) = topomat!(incidence(c))
 
-@doc doc"""
+@doc raw"""
     @circuit begin #= ... =# end
 
 Provides a simple domain-specific language to decribe circuits. The
@@ -318,8 +318,9 @@ If a net or pin specification is not just a single symbol or number, and has to
 be put in quotes (e.g. `"in+"`, `"9V"`)
 
 !!! note
-    Instead of `⟷` (`\\longleftrightarrow`), one can also use `==`.
-""" macro circuit(cdef)
+    Instead of `⟷` (`\longleftrightarrow`), one can also use `==`.
+"""
+macro circuit(cdef)
     is_conn_spec(expr::Expr) =
         (expr.head === :call && (expr.args[1] === :(⟷) || expr.args[1] === :(↔) || expr.args[1] === :(==))) ||
         (expr.head === :comparison && all(c -> c === :(==), expr.args[2:2:end]))
@@ -404,7 +405,7 @@ be put in quotes (e.g. `"in+"`, `"9V"`)
     return ccode
 end
 
-@doc doc"""
+@doc raw"""
     composite_element(circ; pinmap=Dict(), ports)
 
 Create a circuit element from the (sub-)circuit `circ`. The `pinmap` defines
