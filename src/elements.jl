@@ -527,6 +527,7 @@ Pins: `in+` and `in-` for input, `out+` and `out-` for output
             vi_scaled = vi * (gain/scale)
             res = @SVector [tanh(vi_scaled) * scale - vo]
             J = @SMatrix [gain / cosh(vi_scaled)^2 -1.0]
+            return (res, J)
         end
     return Element(mv=[0 0; 1 0; 0 1], mi=[1 0; 0 0; 0 0], mq=[0 0; -1 0; 0 -1],
                    u0=[0; 0; offset],
