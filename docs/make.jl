@@ -14,6 +14,6 @@ makedocs(
 if v"1.0" ≤ VERSION < v"1.1" # deploy from 1.0
     deploydocs(
         repo = "github.com/HSU-ANT/ACME.jl.git",
-        devbranch = "develop",
+        devbranch = "main",
     )
 end
