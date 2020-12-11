@@ -568,6 +568,17 @@ end
         Yref = [let ω=2*44100*tan(π*k/length(y)); 1/(G⁻¹(im*ω) + H(im*ω)); end for k in eachindex(Y).-1]
         @test Y ≈ Yref
     end
+
+    circ = @circuit begin
+        input = voltagesource(), [-] ⟷ gnd
+        op = opamp(Val{:macak}, 100, -3, 4), ["in+"] ⟷ input[+], ["in-"] ⟷ ["out-"] ⟷ gnd
+        output = voltageprobe(), [+] ⟷ op["out+"], [-] ⟷ gnd
+    end
+    u = range(-1, stop=1, length=1000)
+    model = DiscreteModel(circ, 1/44100)
+    y = run!(model, u')[1,:]
+    yref = [0.5*(4 + -3) + 0.5*(4 - -3)*tanh(100/(0.5*(4 - -3)) * u) for u in u]
+    @test y ≈ yref
 end
 
 function checksteady!(model)
