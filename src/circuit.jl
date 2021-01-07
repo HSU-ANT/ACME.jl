@@ -217,7 +217,7 @@ function topomat!(incidence::SparseMatrixCSC{T}) where {T<:Integer}
 
     row = 1;
     for col = 1:size(incidence)[2]
-        rows = filter(r -> r ≥ row, findall(!iszero, incidence[:, col]))
+        rows = filter(≥(row), findall(!iszero, incidence[:, col]))
         @assert length(rows) ≤ 2
 
         isempty(rows) && continue
