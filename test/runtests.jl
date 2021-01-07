@@ -211,7 +211,7 @@ end
 @testset "gensolve/rank_factorize" begin
     a = Rational{BigInt}[1 1 1; 1 1 2; 1 2 1; 1 2 2; 2 1 1; 2 1 2]
     b = Rational{BigInt}[1 2 3 4 5 6; 6 5 4 3 2 1; 1 0 1 0 1 0]
-    nullspace = ACME.gensolve(sparse(a'), spzeros(Rational{BigInt}, size(a, 2), 0))[2]
+    nullspace = @inferred(ACME.gensolve(sparse(a'), spzeros(Rational{BigInt}, size(a, 2), 0)))[2]
     @test nullspace'*a == spzeros(3, 3)
     c, f = ACME.rank_factorize(sparse(a * b))
     @test c*f == a*b

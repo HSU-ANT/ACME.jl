@@ -695,7 +695,7 @@ function gensolve(a, b, x, h, thresh=0.1)
     if m == 0
         return x, h
     end
-    t = sortperm(vec(mapslices(ait -> count(!iszero, ait), a, dims=2))) # row indexes in ascending order of nnz
+    t = sortperm([count(!iszero, ait) for ait in eachrow(a)]) # row indexes in ascending order of nnz
     tol = 3 * max(eps(float(eltype(a))), eps(float(eltype(h)))) * size(a, 2)
     for i in 1:m
         ait = a[t[i],:]' # ait is a row of the a matrix
@@ -707,7 +707,7 @@ function gensolve(a, b, x, h, thresh=0.1)
             continue
         end
         jat = jnz[nz_abs_vals .≥ thresh*max_abs_val] # cols above threshold
-        j = jat[argmin(vec(mapslices(hj -> count(!iszero, hj), h[:,jat], dims=1)))]
+        j = jat[argmin([count(!iszero, hj) for hj in eachcol(h[:,jat])])]
         q = h[:,j]
         x = x + convert(typeof(x), q * ((b[t[i],:]' - ait*x) * (1 / (ait*q))))
         if size(h)[2] > 1
