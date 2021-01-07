@@ -1,11 +1,11 @@
-# Copyright 2015, 2016, 2017, 2018, 2019, 2020 Martin Holters
+# Copyright 2015, 2016, 2017, 2018, 2019, 2020, 2021 Martin Holters
 # See accompanying license file.
 
 module ACME
 
 export DiscreteModel, run!, steadystate, steadystate!, linearize, ModelRunner
 
-using Compat: evalpoly
+using Compat: eachcol, eachrow, evalpoly
 using SparseArrays: SparseMatrixCSC, blockdiag, dropzeros!, findnz,
     nonzeros, sparse, spzeros
 using LinearAlgebra: BLAS, I, axpy!, lu, rmul!
@@ -690,7 +690,7 @@ function gensolve(a, b, x, h, thresh=0.1)
     if m == 0
         return x, h
     end
-    t = sortperm(vec(mapslices(ait -> count(!iszero, ait), a, dims=2))) # row indexes in ascending order of nnz
+    t = sortperm(collect(count(!iszero, ait) for ait in eachrow(a))) # row indexes in ascending order of nnz
     tol = 3 * max(eps(float(eltype(a))), eps(float(eltype(h)))) * size(a, 2)
     for i in 1:m
         ait = a[t[i],:]' # ait is a row of the a matrix
@@ -702,11 +702,11 @@ function gensolve(a, b, x, h, thresh=0.1)
             continue
         end
         jat = jnz[nz_abs_vals .≥ thresh*max_abs_val] # cols above threshold
-        j = jat[argmin(vec(mapslices(hj -> count(!iszero, hj), h[:,jat], dims=1)))]
+        j = jat[argmin(collect(count(!iszero, hj) for hj in eachcol(h[:,jat])))]
         q = h[:,j]
-        x = x + convert(typeof(x), q * ((b[t[i],:]' - ait*x) * (1 / (ait*q))))
+        x = x + convert(typeof(x), q * ((b[t[i],:]' - ait*x) * (1 / (ait*q))))::typeof(x)
         if size(h)[2] > 1
-            h = h[:,[1:j-1;j+1:end]] - convert(typeof(h), q * s[1,[1:j-1;j+1:end]]'*(1/s[1,j]))
+            h = h[:,[1:j-1;j+1:end]] - convert(typeof(h), q * s[1,[1:j-1;j+1:end]]'*(1/s[1,j]))::typeof(h)
         else
             h = similar(h, eltype(h), (size(h)[1], 0))
         end
