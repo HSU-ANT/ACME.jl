@@ -1,4 +1,4 @@
-# Copyright 2015, 2016, 2017, 2018, 2019, 2020 Martin Holters
+# Copyright 2015, 2016, 2017, 2018, 2019, 2020, 2021 Martin Holters
 # See accompanying license file.
 
 export Circuit, add!, connect!, disconnect!, @circuit, composite_element
@@ -219,7 +219,7 @@ function topomat!(incidence::SparseMatrixCSC{T}) where {T<:Integer}
 
     row = 1;
     for col = 1:size(incidence)[2]
-        rows = filter(r -> r ≥ row, findall(!iszero, incidence[:, col]))
+        rows = filter(≥(row), findall(!iszero, incidence[:, col]))
         @assert length(rows) ≤ 2
 
         isempty(rows) && continue

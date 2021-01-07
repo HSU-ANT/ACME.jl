@@ -1,24 +1,24 @@
-# Copyright 2015, 2016, 2017, 2018, 2019, 2020 Martin Holters
+# Copyright 2015, 2016, 2017, 2018, 2019, 2020, 2021 Martin Holters
 # See accompanying license file.
 
 include("checklic.jl")
 
 using ACME
 using Compat: evalpoly, only
-using Test: @test, @test_broken, @test_logs, @test_throws, @testset
+using Test: @inferred, @test, @test_broken, @test_logs, @test_throws, @testset
 using FFTW: rfft
 using ProgressMeter
 using SparseArrays: sparse, spzeros
 
 @testset "topomat" begin
-    tv, ti = ACME.topomat(sparse([1 -1 1; -1 1 -1]))
+    tv, ti = @inferred ACME.topomat(sparse([1 -1 1; -1 1 -1]))
     @test tv*ti'==spzeros(2,1)
 
     # Pathological cases for topomat:
     # two nodes, one loop branch (short-circuited) -> voltage==0, current arbitrary
-    @test ACME.topomat(spzeros(Int, 2, 1)) == (hcat([1]), spzeros(0, 1))
+    @test @inferred(ACME.topomat(spzeros(Int, 2, 1))) == (hcat([1]), spzeros(0, 1))
     # two nodes, one branch between them -> voltage arbitrary, current==0
-    @test ACME.topomat(sparse([1,2], [1,1], [1,-1])) == (spzeros(0, 1), hcat([1]))
+    @test @inferred(ACME.topomat(sparse([1,2], [1,1], [1,-1]))) == (spzeros(0, 1), hcat([1]))
 end
 
 @testset "LinearSolver" begin
