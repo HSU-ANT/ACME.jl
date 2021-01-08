@@ -46,7 +46,7 @@ for mat in [:mv; :mi; :mx; :mxd; :mq; :mu; :pv; :pi; :px; :pxd; :pq]
                 )::SparseMatrixCSC{Rational{BigInt},Int}
 end
 
-u0(c::Circuit) = vcat((elem.u0 for elem in elements(c))...)
+u0(c::Circuit) = reduce(vcat, elem.u0 for elem in elements(c); init=spzeros(Real, 0, 1))
 
 function incidence(c::Circuit)
     i = sizehint!(Int[], 2nb(c))
