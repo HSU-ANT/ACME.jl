@@ -260,50 +260,57 @@ function DiscreteModel(circ::Circuit, t::Real, ::Type{Solver}=HomotopySolver{Cac
 end
 
 function model_matrices(circ::Circuit, t::Rational{BigInt})
-    lhs = convert(SparseMatrixCSC{Rational{BigInt},Int},
-                  [mv(circ) mi(circ) mxd(circ)//t+mx(circ)//2 mq(circ);
-                   blockdiag(topomat(circ)...) spzeros(nb(circ), nx(circ) + nq(circ))])
-    rhs = convert(SparseMatrixCSC{Rational{BigInt},Int},
-                  [u0(circ) mu(circ) mxd(circ)//t-mx(circ)//2;
-                          spzeros(nb(circ), 1+nu(circ)+nx(circ))])
+    lhs = Rational{BigInt}[
+        mv(circ) mi(circ) mxd(circ)//t+mx(circ)//2 mq(circ);
+        blockdiag(topomat(circ)...) spzeros(nb(circ), nx(circ) + nq(circ))
+    ]
+    rhs = Rational{BigInt}[
+        u0(circ) mu(circ) mxd(circ)//t-mx(circ)//2;
+        spzeros(Rational{BigInt}, nb(circ), 1+nu(circ)+nx(circ))
+    ]
     x, f = Matrix.(gensolve(lhs, rhs))
 
-    rowsizes = [nb(circ); nb(circ); nx(circ); nq(circ)]
-    res = Dict{Symbol,Array}(zip([:fv; :fi; :c; :fq], matsplit(f, rowsizes)))
+    rowsizes = (nb(circ), nb(circ), nx(circ), nq(circ))
+    rowranges = consecranges(rowsizes)
+    fq = f[rowranges[4], :]
 
-    nullspace = gensolve(sparse(res[:fq]::Matrix{Rational{BigInt}}),
-                         spzeros(Rational{BigInt}, size(res[:fq],1), 0))[2]
+    nullspace = gensolve(sparse(fq), spzeros(Rational{BigInt}, size(fq, 1), 0))[2]
     indeterminates = f * nullspace
 
-    if sum(abs2, res[:c] * nullspace) > 1e-20
+    if sum(abs2, indeterminates[rowranges[3],:]) > 1e-20
         @warn "State update depends on indeterminate quantity"
     end
+
     while size(nullspace, 2) > 0
-        i, j = argmax(abs.(nullspace)).I
+        i, j = (argmax(abs.(nullspace))::CartesianIndex{2}).I # argmax cannot be inferred prior to Julia 1.7
         nullspace = nullspace[[1:i-1; i+1:end], [1:j-1; j+1:end]]
         f = f[:, [1:i-1; i+1:end]]
-        for k in [:fv; :fi; :c; :fq]
-            res[k] = res[k][:, [1:i-1; i+1:end]]
-        end
     end
 
-    merge!(res, Dict(zip([:v0 :ev :dv; :i0 :ei :di; :x0 :b :a; :q0 :eq_full :dq_full],
-                         matsplit(x, rowsizes, [1; nu(circ); nx(circ)]))))
-    for v in (:v0, :i0, :x0, :q0)
-        res[v] = dropdims(res[v], dims=2)
-    end
+    f_split = NamedTuple{(:fv, :fi, :c, :fq)}(matsplit(f, rowsizes))
+
+    x_split = NamedTuple{(:v0, :i0, :x0, :q0, :ev, :ei, :b, :eq_full, :dv, :di, :a, :dq_full)}(
+        matsplit(x, rowsizes, (1, nu(circ), nx(circ)))
+    )
+    vs = (:v0, :i0, :x0, :q0)
+    x_split_replace0 = NamedTuple{vs}(
+        map(let x_split=x_split; v -> dropdims(x_split[v], dims=2); end, vs)
+    )
 
     p = [pv(circ) pi(circ) px(circ)//2+pxd(circ)//t pq(circ)]
     if sum(abs2, p * indeterminates) > 1e-20
         @warn "Model output depends on indeterminate quantity"
     end
-    res[:dy] = p * x[:,2+nu(circ):end] + px(circ)//2-pxd(circ)//t
-    #          p * [dv; di; a;  dq_full] + px(circ)//2-pxd(circ)//t
-    res[:ey] = p * x[:,2:1+nu(circ)] # p * [ev; ei; b;  eq_full]
-    res[:fy] = p * f                 # p * [fv; fi; c;  fq]
-    res[:y0] = p * vec(x[:,1])       # p * [v0; i0; x0; q0]
+    y_split = (
+        dy = p * x[:,2+nu(circ):end] + px(circ)//2-pxd(circ)//t,
+        #    p * [dv; di; a;  dq_full] + px(circ)//2-pxd(circ)//t
+        ey = p * x[:,2:1+nu(circ)], # p * [ev; ei; b;  eq_full]
+        fy = p * f,                 # p * [fv; fi; c;  fq]
+        y0 = p * x[:,1],            # p * [v0; i0; x0; q0]
+    )
 
-    return res
+    res = merge(f_split, x_split, x_split_replace0, y_split)
+    return Dict{Symbol,Array}(zip(keys(res), res))
 end
 
 model_matrices(circ::Circuit, t) = model_matrices(circ, Rational{BigInt}(t))
@@ -737,9 +744,18 @@ function rank_factorize(a::SparseMatrixCSC)
     return c, f
 end
 
-consecranges(lengths) = map((l, e) -> (e-l+1):e, lengths, cumsum(lengths))
+# cumsum(::Tuple) requires Julia 1.5, so roll our own version if needed, named
+# _cumsum so not to commit type piracy
+_cumsum(x) = cumsum(x)
+if !hasmethod(cumsum, Tuple{Tuple})
+    _cumsum(x::Tuple) = Base.tail(foldl((r, xi) -> (r..., r[end] + xi), x; init=(false,)))
+end
+
+consecranges(lengths) = map((l, e) -> (e-l+1):e, lengths, _cumsum(lengths))
 
 matsplit(v::AbstractVector, rowsizes) = [v[rs] for rs in consecranges(rowsizes)]
+matsplit(m::AbstractMatrix, rowsizes::Tuple, colsizes::Tuple=(size(m,2),)) =
+    ((map(cs -> map(rs -> m[rs, cs], consecranges(rowsizes)), consecranges(colsizes))...)...,)
 matsplit(m::AbstractMatrix, rowsizes, colsizes=[size(m,2)]) =
     [m[rs, cs] for rs in consecranges(rowsizes), cs in consecranges(colsizes)]
 
