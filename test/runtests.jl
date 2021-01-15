@@ -234,13 +234,12 @@ end
         zuin in (zeros(Rational{BigInt}, 3, 1), hcat(Rational{BigInt}[1; 2; -1]))
         dq_full = p * dq + fq * zxin
         eq_full = p * eq + fq * zuin
-        mats = Dict{Symbol,Array}(:a => a, :b => b, :c => c, :dy => dy, :ey => ey,
-            :fy => fy, :dq_full => dq_full, :eq_full => eq_full, :fq => fq)
-        mats[:dq_fulls]=Matrix[mats[:dq_full]]
-        mats[:eq_fulls]=Matrix[mats[:eq_full]]
-        mats[:fqprev_fulls]=Matrix[mats[:eq_full]]
-        mats[:fqs]=Matrix[mats[:fq]]
-        ACME.reduce_pdims!(mats)
+        mats = (
+            a = a, b = b, c = c, dy = dy, ey = ey, fy = fy,
+            dq_full = dq_full, eq_full = eq_full, fq = fq,
+            dq_fulls = [dq_full], eq_fulls = [eq_full], fqprev_fulls = [eq_full], fqs = [fq]
+        )
+        mats = ACME.reduce_pdims!(mats)
         @test size(mats[:pexps][1], 2) == 3
         @test mats[:pexps][1] * mats[:dqs][1] == mats[:dq_fulls][1]
         @test mats[:pexps][1] * mats[:eqs][1] == mats[:eq_fulls][1]

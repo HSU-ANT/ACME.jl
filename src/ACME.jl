@@ -162,11 +162,8 @@ function DiscreteModel(circ::Circuit, t::Real, ::Type{Solver}=HomotopySolver{Cac
     model_qidxs = [reduce(vcat, consecranges(nqs)[nles]) for nles in nl_elems]
     mats = merge(mats, split_nl_model_matrices(mats, model_qidxs, model_nns))
 
-    mats = Dict{Symbol,Array}(zip(keys(mats), mats))
+    mats = reduce_pdims!(mats)
 
-    reduce_pdims!(mats)
-
-    model_nps = size.(mats[:dqs], 1)
     model_nqs = size.(mats[:pexps], 1)
 
     @assert nn(circ) == sum(model_nns)
@@ -175,7 +172,7 @@ function DiscreteModel(circ::Circuit, t::Real, ::Type{Solver}=HomotopySolver{Cac
     fqs = Matrix{Float64}.(mats[:fqs])
     fqprev_fulls = Matrix{Float64}.(mats[:fqprev_fulls])
 
-    model_nonlinear_eq_funcs = [
+    model_nonlinear_eq_funcs = Function[
         let q = zeros(nq), circ_nl_func = nonlinear_eq_func(circ, nles)
             @inline function(res, J, pfull, Jq, fq, z)
                 #copyto!(q, pfull + fq * z)
@@ -190,27 +187,30 @@ function DiscreteModel(circ::Circuit, t::Real, ::Type{Solver}=HomotopySolver{Cac
             end
         end for (nles, nq) in zip(nl_elems, model_nqs)]
 
-    nonlinear_eq_funcs = [
+    nonlinear_eq_funcs = Function[
         @inline function (res, J, scratch, z)
             nleq(res, J, scratch[1], scratch[2], fq, z)
         end for (nleq, fq) in zip(model_nonlinear_eq_funcs, fqs)]
 
     init_zs = [zeros(nn) for nn in model_nns]
     for idx in eachindex(nonlinear_eq_funcs)
-        q = q0s[idx] + fqprev_fulls[idx] * vcat(init_zs...)
+        q = q0s[idx] + fqprev_fulls[idx] * reduce(vcat, init_zs)
         init_zs[idx] = initial_solution(nonlinear_eq_funcs[idx], q, model_nns[idx])
     end
 
-    while any(np -> np == 0, model_nps)
-        const_idxs = findall(iszero, model_nps)
-        const_zidxs = vcat(consecranges(model_nns)[const_idxs]...)
+    while true
+        const_idxs = findall(iszero, size.(mats[:dqs], 1))
+        if isempty(const_idxs)
+            break
+        end
+        const_zidxs = reduce(vcat, consecranges(model_nns)[const_idxs])
         varying_zidxs = filter(idx -> !(idx in const_zidxs), 1:sum(model_nns))
         for idx in eachindex(mats[:q0s])
-            mats[:q0s][idx] += mats[:fqprev_fulls][idx][:,const_zidxs] * vcat(init_zs[const_idxs]...)
+            mats[:q0s][idx] += mats[:fqprev_fulls][idx][:,const_zidxs] * reduce(vcat, init_zs[const_idxs])
             mats[:fqprev_fulls][idx] = mats[:fqprev_fulls][idx][:,varying_zidxs]
         end
-        mats[:x0] += mats[:c][:,const_zidxs] * vcat(init_zs[const_idxs]...)
-        mats[:y0] += mats[:fy][:,const_zidxs] * vcat(init_zs[const_idxs]...)
+        copyto!(mats[:x0], mats[:x0] + mats[:c][:,const_zidxs] * reduce(vcat, init_zs[const_idxs]))
+        copyto!(mats[:y0], mats[:y0] + mats[:fy][:,const_zidxs] * reduce(vcat, init_zs[const_idxs]))
         deleteat!(mats[:q0s], const_idxs)
         deleteat!(mats[:dq_fulls], const_idxs)
         deleteat!(mats[:eq_fulls], const_idxs)
@@ -222,11 +222,10 @@ function DiscreteModel(circ::Circuit, t::Real, ::Type{Solver}=HomotopySolver{Cac
         deleteat!(model_nonlinear_eq_funcs, const_idxs)
         deleteat!(nonlinear_eq_funcs, const_idxs)
         deleteat!(nl_elems, const_idxs)
-        mats[:fy] = mats[:fy][:,varying_zidxs]
-        mats[:c] = mats[:c][:,varying_zidxs]
-        reduce_pdims!(mats)
-        model_nps = size.(mats[:dqs], 1)
+        mats = merge(mats, (fy=mats[:fy][:,varying_zidxs], c=mats[:c][:,varying_zidxs]))
+        mats = reduce_pdims!(mats)
     end
+    model_nps = size.(mats[:dqs], 1)
 
     q0s = Array{Float64}.(mats[:q0s])
     fqs = Array{Float64}.(mats[:fqs])
@@ -258,6 +257,7 @@ function DiscreteModel(circ::Circuit, t::Real, ::Type{Solver}=HomotopySolver{Cac
                                       model_nns[idx], model_nps[idx]),
                                   zeros(model_nps[idx]), init_zs[idx])
                 for idx in eachindex(nonlinear_eq_funcs))...,)
+    mats = Dict{Symbol,Array}(zip(keys(mats), mats))
     return DiscreteModel(mats, model_nonlinear_eq_funcs, solvers)
 end
 
@@ -400,20 +400,20 @@ function split_nl_model_matrices(mats, model_qidxs, model_nns)
     )
 end
 
-function reduce_pdims!(mats::Dict)
+function reduce_pdims!(mats)
     subcount = length(mats[:dq_fulls])
-    mats[:dqs] = Vector{Matrix}(undef, subcount)
-    mats[:eqs] = Vector{Matrix}(undef, subcount)
-    mats[:fqprevs] = Vector{Matrix}(undef, subcount)
-    mats[:pexps] = Vector{Matrix}(undef, subcount)
+    dqs = Vector{eltype(mats[:dq_fulls])}(undef, subcount)
+    eqs = Vector{eltype(mats[:eq_fulls])}(undef, subcount)
+    fqprevs = Vector{eltype(mats[:fqprev_fulls])}(undef, subcount)
+    pexps = Vector{Matrix{Rational{BigInt}}}(undef, subcount)
     offset = 0
     for idx in 1:subcount
         # decompose [dq_full eq_full] into pexp*[dq eq] with [dq eq] having minimum
         # number of rows
         pexp, dqeq = rank_factorize(sparse([mats[:dq_fulls][idx] mats[:eq_fulls][idx] mats[:fqprev_fulls][idx]]))
-        mats[:pexps][idx] = pexp
-        colsizes = [size(mats[m][idx], 2) for m in [:dq_fulls, :eq_fulls, :fqprev_fulls]]
-        mats[:dqs][idx], mats[:eqs][idx], mats[:fqprevs][idx] = matsplit(dqeq, [size(dqeq, 1)], colsizes)
+        pexps[idx] = pexp
+        colsizes = map(m -> size(mats[m][idx], 2)::Int, (:dq_fulls, :eq_fulls, :fqprev_fulls))
+        dqs[idx], eqs[idx], fqprevs[idx] = matsplit(dqeq, (size(dqeq, 1),), colsizes)
 
         # project pexp onto the orthogonal complement of the column space of Fq
         fq = mats[:fqs][idx]
@@ -422,27 +422,32 @@ function reduce_pdims!(mats::Dict)
         pexp = pexp - fq*fq_pinv*pexp
         # if the new pexp has lower rank, update
         pexp, f = rank_factorize(sparse(pexp))
-        if size(pexp, 2) < size(mats[:pexps][idx], 2)
+        if size(pexp, 2) < size(pexps[idx], 2)
             cols = offset .+ (1:nn)
-            mats[:a] = mats[:a] - mats[:c][:,cols]*fq_pinv*mats[:pexps][idx]*mats[:dqs][idx]
-            mats[:b] = mats[:b] - mats[:c][:,cols]*fq_pinv*mats[:pexps][idx]*mats[:eqs][idx]
-            mats[:dy] = mats[:dy] - mats[:fy][:,cols]*fq_pinv*mats[:pexps][idx]*mats[:dqs][idx]
-            mats[:ey] = mats[:ey] - mats[:fy][:,cols]*fq_pinv*mats[:pexps][idx]*mats[:eqs][idx]
+            copyto!(mats[:a], mats[:a] - mats[:c][:,cols]*fq_pinv*pexps[idx]*dqs[idx])
+            copyto!(mats[:b], mats[:b] - mats[:c][:,cols]*fq_pinv*pexps[idx]*eqs[idx])
+            copyto!(mats[:dy], mats[:dy] - mats[:fy][:,cols]*fq_pinv*pexps[idx]*dqs[idx])
+            copyto!(mats[:ey], mats[:ey] - mats[:fy][:,cols]*fq_pinv*pexps[idx]*eqs[idx])
             for idx2 in (idx+1):subcount
-                mats[:dq_fulls][idx2] = mats[:dq_fulls][idx2] - mats[:fqprev_fulls][idx2][:,cols]*fq_pinv*mats[:pexps][idx]*mats[:dqs][idx]
-                mats[:eq_fulls][idx2] = mats[:eq_fulls][idx2] - mats[:fqprev_fulls][idx2][:,cols]*fq_pinv*mats[:pexps][idx]*mats[:eqs][idx]
-                mats[:fqprev_fulls][idx2][:,1:offset] = mats[:fqprev_fulls][idx2][:,1:offset] - mats[:fqprev_fulls][idx2][:,cols]*fq_pinv*mats[:pexps][idx]*mats[:fqprevs][idx][:,1:offset]
+                q = mats[:fqprev_fulls][idx2][:,cols]*fq_pinv*pexps[idx]
+                copyto!(mats[:dq_fulls][idx2], mats[:dq_fulls][idx2] - q*dqs[idx])
+                copyto!(mats[:eq_fulls][idx2], mats[:eq_fulls][idx2] - q*eqs[idx])
+                copyto!(
+                    mats[:fqprev_fulls][idx2][:,1:offset],
+                    mats[:fqprev_fulls][idx2][:,1:offset] - q*fqprevs[idx][:,1:offset]
+                )
             end
-            mats[:pexps][idx] = pexp
-            mats[:dqs][idx] = f * mats[:dqs][idx]
-            mats[:eqs][idx] = f * mats[:eqs][idx]
-            mats[:fqprevs][idx] = f * mats[:fqprevs][idx]
-            mats[:dq_fulls][idx] = pexp * mats[:dqs][idx]
-            mats[:eq_fulls][idx] = pexp * mats[:eqs][idx]
-            mats[:fqprev_fulls][idx] = pexp * mats[:fqprevs][idx]
+            pexps[idx] = pexp
+            dqs[idx] = f * dqs[idx]
+            eqs[idx] = f * eqs[idx]
+            fqprevs[idx] = f * fqprevs[idx]
+            copyto!(mats[:dq_fulls][idx], pexp * dqs[idx])
+            copyto!(mats[:eq_fulls][idx], pexp * eqs[idx])
+            copyto!(mats[:fqprev_fulls][idx], pexp * fqprevs[idx])
         end
         offset += nn
     end
+    return merge(mats, (dqs = dqs, eqs=eqs, fqprevs=fqprevs, pexps=pexps))
 end
 
 function initial_solution(init_nl_eq_func::Function, q0, nn)
@@ -746,7 +751,7 @@ function rank_factorize(a::SparseMatrixCSC)
     nullspace = gensolve(a', spzeros(eltype(a), size(a, 2), 0))[2]
     c = Matrix{eltype(a)}(I, size(a, 1), size(a, 1))
     while size(nullspace, 2) > 0
-        i, j = argmax(abs.(nullspace)).I
+        i, j = (argmax(abs.(nullspace))::CartesianIndex{2}).I # argmax cannot be inferred prior to Julia 1.7
         c -= c[:, i] * nullspace[:, j]' / nullspace[i, j]
         c = c[:, [1:i-1; i+1:end]]
         nullspace -= nullspace[:, j] * vec(nullspace[i, :])' / nullspace[i, j]
