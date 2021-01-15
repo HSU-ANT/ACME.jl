@@ -159,8 +159,10 @@ function DiscreteModel(circ::Circuit, t::Real, ::Type{Solver}=HomotopySolver{Cac
     end
 
     model_nns = Int[sum(nns[nles]) for nles in nl_elems]
-    model_qidxs = [vcat(consecranges(nqs)[nles]...) for nles in nl_elems]
-    split_nl_model_matrices!(mats, model_qidxs, model_nns)
+    model_qidxs = [reduce(vcat, consecranges(nqs)[nles]) for nles in nl_elems]
+    mats = merge(mats, split_nl_model_matrices(mats, model_qidxs, model_nns))
+
+    mats = Dict{Symbol,Array}(zip(keys(mats), mats))
 
     reduce_pdims!(mats)
 
@@ -309,8 +311,7 @@ function model_matrices(circ::Circuit, t::Rational{BigInt})
         y0 = p * x[:,1],            # p * [v0; i0; x0; q0]
     )
 
-    res = merge(f_split, x_split, x_split_replace0, y_split)
-    return Dict{Symbol,Array}(zip(keys(res), res))
+    return merge(f_split, x_split, x_split_replace0, y_split)
 end
 
 model_matrices(circ::Circuit, t) = model_matrices(circ, Rational{BigInt}(t))
@@ -356,7 +357,7 @@ function nldecompose!(mats, nns, nqs)
     while !isempty(rem_nles)
         for sz in 1:length(rem_nles), sub in subsets(collect(rem_nles), sz)
             nn_sub = sum(nns[sub])
-            a_update = tryextract(fq[[sub_ranges[sub]...;],rem_cols], nn_sub)
+            a_update = tryextract(fq[reduce(vcat, sub_ranges[sub]), rem_cols], nn_sub)
             if a_update !== nothing
                 fq[:,rem_cols] = fq[:,rem_cols] * a_update
                 a[:,rem_cols] = a[:,rem_cols] * a_update
@@ -370,22 +371,33 @@ function nldecompose!(mats, nns, nqs)
         end
     end
 
-    mats[:c] = mats[:c] * a
+    copyto!(mats[:c], mats[:c] * a)
     # mats[:fq] is updated as part of the loop
-    mats[:fy] = mats[:fy] * a
+    copyto!(mats[:fy], mats[:fy] * a)
     return extracted_subs
 end
 
 
-function split_nl_model_matrices!(mats, model_qidxs, model_nns)
-    mats[:dq_fulls] = Matrix[mats[:dq_full][qidxs,:] for qidxs in model_qidxs]
-    mats[:eq_fulls] = Matrix[mats[:eq_full][qidxs,:] for qidxs in model_qidxs]
-    let fqsplit = vcat((matsplit(mats[:fq][qidxs,:], [length(qidxs)], model_nns) for qidxs in model_qidxs)...)
-        mats[:fqs] = Matrix[fqsplit[i,i] for i in 1:length(model_qidxs)]
-        mats[:fqprev_fulls] = Matrix[[fqsplit[i, 1:i-1]... zeros(eltype(mats[:fq]), length(model_qidxs[i]), sum(model_nns[i:end]))]
-                                     for i in 1:length(model_qidxs)]
-    end
-    mats[:q0s] = Vector[mats[:q0][qidxs] for qidxs in model_qidxs]
+function split_nl_model_matrices(mats, model_qidxs, model_nns)
+    fqsplit = reduce(
+        vcat,
+        matsplit(mats[:fq][qidxs,:], [length(qidxs)], model_nns) for qidxs in model_qidxs;
+        init=Matrix{typeof(mats[:fq])}(undef, 0, length(model_nns))
+    )
+    return (
+        dq_fulls = [mats[:dq_full][qidxs,:] for qidxs in model_qidxs],
+        eq_fulls = [mats[:eq_full][qidxs,:] for qidxs in model_qidxs],
+        fqs = [fqsplit[i,i] for i in 1:length(model_qidxs)],
+        fqprev_fulls = [
+            foldr(
+                hcat,
+                fqsplit[i, 1:i-1];
+                init = zeros(eltype(mats[:fq]), length(model_qidxs[i]), sum(model_nns[i:end]))
+            )
+            for i in 1:length(model_qidxs)
+        ],
+        q0s = [mats[:q0][qidxs] for qidxs in model_qidxs]
+    )
 end
 
 function reduce_pdims!(mats::Dict)
