@@ -796,4 +796,6 @@ precompile(mosfet, (Symbol,))
 precompile(opamp, ())
 precompile(opamp, (Type{Val{:macak}}, Float64, Float64, Float64))
 
+precompile(DiscreteModel, (Circuit, Rational{Int}))
+
 end # module
