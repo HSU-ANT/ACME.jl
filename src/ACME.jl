@@ -771,4 +771,6 @@ matsplit(m::AbstractMatrix, rowsizes, colsizes=[size(m,2)]) =
 
 include("deprecated.jl")
 
+@assert precompile(DiscreteModel, (Circuit, Rational{Int}))
+
 end # module
