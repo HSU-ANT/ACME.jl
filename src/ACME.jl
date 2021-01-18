@@ -131,18 +131,14 @@ mutable struct DiscreteModel{Solvers}
     solvers::Solvers
     x::Vector{Float64}
 
-    function DiscreteModel(mats::Dict{Symbol}, nonlinear_eq_funcs::Vector,
+    function DiscreteModel(mats, nonlinear_eq_funcs::Vector,
             solvers::Solvers) where {Solvers}
-        model = new{Solvers}()
-
-        for mat in (:a, :b, :c, :pexps, :dqs, :eqs, :fqprevs, :fqs, :dy, :ey, :fy, :x0, :q0s, :y0)
-            setfield!(model, mat, convert(fieldtype(typeof(model), mat), mats[mat]))
-        end
-
-        model.nonlinear_eq_funcs = nonlinear_eq_funcs
-        model.solvers = solvers
-        model.x = zeros(nx(model))
-        return model
+        return new{Solvers}(
+            mats[:a], mats[:b], mats[:c], mats[:x0],
+            mats[:pexps], mats[:dqs], mats[:eqs], mats[:fqprevs], mats[:fqs], mats[:q0s],
+            mats[:dy], mats[:ey], mats[:fy], mats[:y0],
+            nonlinear_eq_funcs, solvers, zeros(length(mats[:x0]))
+        )
     end
 end
 
@@ -257,7 +253,6 @@ function DiscreteModel(circ::Circuit, t::Real, ::Type{Solver}=HomotopySolver{Cac
                                       model_nns[idx], model_nps[idx]),
                                   zeros(model_nps[idx]), init_zs[idx])
                 for idx in eachindex(nonlinear_eq_funcs))...,)
-    mats = Dict{Symbol,Array}(zip(keys(mats), mats))
     return DiscreteModel(mats, model_nonlinear_eq_funcs, solvers)
 end
 
