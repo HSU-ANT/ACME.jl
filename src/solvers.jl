@@ -1,40 +1,50 @@
-# Copyright 2016, 2017, 2018, 2019 Martin Holters
+# Copyright 2016, 2017, 2018, 2019, 2020 Martin Holters
 # See accompanying license file.
 
 export SimpleSolver, HomotopySolver, CachingSolver
 import Base.copy!
 
-struct ParametricNonLinEq{F_eval<:Function,F_setp<:Function,F_calcjp<:Function,Scratch}
+struct ParametricNonLinEq{Nn,Np,Nq,F_eval<:Function,F_setp<:Function,F_calcjp<:Function,Tpfull,TJq}
     func::F_eval
     set_p::F_setp
     calc_Jp::F_calcjp
     res::Vector{Float64}
     Jp::Matrix{Float64}
     J::Matrix{Float64}
-    scratch::Scratch
-    function ParametricNonLinEq(func::F_eval, set_p::F_setp, calc_Jp::F_calcjp,
-            scratch::Scratch, nn::Integer, np::Integer
-        ) where {F_eval<:Function,F_setp<:Function,F_calcjp<:Function,Scratch}
-        res = zeros(nn)
-        Jp = zeros(nn, np)
-        J = zeros(nn, nn)
-        return new{F_eval,F_setp,F_calcjp,Scratch}(func, set_p, calc_Jp, res, Jp, J, scratch)
+    pfull::Tpfull
+    Jq::TJq
+    function ParametricNonLinEq{Nn,Np,Nq}(func::F_eval, set_p::F_setp, calc_Jp::F_calcjp,
+        ) where {Nn,Np,Nq,F_eval<:Function,F_setp<:Function,F_calcjp<:Function}
+        res = zeros(Nn)
+        Jp = zeros(Nn, Np)
+        J = zeros(Nn, Nn)
+        pfull = Ref(zero(SVector{Nq,Float64}))
+        Jq = Ref(zero(SMatrix{Nn, Nq, Float64}))
+        return new{Nn,Np,Nq,F_eval,F_setp,F_calcjp,typeof(pfull),typeof(Jq)}(
+            func, set_p, calc_Jp, res, Jp, J, pfull, Jq
+        )
     end
 end
-ParametricNonLinEq(func::Function, nn::Integer, np::Integer) =
-    ParametricNonLinEq(func, default_set_p, default_calc_Jp,
-                       (zeros(np), zeros(nn, np)), nn, np)
+ParametricNonLinEq{Nn,Np}(func::Function) where {Nn, Np} =
+    ParametricNonLinEq{Nn,Np,Np}(func, identity, identity)
 
-default_set_p(scratch, p) = (copyto!(scratch[1], p); nothing)
-default_calc_Jp(scratch, Jp) = (copyto!(Jp, scratch[2]); nothing)
+nn(nleq::ParametricNonLinEq{Nn}) where {Nn} = Nn
+np(nleq::ParametricNonLinEq{<:Any,Np}) where {Np} = Np
 
-nn(nleq::ParametricNonLinEq) = length(nleq.res)
-np(nleq::ParametricNonLinEq) = size(nleq.Jp, 2)
-
-set_p!(nleq::ParametricNonLinEq, p) = nleq.set_p(nleq.scratch, p)
-calc_Jp!(nleq::ParametricNonLinEq) = nleq.calc_Jp(nleq.scratch, nleq.Jp)
-evaluate!(nleq::ParametricNonLinEq, z) =
-    nleq.func(nleq.res, nleq.J, nleq.scratch, z)
+function set_p!(nleq::ParametricNonLinEq{<:Any,Np}, p) where {Np}
+    nleq.pfull[] = nleq.set_p(SVector{Np,Float64}(p))
+    return
+end
+function calc_Jp!(nleq::ParametricNonLinEq)
+    nleq.Jp .= nleq.calc_Jp(nleq.Jq[])
+    return
+end
+function evaluate!(nleq::ParametricNonLinEq{Nn}, z) where {Nn}
+    res, J, Jq = nleq.func(nleq.pfull[], SVector{Nn,Float64}(z))
+    nleq.res .= res
+    nleq.J .= J
+    nleq.Jq[] = Jq
+end
 
 struct LinearSolver
     factors::Matrix{Float64}

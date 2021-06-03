@@ -9,6 +9,7 @@ using Test: @test, @test_broken, @test_logs, @test_throws, @testset
 using FFTW: rfft
 using ProgressMeter
 using SparseArrays: sparse, spzeros
+using StaticArrays: @SMatrix, @SVector
 
 @testset "topomat" begin
     tv, ti = ACME.topomat(sparse([1 -1 1; -1 1 -1]))
@@ -175,12 +176,12 @@ end
 end
 
 @testset "HomotopySolver" begin
-    nleq = ACME.ParametricNonLinEq((res, J, scratch, z) ->
-    let p=scratch[1], Jp=scratch[2]
-        res[1] = z[1]^2 - 1 + p[1]
-        J[1,1] = 2*z[1]
-        Jp[1,1] = 1
-    end, 1, 1)
+    nleq = ACME.ParametricNonLinEq{1,1}(function (p, z)
+        res = @SVector [z[1]^2 - 1 + p[1]]
+        J = @SMatrix [2*z[1]]
+        Jp = @SMatrix [1.0]
+        return (res, J, Jp)
+    end)
     solver = ACME.HomotopySolver{ACME.SimpleSolver}(nleq, [0.0], [1.0])
     ACME.solve(solver, [-0.5 + rand()])
     @test ACME.hasconverged(solver)
@@ -583,8 +584,8 @@ end
 
 function checksteady!(model)
     x_steady = steadystate!(model)
-    for s in model.solvers
-        ACME.set_resabstol!(s, 1e-13)
+    for nleq in model.nonlinear_eqs
+        ACME.set_resabstol!(nleq.solver, 1e-13)
     end
     run!(model, zeros(1, 1))
     return model.x ≈ x_steady
@@ -638,8 +639,8 @@ end
     @testset "birdie" begin
         include(joinpath(dirname(@__FILE__), "..", "examples", "birdie.jl"))
         model=birdie(vol=0.8)
-        ACME.solve(model.solvers[1], [0.003, -0.0002])
-        @assert all(ACME.hasconverged, model.solvers)
+        ACME.solve(model.nonlinear_eqs[1].solver, [0.003, -0.0002])
+        @assert all((nleq) -> ACME.hasconverged(nleq.solver), model.nonlinear_eqs)
         println("Running birdie with fixed vol")
         @test ACME.np(model, 1) == 2
         y = run!(model, sin.(2π*1000/44100*(0:44099)'); showprogress=false)
