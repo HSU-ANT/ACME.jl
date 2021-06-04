@@ -1,4 +1,4 @@
-# Copyright 2016, 2017, 2018, 2019 Martin Holters
+# Copyright 2016, 2017, 2018, 2019, 2020, 2021 Martin Holters
 # See accompanying license file.
 
 import Base.deleteat!

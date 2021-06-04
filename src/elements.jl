@@ -1,4 +1,4 @@
-# Copyright 2015, 2016, 2017, 2018, 2019, 2020 Martin Holters
+# Copyright 2015, 2016, 2017, 2018, 2019, 2020, 2021 Martin Holters
 # See accompanying license file.
 
 export resistor, potentiometer, capacitor, inductor, transformer,
