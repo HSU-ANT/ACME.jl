@@ -1,7 +1,7 @@
 # Copyright 2016, 2017, 2018 Martin Holters
 # See accompanying license file.
 
-using ACME
+using ACME2
 
 # Model of "Der Birdie", see
 # http://diy.musikding.de/wp-content/uploads/2013/06/birdieschalt.pdf

@@ -1,7 +1,7 @@
 # Copyright 2015, 2016, 2017, 2018 Martin Holters
 # See accompanying license file.
 
-using ACME
+using ACME2
 
 function sallenkey(::Type{Circuit})
     @circuit begin

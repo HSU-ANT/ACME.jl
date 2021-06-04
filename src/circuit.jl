@@ -449,7 +449,7 @@ ports.
     Mₓ´ = [mxd(circ); spzeros(numports, nx(circ))]
     Mq = [mq(circ); spzeros(numports, nq(circ))]
     Mu = [mu(circ); spzeros(numports, nu(circ))]
-    u0 = [ACME.u0(circ); spzeros(numports)]
+    u0 = [ACME2.u0(circ); spzeros(numports)]
     incid = [incidence(circ) spzeros(Int, length(circ.nets), numports)]
     for i in eachindex(ports)
         port = ports[i]

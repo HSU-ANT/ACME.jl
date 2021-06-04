@@ -1,8 +1,8 @@
 using Documenter, ACME
 
 makedocs(
-    modules = [ACME],
-    sitename = "ACME.jl",
+    modules = [ACME2],
+    sitename = "ACME2jl",
     pages = Any[
         "Home" => "index.md",
         "gettingstarted.md",
@@ -13,7 +13,7 @@ makedocs(
 
 if v"1.0" ≤ VERSION < v"1.1" # deploy from 1.0
     deploydocs(
-        repo = "github.com/HSU-ANT/ACME.jl.git",
+        repo = "github.com/markbennett95/ACME.jl.git",
         devbranch = "main",
     )
 end

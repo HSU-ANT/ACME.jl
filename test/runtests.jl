@@ -3,7 +3,7 @@
 
 include("checklic.jl")
 
-using ACME
+using ACME2
 using Compat: evalpoly, only
 using Test: @test, @test_broken, @test_logs, @test_throws, @testset
 using FFTW: rfft
@@ -11,34 +11,34 @@ using ProgressMeter
 using SparseArrays: sparse, spzeros
 
 @testset "topomat" begin
-    tv, ti = ACME.topomat(sparse([1 -1 1; -1 1 -1]))
+    tv, ti = ACME2.topomat(sparse([1 -1 1; -1 1 -1]))
     @test tv*ti'==spzeros(2,1)
 
     # Pathological cases for topomat:
     # two nodes, one loop branch (short-circuited) -> voltage==0, current arbitrary
-    @test ACME.topomat(spzeros(Int, 2, 1)) == (hcat([1]), spzeros(0, 1))
+    @test ACME2.topomat(spzeros(Int, 2, 1)) == (hcat([1]), spzeros(0, 1))
     # two nodes, one branch between them -> voltage arbitrary, current==0
-    @test ACME.topomat(sparse([1,2], [1,1], [1,-1])) == (spzeros(0, 1), hcat([1]))
+    @test ACME2.topomat(sparse([1,2], [1,1], [1,-1])) == (spzeros(0, 1), hcat([1]))
 end
 
 @testset "LinearSolver" begin
-    solver = ACME.LinearSolver(3)
+    solver = ACME2.LinearSolver(3)
     A = [1.0 0.5 0.4; 2.0 4.0 1.7; 4.0 7.0 9.1]
-    @test ACME.setlhs!(solver, A)
+    @test ACME2.setlhs!(solver, A)
     x = rand(3)
     y = similar(x)
-    ACME.solve!(solver, y, x)
+    ACME2.solve!(solver, y, x)
     @test A*y ≈ x
     y = copy(x)
-    ACME.solve!(solver, y, y)
+    ACME2.solve!(solver, y, y)
     @test A*y ≈ x
-    @test_throws DimensionMismatch ACME.setlhs!(solver, zeros(2, 3))
-    @test_throws DimensionMismatch ACME.setlhs!(solver, zeros(3, 4))
-    @test_throws DimensionMismatch ACME.setlhs!(solver, zeros(4, 4))
-    @test_throws DimensionMismatch ACME.solve!(solver, zeros(2), zeros(3))
-    @test_throws DimensionMismatch ACME.solve!(solver, zeros(3), zeros(4))
-    @test_throws DimensionMismatch ACME.solve!(solver, zeros(4), zeros(4))
-    @test !ACME.setlhs!(solver, zeros(3,3))
+    @test_throws DimensionMismatch ACME2.setlhs!(solver, zeros(2, 3))
+    @test_throws DimensionMismatch ACME2.setlhs!(solver, zeros(3, 4))
+    @test_throws DimensionMismatch ACME2.setlhs!(solver, zeros(4, 4))
+    @test_throws DimensionMismatch ACME2.solve!(solver, zeros(2), zeros(3))
+    @test_throws DimensionMismatch ACME2.solve!(solver, zeros(3), zeros(4))
+    @test_throws DimensionMismatch ACME2.solve!(solver, zeros(4), zeros(4))
+    @test !ACME2.setlhs!(solver, zeros(3,3))
 end
 
 @testset "simple circuits" begin
@@ -144,7 +144,7 @@ end
             probe = voltageprobe(), [+] == d[+], [-] == d[-]
         end
         model = DiscreteModel(circ, 1)
-        @test ACME.nn(model) == 1
+        @test ACME2.nn(model) == 1
         y = run!(model, [1.0 1.0])
         @test size(y) == (1, 2)
         @test y[1,1] == y[1,2]
@@ -156,9 +156,9 @@ end
 @testset "KDTree" begin
     @testset "size = 4×$num" for num = 1:50
         let ps = rand(4, num)
-            t = ACME.KDTree(ps)
+            t = ACME2.KDTree(ps)
             for i in 1:size(ps)[2]
-                idx = ACME.indnearest(t, ps[:,i])
+                idx = ACME2.indnearest(t, ps[:,i])
                 @test ps[:,i] == ps[:,idx]
             end
         end
@@ -166,34 +166,34 @@ end
 
     @testset "size = 5×10000" begin
         ps = rand(6, 10000)
-        t = ACME.KDTree(ps)
+        t = ACME2.KDTree(ps)
         p = rand(6)
         best_p = ps[:,argmin(vec(sum(abs2, ps .- p, dims=1)))]
-        idx = ACME.indnearest(t, p)
+        idx = ACME2.indnearest(t, p)
         @test sum(abs2, p - best_p) ≈ sum(abs2, p - ps[:, idx])
     end
 end
 
 @testset "HomotopySolver" begin
-    nleq = ACME.ParametricNonLinEq((res, J, scratch, z) ->
+    nleq = ACME2.ParametricNonLinEq((res, J, scratch, z) ->
     let p=scratch[1], Jp=scratch[2]
         res[1] = z[1]^2 - 1 + p[1]
         J[1,1] = 2*z[1]
         Jp[1,1] = 1
     end, 1, 1)
-    solver = ACME.HomotopySolver{ACME.SimpleSolver}(nleq, [0.0], [1.0])
-    ACME.solve(solver, [-0.5 + rand()])
-    @test ACME.hasconverged(solver)
-    ACME.solve(solver, [1.5 + rand()])
-    @test !ACME.hasconverged(solver)
+    solver = ACME2.HomotopySolver{ACME2.SimpleSolver}(nleq, [0.0], [1.0])
+    ACME2.solve(solver, [-0.5 + rand()])
+    @test ACME2.hasconverged(solver)
+    ACME2.solve(solver, [1.5 + rand()])
+    @test !ACME2.hasconverged(solver)
 end
 
 @testset "gensolve/rank_factorize" begin
     a = Rational{BigInt}[1 1 1; 1 1 2; 1 2 1; 1 2 2; 2 1 1; 2 1 2]
     b = Rational{BigInt}[1 2 3 4 5 6; 6 5 4 3 2 1; 1 0 1 0 1 0]
-    nullspace = ACME.gensolve(sparse(a'), spzeros(Rational{BigInt}, size(a, 2), 0))[2]
+    nullspace = ACME2.gensolve(sparse(a'), spzeros(Rational{BigInt}, size(a, 2), 0))[2]
     @test nullspace'*a == spzeros(3, 3)
-    c, f = ACME.rank_factorize(sparse(a * b))
+    c, f = ACME2.rank_factorize(sparse(a * b))
     @test c*f == a*b
 end
 
@@ -220,7 +220,7 @@ end
         mats[:eq_fulls]=Matrix[mats[:eq_full]]
         mats[:fqprev_fulls]=Matrix[mats[:eq_full]]
         mats[:fqs]=Matrix[mats[:fq]]
-        ACME.reduce_pdims!(mats)
+        ACME2.reduce_pdims!(mats)
         @test size(mats[:pexps][1], 2) == 3
         @test mats[:pexps][1] * mats[:dqs][1] == mats[:dq_fulls][1]
         @test mats[:pexps][1] * mats[:eqs][1] == mats[:eq_fulls][1]
@@ -251,14 +251,14 @@ end
     connect!(circ, (:probe2, :-), (:src2, :-))
     model = DiscreteModel(circ, 1, decompose_nonlinearity=false)
     y = run!(model, hcat([2.0; 1.0]))
-    @test ACME.nn(model, 1) == 3
+    @test ACME2.nn(model, 1) == 3
     @test y[1] ≈ 1e-12*(exp(1/25e-3)-1)
     @test y[2] ≈ 1e-12*(exp(1/25e-3)-1)
     model = DiscreteModel(circ, 1)
     y = run!(model, hcat([2.0; 1.0]))
     # single diode is extracted first, although it was added last
-    @test ACME.nn(model, 1) == 1
-    @test ACME.nn(model, 2) == 2
+    @test ACME2.nn(model, 1) == 1
+    @test ACME2.nn(model, 2) == 2
     @test y[1] ≈ y[2] ≈ 1e-12*(exp(1/25e-3)-1)
 end
 
@@ -584,7 +584,7 @@ end
 function checksteady!(model)
     x_steady = steadystate!(model)
     for s in model.solvers
-        ACME.set_resabstol!(s, 1e-13)
+        ACME2.set_resabstol!(s, 1e-13)
     end
     run!(model, zeros(1, 1))
     return model.x ≈ x_steady
@@ -616,7 +616,7 @@ end
         include(joinpath(dirname(@__FILE__), "..", "examples", "diodeclipper.jl"))
         model=diodeclipper()
         println("Running diodeclipper")
-        @test ACME.np(model, 1) == 1
+        @test ACME2.np(model, 1) == 1
         y = run!(model, sin.(2π*1000/44100*(0:44099)'); showprogress=false)
         @test size(y) == (1,44100)
         # TODO: further validate y
@@ -638,10 +638,10 @@ end
     @testset "birdie" begin
         include(joinpath(dirname(@__FILE__), "..", "examples", "birdie.jl"))
         model=birdie(vol=0.8)
-        ACME.solve(model.solvers[1], [0.003, -0.0002])
-        @assert all(ACME.hasconverged, model.solvers)
+        ACME2.solve(model.solvers[1], [0.003, -0.0002])
+        @assert all(ACME2.hasconverged, model.solvers)
         println("Running birdie with fixed vol")
-        @test ACME.np(model, 1) == 2
+        @test ACME2.np(model, 1) == 2
         y = run!(model, sin.(2π*1000/44100*(0:44099)'); showprogress=false)
         @test size(y) == (1,44100)
         # TODO: further validate y
@@ -651,7 +651,7 @@ end
 
         model=birdie()
         println("Running birdie with varying vol")
-        @test ACME.np(model, 1) == 3
+        @test ACME2.np(model, 1) == 3
         y = run!(model, [sin.(2π*1000/44100*(0:44099)'); range(1, stop=0, length=44100)']; showprogress=false)
         @test size(y) == (1,44100)
         # TODO: further validate y
@@ -661,7 +661,7 @@ end
         include(joinpath(dirname(@__FILE__), "..", "examples", "superover.jl"))
         model=superover(drive=1.0, tone=1.0, level=1.0)
         println("Running superover with fixed potentiometer values")
-        @test ACME.np(model, 1) == 5
+        @test ACME2.np(model, 1) == 5
         y = run!(model, sin.(2π*1000/44100*(0:44099)'); showprogress=false)
         @test size(y) == (1,44100)
         # TODO: further validate y
@@ -674,9 +674,9 @@ end
         connect!(circ, (:vbsrc, :+), :vb)
         connect!(circ, (:vbsrc, :-), :gnd)
         model = DiscreteModel(circ, 1/44100)
-        @test ACME.np(model, 1) == 2
-        @test ACME.np(model, 2) == 1
-        @test ACME.np(model, 3) == 2
+        @test ACME2.np(model, 1) == 2
+        @test ACME2.np(model, 2) == 1
+        @test ACME2.np(model, 3) == 2
         y = run!(model, sin.(2π*1000/44100*(0:44099)'); showprogress=false)
         @test size(y) == (1,44100)
         # TODO: further validate y
@@ -685,7 +685,7 @@ end
 
         println("Running simplified, non-decomposed superover with fixed potentiometer values")
         model = DiscreteModel(circ, 1/44100, decompose_nonlinearity=false)
-        @test ACME.np(model, 1) == 5
+        @test ACME2.np(model, 1) == 5
         y = run!(model, sin.(2π*1000/44100*(0:44099)'); showprogress=false)
         @test size(y) == (1,44100)
         # TODO: further validate y
@@ -694,7 +694,7 @@ end
 
         model=superover()
         println("Running superover with varying potentiometer values")
-        @test ACME.np(model, 1) == 11
+        @test ACME2.np(model, 1) == 11
         y = run!(model, [sin.(2π*1000/44100*(0:999)'); range(1, stop=0, length=1000)'; range(0, stop=1, length=1000)'; range(1, stop=0, length=1000)']; showprogress=false)
         @test size(y) == (1,1000)
         # TODO: further validate y
@@ -705,10 +705,10 @@ end
         connect!(circ, (:vbsrc, :+), :vb)
         connect!(circ, (:vbsrc, :-), :gnd)
         model = DiscreteModel(circ, 1/44100)
-        @test ACME.np(model, 1) == 2
-        @test ACME.np(model, 2) == 2
-        @test ACME.np(model, 3) == 2
-        @test ACME.np(model, 4) == 4
+        @test ACME2.np(model, 1) == 2
+        @test ACME2.np(model, 2) == 2
+        @test ACME2.np(model, 3) == 2
+        @test ACME2.np(model, 4) == 4
         y = run!(model, [sin.(2π*1000/44100*(0:999)'); range(1, stop=0, length=1000)'; range(0, stop=1, length=1000)'; range(1, stop=0, length=1000)']; showprogress=false)
         @test size(y) == (1,1000)
         # TODO: further validate y
