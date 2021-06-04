@@ -8,9 +8,9 @@ struct ParametricNonLinEq{F_eval<:Function,F_setp<:Function,F_calcjp<:Function,S
     func::F_eval
     set_p::F_setp
     calc_Jp::F_calcjp
-    res::Vector{Float64}
-    Jp::Matrix{Float64}
-    J::Matrix{Float64}
+    res::Vector{Real}
+    Jp::Matrix{Real}
+    J::Matrix{Real}
     scratch::Scratch
     function ParametricNonLinEq(func::F_eval, set_p::F_setp, calc_Jp::F_calcjp,
             scratch::Scratch, nn::Integer, np::Integer
@@ -37,14 +37,14 @@ evaluate!(nleq::ParametricNonLinEq, z) =
     nleq.func(nleq.res, nleq.J, nleq.scratch, z)
 
 struct LinearSolver
-    factors::Matrix{Float64}
+    factors::Matrix{Real}
     ipiv::Vector{Int}
     function LinearSolver(n::Int)
         new(zeros(n, n), zeros(Int, n))
     end
 end
 
-function setlhs!(solver::LinearSolver, A::Matrix{Float64})
+function setlhs!(solver::LinearSolver, A::Matrix{Real})
     m, n = size(solver.factors)
     if (m, n) ≠ size(A)
         throw(DimensionMismatch("matrix has size $(size(A)), but must have size $(size(solver.factors))"))
@@ -96,7 +96,7 @@ function setlhs!(solver::LinearSolver, A::Matrix{Float64})
     return true
 end
 
-function solve!(solver::LinearSolver, x::Vector{Float64}, b::Vector{Float64})
+function solve!(solver::LinearSolver, x::Vector{Real}, b::Vector{Real})
     n = size(solver.factors, 2)
     if n ≠ length(x)
         throw(DimensionMismatch("x has length $(length(x)), but needs $n"))
@@ -149,19 +149,19 @@ is rarely useful as such.
 """
 mutable struct SimpleSolver{NLEQ<:ParametricNonLinEq}
     nleq::NLEQ
-    z::Vector{Float64}
+    z::Vector{Real}
     linsolver::LinearSolver
-    last_z::Vector{Float64}
-    last_p::Vector{Float64}
-    last_Jp::Matrix{Float64}
+    last_z::Vector{Real}
+    last_p::Vector{Real}
+    last_Jp::Matrix{Real}
     last_linsolver::LinearSolver
     iters::Int
-    resmaxabs::Float64
-    tol::Float64
-    tmp_nn::Vector{Float64}
-    tmp_np::Vector{Float64}
-    function SimpleSolver(nleq::NLEQ, initial_p::Vector{Float64},
-            initial_z::Vector{Float64}) where {NLEQ<:ParametricNonLinEq}
+    resmaxabs::Real
+    tol::Real
+    tmp_nn::Vector{Real}
+    tmp_np::Vector{Real}
+    function SimpleSolver(nleq::NLEQ, initial_p::Vector{Real},
+            initial_z::Vector{Real}) where {NLEQ<:ParametricNonLinEq}
         z = zeros(nn(nleq))
         linsolver = LinearSolver(nn(nleq))
         last_z = zeros(nn(nleq))
@@ -203,7 +203,7 @@ hasconverged(solver::SimpleSolver) = solver.resmaxabs < solver.tol
 
 needediterations(solver::SimpleSolver) = solver.iters
 
-function solve(solver::SimpleSolver, p::AbstractVector{Float64}, maxiter=500)
+function solve(solver::SimpleSolver, p::AbstractVector{Real}, maxiter=500)
     set_p!(solver.nleq, p)
     #solver.z = solver.last_z - solver.last_J\(solver.last_Jp * (p-solver.last_p))
     copyto!(solver.tmp_np, p)
@@ -245,13 +245,13 @@ properties.
 """
 mutable struct HomotopySolver{BaseSolver}
     basesolver::BaseSolver
-    start_p::Vector{Float64}
-    pa::Vector{Float64}
+    start_p::Vector{Real}
+    pa::Vector{Real}
     iters::Int
     HomotopySolver(basesolver::BaseSolver, np::Integer) where {BaseSolver} =
         new{BaseSolver}(basesolver, zeros(np), zeros(np), 0)
     function HomotopySolver{BaseSolver}(nleq::ParametricNonLinEq,
-            initial_p::Vector{Float64}, initial_z::Vector{Float64}
+            initial_p::Vector{Real}, initial_z::Vector{Real}
         ) where {BaseSolver}
         basesolver = BaseSolver(nleq, initial_p, initial_z)
         return HomotopySolver(basesolver, np(nleq))
@@ -317,21 +317,21 @@ for a more detailed discussion.
 """
 mutable struct CachingSolver{BaseSolver}
     basesolver::BaseSolver
-    ps_tree::KDTree{Vector{Float64}, Matrix{Float64}}
-    zs::Matrix{Float64}
+    ps_tree::KDTree{Vector{Real}, Matrix{Real}}
+    zs::Matrix{Real}
     num_ps::Int
     new_count::Int
     new_count_limit::Int
-    alts::Alts{Float64}
-    function CachingSolver(basesolver::BaseSolver, initial_p::Vector{Float64},
-            initial_z::Vector{Float64}, nn::Integer) where {BaseSolver}
+    alts::Alts{Real}
+    function CachingSolver(basesolver::BaseSolver, initial_p::Vector{Real},
+            initial_z::Vector{Real}, nn::Integer) where {BaseSolver}
          ps_tree = KDTree(hcat(initial_p))
          zs = reshape(copy(initial_z), nn, 1)
          alts = Alts(initial_p)
          return new{BaseSolver}(basesolver, ps_tree, zs, 1, 0, 2, alts)
     end
     function CachingSolver{BaseSolver}(nleq::ParametricNonLinEq,
-            initial_p::Vector{Float64}, initial_z::Vector{Float64}) where {BaseSolver}
+            initial_p::Vector{Real}, initial_z::Vector{Real}) where {BaseSolver}
         basesolver = BaseSolver(nleq, initial_p, initial_z)
         return CachingSolver(basesolver, initial_p, initial_z, nn(nleq))
     end
@@ -403,7 +403,7 @@ set_extrapolation_origin(solver::CachingSolver, p, z) =
 get_extrapolation_jacobian(solver::CachingSolver) =
     get_extrapolation_jacobian(solver.basesolver)
 
-function linearize(solver, p::AbstractVector{Float64})
+function linearize(solver, p::AbstractVector{Real})
     z = solve(solver, p)
     set_extrapolation_origin(solver, p, z)
     if !hasconverged(solver)
