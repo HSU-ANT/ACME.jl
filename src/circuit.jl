@@ -11,7 +11,7 @@ end
 
 @inline (cnlf::CircuitNLFunc{Fs})(q) where {Fs} = _apply_all(q, cnlf.fs...)
 
-_apply_all(q) = (SVector{0,Float64}(), SMatrix{0,0,Float64}())
+_apply_all(q) = (SVector{0,Real}(), SMatrix{0,0,Real}())
 @inline function _apply_all(q, f1::F, fs...) where F
     (res1, J1) = f1(q)
     (resrem, Jrem) = _apply_all(q, fs...)

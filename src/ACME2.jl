@@ -1,7 +1,8 @@
 # Copyright 2015, 2016, 2017, 2018, 2019, 2020 Martin Holters
+# Literally just changed the Float64's to Real lol - Mark Bennett
 # See accompanying license file.
 
-module ACME
+module ACME2
 
 export DiscreteModel, run!, steadystate, steadystate!, linearize, ModelRunner
 
@@ -84,7 +85,7 @@ mutable struct Element
       end
     end
     if !isdefined(elem, :nonlinear_eq)
-      elem.nonlinear_eq = (q) -> (SVector{0,Float64}(), SMatrix{0,0,Float64}())
+      elem.nonlinear_eq = (q) -> (SVector{0,Real}(), SMatrix{0,0,Real}())
     elseif elem.nonlinear_eq isa Expr
         nn = get(sizes, :nb, 0) + get(sizes, :nx, 0) + get(sizes, :nq, 0) - get(sizes, :nl, 0)
         elem.nonlinear_eq = wrap_nleq_expr(nn, get(sizes, :nq, 0), elem.nonlinear_eq)
@@ -110,25 +111,25 @@ include("elements.jl")
 include("circuit.jl")
 
 mutable struct DiscreteModel{Solvers}
-    a::Matrix{Float64}
-    b::Matrix{Float64}
-    c::Matrix{Float64}
-    x0::Vector{Float64}
-    pexps::Vector{Matrix{Float64}}
-    dqs::Vector{Matrix{Float64}}
-    eqs::Vector{Matrix{Float64}}
-    fqprevs::Vector{Matrix{Float64}}
-    fqs::Vector{Matrix{Float64}}
-    q0s::Vector{Vector{Float64}}
-    dy::Matrix{Float64}
-    ey::Matrix{Float64}
-    fy::Matrix{Float64}
-    y0::Vector{Float64}
+    a::Matrix{Real}
+    b::Matrix{Real}
+    c::Matrix{Real}
+    x0::Vector{Real}
+    pexps::Vector{Matrix{Real}}
+    dqs::Vector{Matrix{Real}}
+    eqs::Vector{Matrix{Real}}
+    fqprevs::Vector{Matrix{Real}}
+    fqs::Vector{Matrix{Real}}
+    q0s::Vector{Vector{Real}}
+    dy::Matrix{Real}
+    ey::Matrix{Real}
+    fy::Matrix{Real}
+    y0::Vector{Real}
 
     nonlinear_eq_funcs::Vector
 
     solvers::Solvers
-    x::Vector{Float64}
+    x::Vector{Real}
 
     function DiscreteModel(mats::Dict{Symbol}, nonlinear_eq_funcs::Vector,
             solvers::Solvers) where {Solvers}
@@ -168,9 +169,9 @@ function DiscreteModel(circ::Circuit, t::Real, ::Type{Solver}=HomotopySolver{Cac
 
     @assert nn(circ) == sum(model_nns)
 
-    q0s = Vector{Float64}.(mats[:q0s])
-    fqs = Matrix{Float64}.(mats[:fqs])
-    fqprev_fulls = Matrix{Float64}.(mats[:fqprev_fulls])
+    q0s = Vector{Real}.(mats[:q0s])
+    fqs = Matrix{Real}.(mats[:fqs])
+    fqprev_fulls = Matrix{Real}.(mats[:fqprev_fulls])
 
     model_nonlinear_eq_funcs = [
         let q = zeros(nq), circ_nl_func = nonlinear_eq_func(circ, nles)
@@ -225,10 +226,10 @@ function DiscreteModel(circ::Circuit, t::Real, ::Type{Solver}=HomotopySolver{Cac
         model_nps = size.(mats[:dqs], 1)
     end
 
-    q0s = Array{Float64}.(mats[:q0s])
-    fqs = Array{Float64}.(mats[:fqs])
-    fqprev_fulls = Array{Float64}.(mats[:fqprev_fulls])
-    pexps = Array{Float64}.(mats[:pexps])
+    q0s = Array{Real}.(mats[:q0s])
+    fqs = Array{Real}.(mats[:fqs])
+    fqprev_fulls = Array{Real}.(mats[:fqprev_fulls])
+    pexps = Array{Real}.(mats[:pexps])
 
     nonlinear_eq_set_ps = [
         function(scratch, p)
@@ -477,12 +478,12 @@ function steadystate!(model::DiscreteModel, u=zeros(nu(model)))
     return x_steady
 end
 
-function linearize(model::DiscreteModel, usteady::AbstractVector{Float64}=zeros(nu(model)))
+function linearize(model::DiscreteModel, usteady::AbstractVector{Real}=zeros(nu(model)))
     xsteady = steadystate(model, usteady)
     zranges = Vector{UnitRange{Int64}}(undef, length(model.solvers))
-    dzdps = Vector{Matrix{Float64}}(undef, length(model.solvers))
-    dqlins = Vector{Matrix{Float64}}(undef, length(model.solvers))
-    eqlins = Vector{Matrix{Float64}}(undef, length(model.solvers))
+    dzdps = Vector{Matrix{Real}}(undef, length(model.solvers))
+    dqlins = Vector{Matrix{Real}}(undef, length(model.solvers))
+    eqlins = Vector{Matrix{Real}}(undef, length(model.solvers))
     zsteady = zeros(nn(model))
     zoff = 1
     x0 = copy(model.x0)
@@ -517,15 +518,15 @@ function linearize(model::DiscreteModel, usteady::AbstractVector{Float64}=zeros(
     end
 
     mats = Dict(:a => a, :b => b, :c => zeros(nx(model), 0),
-        :pexps => Matrix{Float64}[], :dqs => Matrix{Float64}[],
-        :eqs => Matrix{Float64}[], :fqprevs => Matrix{Float64}[],
-        :fqs => Matrix{Float64}[], :q0s => Vector{Float64}[],
+        :pexps => Matrix{Real}[], :dqs => Matrix{Real}[],
+        :eqs => Matrix{Real}[], :fqprevs => Matrix{Real}[],
+        :fqs => Matrix{Real}[], :q0s => Vector{Real}[],
         :dy => dy, :ey => ey, :fy => zeros(ny(model), 0), :x0 => x0, :y0 => y0)
     return DiscreteModel(mats, [], ())
 end
 
 """
-    run!(model::DiscreteModel, u::AbstractMatrix{Float64}; showprogress=true)
+    run!(model::DiscreteModel, u::AbstractMatrix{Real}; showprogress=true)
 
 Run the given `model` by feeding it the input `u` which must be a matrix with
 one row for each of the circuit's inputs and one column for each time step to
@@ -539,22 +540,22 @@ inputs, a matrix with zero rows may be passed. The internal state of the model
 By default `run!` will show a progress bar to report its progress. This can be
 disabled by passing `showprogress=false`.
 """
-run!(model::DiscreteModel, u::AbstractMatrix{Float64}; showprogress=true) =
+run!(model::DiscreteModel, u::AbstractMatrix{Real}; showprogress=true) =
     return run!(ModelRunner(model, showprogress), u)
 
 struct ModelRunner{Model<:DiscreteModel,ShowProgress}
     model::Model
-    ucur::Vector{Float64}
-    ps::Vector{Vector{Float64}}
-    ycur::Vector{Float64}
-    xnew::Vector{Float64}
-    z::Vector{Float64}
+    ucur::Vector{Real}
+    ps::Vector{Vector{Real}}
+    ycur::Vector{Real}
+    xnew::Vector{Real}
+    z::Vector{Real}
     function ModelRunner{Model,ShowProgress}(model::Model) where {Model<:DiscreteModel,ShowProgress}
-        ucur = Vector{Float64}(undef, nu(model))
-        ps = Vector{Float64}[Vector{Float64}(undef, np(model, idx)) for idx in 1:length(model.solvers)]
-        ycur = Vector{Float64}(undef, ny(model))
-        xnew = Vector{Float64}(undef, nx(model))
-        z = Vector{Float64}(undef, nn(model))
+        ucur = Vector{Real}(undef, nu(model))
+        ps = Vector{Real}[Vector{Real}(undef, np(model, idx)) for idx in 1:length(model.solvers)]
+        ycur = Vector{Real}(undef, ny(model))
+        xnew = Vector{Real}(undef, nx(model))
+        z = Vector{Real}(undef, nn(model))
         return new{Model,ShowProgress}(model, ucur, ps, ycur, xnew, z)
     end
 end
@@ -579,7 +580,7 @@ ModelRunner(model::Model, showprogress::Bool) where {Model<:DiscreteModel} =
     ModelRunner{Model,showprogress}(model)
 
 """
-    run!(runner::ModelRunner, u::AbstractMatrix{Float64})
+    run!(runner::ModelRunner, u::AbstractMatrix{Real})
 
 Run the given `runner` by feeding it the input `u` which must be a matrix with
 one row for each of the circuit's inputs and one column for each time step to
@@ -591,13 +592,13 @@ inputs, a matrix with zero rows may be passed. The internal state of the
 underlying `DiscreteModel` (e.g. capacitor charges) is preserved accross calls
 to `run!`.
 """
-function run!(runner::ModelRunner, u::AbstractMatrix{Float64})
-    y = Matrix{Float64}(undef, ny(runner.model), size(u, 2))
+function run!(runner::ModelRunner, u::AbstractMatrix{Real})
+    y = Matrix{Real}(undef, ny(runner.model), size(u, 2))
     run!(runner, y, u)
     return y
 end
 
-function checkiosizes(runner::ModelRunner, u::AbstractMatrix{Float64}, y::AbstractMatrix{Float64})
+function checkiosizes(runner::ModelRunner, u::AbstractMatrix{Real}, y::AbstractMatrix{Real})
     if size(u, 1) ≠ nu(runner.model)
         throw(DimensionMismatch("input matrix has $(size(u,1)) rows, but model has $(nu(runner.model)) inputs"))
     end
@@ -610,7 +611,7 @@ function checkiosizes(runner::ModelRunner, u::AbstractMatrix{Float64}, y::Abstra
 end
 
 """
-    run!(runner::ModelRunner, y::AbstractMatrix{Float64}, u::AbstractMatrix{Float64})
+    run!(runner::ModelRunner, y::AbstractMatrix{Real}, u::AbstractMatrix{Real})
 
 Run the given `runner` by feeding it the input `u` and storing the output
 in `y`. The input `u` must be a matrix with one row for each of the circuit's
@@ -622,23 +623,23 @@ To simulate a circuit without inputs, a matrix with zero rows may be passed.
 The internal state of the  underlying `DiscreteModel` (e.g. capacitor charges)
 is preserved accross calls to `run!`.
 """
-function run!(runner::ModelRunner{<:DiscreteModel,true}, y::AbstractMatrix{Float64},
-              u::AbstractMatrix{Float64})
+function run!(runner::ModelRunner{<:DiscreteModel,true}, y::AbstractMatrix{Real},
+              u::AbstractMatrix{Real})
     checkiosizes(runner, u, y)
     @showprogress "Running model: " for n = 1:size(u, 2)
         step!(runner, y, u, n)
     end
 end
 
-function run!(runner::ModelRunner{<:DiscreteModel,false}, y::AbstractMatrix{Float64},
-              u::AbstractMatrix{Float64})
+function run!(runner::ModelRunner{<:DiscreteModel,false}, y::AbstractMatrix{Real},
+              u::AbstractMatrix{Real})
     checkiosizes(runner, u, y)
     for n = 1:size(u, 2)
         step!(runner, y, u, n)
     end
 end
 
-function step!(runner::ModelRunner, y::AbstractMatrix{Float64}, u::AbstractMatrix{Float64}, n)
+function step!(runner::ModelRunner, y::AbstractMatrix{Real}, u::AbstractMatrix{Real}, n)
     model = runner.model
     ucur = runner.ucur
     ycur = runner.ycur
