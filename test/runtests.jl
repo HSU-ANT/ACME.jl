@@ -1,4 +1,4 @@
-# Copyright 2015, 2016, 2017, 2018, 2019, 2020 Martin Holters
+# Copyright 2015, 2016, 2017, 2018, 2019, 2020, 2021 Martin Holters
 # See accompanying license file.
 
 include("checklic.jl")
@@ -75,6 +75,19 @@ end
         y = run!(model, zeros(0, 1))
         @test y[1] ≈ v_d
     end
+end
+
+@testset "circuit with reused resdef" begin
+    @test_logs (:warn, "redefinition of `r1`") macroexpand(
+        @__MODULE__,
+        :(
+            @circuit begin
+                r1 = resistor(100), [1] ↔ gnd
+                r2 = resistor(100), [1] ↔ r1[2]
+                r1 = resistor(100), [1] ↔ r2[2]
+            end
+        )
+    )
 end
 
 @testset "circuit manipulation" begin

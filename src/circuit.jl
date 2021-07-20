@@ -1,4 +1,4 @@
-# Copyright 2015, 2016, 2017, 2018, 2019, 2020 Martin Holters
+# Copyright 2015, 2016, 2017, 2018, 2019, 2020, 2021 Martin Holters
 # See accompanying license file.
 
 export Circuit, add!, connect!, disconnect!, @circuit, composite_element
@@ -321,6 +321,8 @@ be put in quotes (e.g. `"in+"`, `"9V"`)
     Instead of `⟷` (`\longleftrightarrow`), one can also use `==`.
 """
 macro circuit(cdef)
+    used_refdes = Set{Symbol}()
+
     is_conn_spec(expr::Expr) =
         (expr.head === :call && (expr.args[1] === :(⟷) || expr.args[1] === :(↔) || expr.args[1] === :(==))) ||
         (expr.head === :comparison && all(c -> c === :(==), expr.args[2:2:end]))
@@ -343,6 +345,10 @@ macro circuit(cdef)
             elemspec = expr.args[2]
             conn_exprs = []
         end
+        if expr.args[1] ∈ used_refdes
+            @warn "redefinition of `$(expr.args[1])`"
+        end
+        push!(used_refdes, expr.args[1])
         push!(ccode.args, :(add!(circ, $(QuoteNode(expr.args[1])), $(esc(elemspec)))))
         for conn_expr in conn_exprs
             if !is_conn_spec(conn_expr)
