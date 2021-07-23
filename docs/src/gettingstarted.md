@@ -103,12 +103,11 @@ Now we can process some input data. It has to be provided as a matrix with one
 row per input (just one in the example) and one column per sample. So for a
 sinusoid at 1 kHz lasting one second, we do:
 
-```jldoctest firststeps; filter = r"\r?Running model:.*"
+```jldoctest firststeps; filter = r"(Running model:.*\s*)?"
 y = run!(model, sin.(2π*1000/44100*(0:44099)'))
 
 # output
 
-Running model: 100%|████████████████████████████████████| Time: 0:00:01
 1×44100 Matrix{Float64}:
  0.0  0.0275964  0.0990996  0.195777  …  -0.537508  -0.462978  -0.36521
 ```
