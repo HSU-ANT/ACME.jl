@@ -10,17 +10,13 @@ on:
 
 jobs:
   build:
-    name: build on Julia ${{ matrix.julia-version }}
+    name: Docs build
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        julia-version: ['1.0', '1.1', '1.2', '1.3', '1.4', 'nightly']
     steps:
       - uses: actions/checkout@v2.4.0
       - uses: julia-actions/setup-julia@v1
         with:
-          version: ${{ matrix.julia-version }}
+          version: '1.6'
       - name: Install dependencies
         run: julia --project=docs -e 'using Pkg; Pkg.instantiate()'
       - name: Build and deploy
