@@ -79,7 +79,7 @@ y = run!(model, u)
 
 # output
 
-0×10 Array{Float64,2}
+0×10 Matrix{Float64}
 ```
 
 The input `u` is matrix with one row for each of the circuit's inputs and one
@@ -95,7 +95,7 @@ run!(model, [1 zeros(1,99)])
 
 # output
 
-1×100 Array{Float64,2}:
+1×100 Matrix{Float64}:
  1.83357e-8  3.1622e-7  2.59861e-6  …  0.00465423  0.00459275  0.00453208
 ```
 To
@@ -106,7 +106,7 @@ y = run!(model, zeros(0, 100))
 
 # output
 
-0×100 Array{Float64,2}
+0×100 Matrix{Float64}
 ```
 
 The internal state of the model (e.g. capacitor charges) is preserved accross
@@ -136,7 +136,7 @@ steadystate!(model)
 
 # output
 
-20-element Array{Float64,1}:
+20-element Vector{Float64}:
  0.0
  0.0
  0.0
