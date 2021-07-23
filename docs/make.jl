@@ -14,4 +14,5 @@ makedocs(
 deploydocs(
     repo = "github.com/HSU-ANT/ACME.jl.git",
     devbranch = "main",
+    push_preview = true,
 )
