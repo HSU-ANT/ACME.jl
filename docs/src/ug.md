@@ -50,7 +50,7 @@ A `Circuit` only stores elements and information about their connections. To
 simulate a circuit, a model has to be derived from it. This can be as simple
 as:
 
-```jldoctest ug; output = false, filter = r"(ACME\.)?DiscreteModel{.*"s
+```jldoctest ug; output = false, filter = r"DiscreteModel{.*"s
 model = DiscreteModel(circ, 1/44100)
 
 # output
@@ -62,7 +62,7 @@ Here, `1/44100` denotes the sampling interval, i.e. the reciprocal of the
 sampling rate at which the model should run. Optionally, one can specify the
 solver to use for solving the model's non-linear equation:
 
-```jldoctest ug; output = false, filter = r"(ACME\.)?DiscreteModel{.*"s
+```jldoctest ug; output = false, filter = r"DiscreteModel{.*"s
 model = DiscreteModel(circ, 1/44100, HomotopySolver{SimpleSolver})
 
 # output

@@ -28,7 +28,7 @@ using ACME
 
 Now we create the circuit description:
 
-```jldoctest firststeps; output = false, filter = r"(ACME\.)?Circuit\(.*"s
+```jldoctest firststeps; output = false, filter = r"Circuit\(.*"s
 circ = @circuit begin
     j_in = voltagesource()
     r1 = resistor(1e3)
@@ -70,7 +70,7 @@ It is also possible to specify connections following the element definition
 one can only connect to elements defined before. Thus, above circuit could also
 be entered as:
 
-```jldoctest firststeps; output = false, filter = r"(ACME\.)?Circuit\(.*"s
+```jldoctest firststeps; output = false, filter = r"Circuit\(.*"s
 circ = @circuit begin
     j_in = voltagesource(), [-] ⟷ gnd
     r1 = resistor(1e3), [1] ⟷ j_in[+]
@@ -88,7 +88,7 @@ Circuit(...)
 Now that the circuit has been set up, we need to turn it into a model. This
 could hardly be any easier:
 
-```jldoctest firststeps; output = false, filter = r"(ACME\.)?DiscreteModel{.*"s
+```jldoctest firststeps; output = false, filter = r"DiscreteModel{.*"s
 model = DiscreteModel(circ, 1/44100)
 
 # output
