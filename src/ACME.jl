@@ -110,7 +110,7 @@ include("elements.jl")
 
 include("circuit.jl")
 
-mutable struct DiscreteModel{Solvers}
+mutable struct DiscreteModel{Solvers<:Tuple{Vararg{NonlinearSolver}}}
     a::Matrix{Float64}
     b::Matrix{Float64}
     c::Matrix{Float64}
