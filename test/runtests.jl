@@ -412,6 +412,57 @@ end
     @test run!(model, zeros(0,1)) ≈ [10/100000]
 end
 
+@testset "Jiles-Atherton inductor/transformer" begin
+    @testset "Jiles-Atherton inductor" begin
+        circ = @circuit begin
+            Jin = voltagesource()
+            Jout1 = currentprobe(), [+] ↔ Jin[+]
+            Jout2 = currentprobe(), [+] ↔ Jin[+]
+            L_JA = inductor(Val{:JA}), [1] ↔ Jout1[-], [2] ↔ Jin[-]
+            # default parameters approximately linearize as 174mH
+            L_lin = inductor(174e-3), [1] ↔ Jout2[-], [2] ↔ Jin[-]
+        end
+        model = DiscreteModel(circ, 1//44100)
+        # starting non-magnetized, the inductor first behaves sub-linear
+        y = run!(model, fill(0.1, 1, 750))
+        @test isapprox(y[1,1:9], y[2,1:9], rtol=1e-2) # almost linear at first
+        @test all(y[1,:] .< y[2,:])
+        # until it reaches saturation, where it becomes super-linear
+        run!(model, fill(0.1, 1, 500))
+        y = run!(model, fill(0.1, 1, 750))
+        @test all(y[1,:] .> y[2,:])
+        # due to hysteresis, applying the negative voltage for the same time
+        # drives current below zero
+        y = run!(model, fill(-0.1, 1, 2000))
+        @test y[1,end] < -2e-3
+        # with voltage at zero (i.e. shorted), the current stays constant
+        y = run!(model, zeros(1, 1000))
+        @test y[1,1] < -2e-3 && all(y[:,1] .≈ y)
+    end
+    @testset "Jiles-Atherton transformer" begin
+        circ = @circuit begin
+            Jin = voltagesource()
+            R1 = resistor(10), [1] ↔ Jin[+]
+            R2 = resistor(10), [1] ↔ Jin[+]
+            T_JA = transformer(Val{:JA}; ns = [10, 100]), [1] ↔ R1[2], [2] ↔ Jin[-]
+            # approximate small-scale equivalent
+            T_lin = transformer(330e-6, 33e-3), [primary1] ↔ R2[2], [primary2] ↔ Jin[-]
+            Jout1 = voltageprobe(;gp=1e-3), [+] ↔ T_JA[3], [-] ↔ T_JA[4]
+            Jout2 = voltageprobe(;gp=1e-3), [+] ↔ T_lin[secondary1], [-] ↔ T_lin[secondary2]
+        end
+        model = DiscreteModel(circ, 1//44100)
+        u = [sin(2pi*1000/44100*n) for n in (0:499)]'
+        # almost linear for small input
+        y = run!(model, 0.001*u)[:,200:end]
+        @test isapprox(y[1,:], y[2,:]; rtol = 1.2e-3)
+        y = run!(model, 0.002*u)[:,200:end]
+        @test isapprox(y[1,:], y[2,:]; rtol = 1.2e-3)
+        # not at all linear for large input
+        y = run!(model, 10*u)[200:end]
+        @test !isapprox(y[1,:], y[2,:]; rtol = 0.75)
+    end
+end
+
 @testset "BJT" begin
     isc=1e-6
     ise=2e-6

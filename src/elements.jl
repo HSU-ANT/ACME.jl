@@ -1,4 +1,4 @@
-# Copyright 2015, 2016, 2017, 2018, 2019, 2020 Martin Holters
+# Copyright 2015, 2016, 2017, 2018, 2019, 2020, 2021 Martin Holters
 # See accompanying license file.
 
 export resistor, potentiometer, capacitor, inductor, transformer,
@@ -57,7 +57,8 @@ Henri. The coupling can either be specified using `coupling_coefficient` (0 is
 not coupled, 1 is closely coupled) or by `mutual_coupling`, the mutual
 inductance in Henri, where the latter takes precedence if both are given.
 
-Pins: `1` and `2` for primary winding, `3` and `4` for secondary winding
+Pins: `primary1` and `primary2` for primary winding, `secondary1` and
+`secondary2` for secondary winding
 """
 transformer(l1, l2; coupling_coefficient=1,
             mutual_coupling=coupling_coefficient*sqrt(l1*l2)) =
@@ -91,7 +92,7 @@ of nonlinear inductor circuits,” IEEE Trans. Magn., vol. 30, no. 5, pp.
 2795–2801, 1994, where the definition of `c` is taken from the latter. The ACME
 implementation is discussed in [M. Holters, U. Zölzer, "Circuit Simulation with
 Inductors and Transformers Based on the Jiles-Atherton Model of
-Magnetization"](http://ant-s4.unibw-hamburg.de/paper-archive/2016/dafxpapers/08-DAFx-16_paper_10-PN.pdf).
+Magnetization"](http://dafx.de/paper-archive/2016/dafxpapers/08-DAFx-16_paper_10-PN.pdf).
 
 Pins: `1` and `2` for primary winding, `3` and `4` for secondary winding, and so
 on
@@ -120,13 +121,13 @@ function transformer(::Type{Val{:JA}}; D=2.4e-2, A=4.54e-5, ns=[],
         J_1_2 = (1e-4/Ms) * -(1-c)^2*k * δM*δ/den^2 * q[3]
         J_1_3 = (1e-4/Ms) * ((1-c) * δM*(Man-q[2])/den + (c*Ms/a)*Ld_q1)
         J_1_4 = (1e-4/Ms) * ((c * Ms/a * α)*Ld_q1 - 1)
-        return (res, @SMatrix [J_1_1 J_1_2; J_2_1 J_2_2])
+        return (res, @SMatrix [J_1_1 J_1_2 J_1_3 J_1_4])
     end
-    Element(mv=[speye(length(ns)); spzeros(5, length(ns))],
+    Element(mv=Matrix{Int}(I, length(ns)+5, length(ns)),
             mi=[spzeros(length(ns), length(ns)); ns'; spzeros(4, length(ns))],
             mx=[spzeros(length(ns), 2); -π*D 0; -1/a -α/a; 0 -1; 0 0; 0 0],
             mxd=[-μ0*A*ns -μ0*ns*A; 0 0; 0 0; 0 0; -1 0; 0 -1],
-            mq=[zeros(length(ns)+1,4); eye(4)], nonlinear_eq = nonlinear_eq)
+            mq=[zeros(length(ns)+1,4); Matrix(I, 4, 4)], nonlinear_eq = nonlinear_eq)
 end
 
 
@@ -148,14 +149,14 @@ parameters are set using named arguments:
 | `k`  | amount of hysteresis (in Ampere-per-meter) |
 | `Ms` | saturation magnetization (in Ampere-per-meter) |
 
-A detailed discussion of the paramters can be found in D. C. Jiles and D. L.
+A detailed discussion of the parameters can be found in D. C. Jiles and D. L.
 Atherton, “Theory of ferromagnetic hysteresis,” J. Magn. Magn. Mater., vol.
 61, no. 1–2, pp. 48–60, Sep. 1986 and J. H. B. Deane, “Modeling the dynamics
 of nonlinear inductor circuits,” IEEE Trans. Magn., vol. 30, no. 5, pp.
 2795–2801, 1994, where the definition of `c` is taken from the latter. The ACME
 implementation is discussed in [M. Holters, U. Zölzer, "Circuit Simulation with
 Inductors and Transformers Based on the Jiles-Atherton Model of
-Magnetization"](http://ant-s4.unibw-hamburg.de/paper-archive/2016/dafxpapers/08-DAFx-16_paper_10-PN.pdf).
+Magnetization"](http://dafx.de/paper-archive/2016/dafxpapers/08-DAFx-16_paper_10-PN.pdf).
 
 Pins: `1`, `2`
 """
