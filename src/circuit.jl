@@ -25,7 +25,7 @@ struct Circuit
     elements::OrderedDict{Symbol, Element}
     nets :: Vector{Net}
     net_names :: Dict{Symbol, Net}
-    Circuit() = new(OrderedDict{Symbol, Element}(), [], Dict{Symbol, Net}())
+    Circuit() = new(OrderedDict{Symbol, Element}(), Net[], Dict{Symbol, Net}())
 end
 
 elements(c::Circuit) = values(c.elements)
@@ -153,7 +153,7 @@ end
 netfor!(c::Circuit, p::Tuple{Symbol,Any}) = netfor!(c, (p[1], Symbol(p[2])))
 
 function netfor!(c::Circuit, name::Symbol)
-    haskey(c.net_names, name) || push!(c.nets, get!(c.net_names, name, []))
+    haskey(c.net_names, name) || push!(c.nets, get!(c.net_names, name, Net[]))
     c.net_names[name]
 end
 
@@ -179,10 +179,12 @@ connect!(circ, (:src, -), (:r, 2), :gnd) # connect to gnd net
 ```
 """
 function connect!(c::Circuit, pins::Union{Symbol,Tuple{Symbol,Any}}...)
-    nets = unique([netfor!(c, pin) for pin in pins])
+    nets = unique([netfor!(c, pin)::Net for pin in pins])
     for net in nets[2:end]
         append!(nets[1], net)
-        deleteat!(c.nets, findfirst(n -> n == net, c.nets))
+        idx = findfirst(==(net), c.nets)
+        @assert !isnothing(idx)
+        deleteat!(c.nets, idx)
         for (name, named_net) in c.net_names
             if named_net == net
                 c.net_names[name] = nets[1]
@@ -224,7 +226,7 @@ function topomat!(incidence::SparseMatrixCSC{T}) where {T<:Integer}
         t[col] = true;
 
         if rows[1] ≠ row
-            incidence[[rows[1], row], :] = incidence[[row, rows[1]], :]
+            incidence[[rows[1]::Integer, row], :] = incidence[[row, rows[1]], :]
         end
         if length(rows) == 2
             @assert incidence[row, col] + incidence[rows[2], col] == 0
@@ -247,7 +249,7 @@ function topomat!(incidence::SparseMatrixCSC{T}) where {T<:Integer}
     tv = spzeros(T, size(dl, 2), size(incidence, 2))
     # findall here works around JuliaLang/julia#27013 (introdcued in 0.7.0-DEV.4983)
     tv[:, findall(t)] = -dl'
-    tv[:, findall((!).(t))] = SparseMatrixCSC{T}(I, size(dl, 2), size(dl, 2))
+    tv[:, findall((!).(t))] = SparseMatrixCSC{T}(I, size(dl, 2), size(dl, 2))::SparseMatrixCSC{T}
 
     tv, ti
 end
@@ -467,9 +469,9 @@ ports.
     end
 
     tv, ti = topomat!(incid)
-    S = SparseMatrixCSC{Rational{BigInt}}([Mᵥ Mᵢ Mₓ Mₓ´ Mq;
-        blockdiag(tv, ti) spzeros(nb(circ)+numports, 2nx(circ)+nq(circ))])
-    ũ, M = gensolve(S, SparseMatrixCSC{Rational{BigInt}}([Mu u0; spzeros(nb(circ)+numports, nu(circ)+1)]))
+    S = SparseMatrixCSC{Rational{BigInt}}([[Mᵥ Mᵢ Mₓ Mₓ´ Mq];
+        [blockdiag(tv, ti) spzeros(nb(circ)+numports, 2nx(circ)+nq(circ))]])
+    ũ, M = gensolve(S, SparseMatrixCSC{Rational{BigInt}}([[Mu u0]; spzeros(nb(circ)+numports, nu(circ)+1)]))
     # [v' i' x' xd' q']' = ũ + My for arbitrary y
     # now drop all rows concerning only internal voltages and currents
     indices = vcat(consecranges([nb(circ), numports, nb(circ), numports+2nx(circ)+nq(circ)])[[2,4]]...)
