@@ -740,4 +740,29 @@ matsplit(v::AbstractVector, rowsizes) = [v[rs] for rs in consecranges(rowsizes)]
 matsplit(m::AbstractMatrix, rowsizes, colsizes=[size(m,2)]) =
     [m[rs, cs] for rs in consecranges(rowsizes), cs in consecranges(colsizes)]
 
+@assert precompile(resistor, (Float64,))
+@assert precompile(resistor, (Int,))
+@assert precompile(potentiometer, (Float64,))
+@assert precompile(potentiometer, (Int,))
+@assert precompile(potentiometer, (Float64, Float64))
+@assert precompile(potentiometer, (Int, Float64))
+@assert precompile(capacitor, (Float64,))
+@assert precompile(inductor, (Float64,))
+@assert precompile(inductor, (Type{Val{:JA}},))
+@assert precompile(transformer, (Float64, Float64))
+@assert precompile(transformer, (Type{Val{:JA}},))
+@assert precompile(voltagesource, ())
+@assert precompile(voltagesource, (Float64,))
+@assert precompile(voltagesource, (Int,))
+@assert precompile(currentsource, ())
+@assert precompile(currentsource, (Float64,))
+@assert precompile(currentsource, (Int,))
+@assert precompile(voltageprobe, ())
+@assert precompile(currentprobe, ())
+@assert precompile(diode, ())
+@assert precompile(bjt, (Symbol,))
+@assert precompile(mosfet, (Symbol,))
+@assert precompile(opamp, ())
+@assert precompile(opamp, (Type{Val{:macak}}, Float64, Float64, Float64))
+
 end # module
