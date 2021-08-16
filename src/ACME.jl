@@ -76,14 +76,8 @@ struct Element
         matrices, sizes = prepare_element_matrices(; mat_args...)
         if nonlinear_eq === nothing
             nonlinear_eq = (q) -> (SVector{0,Float64}(), SMatrix{0,0,Float64}())
-        elseif nonlinear_eq isa Expr
-            nn = sizes[:nb] + sizes[:nx] + sizes[:nq] - sizes[:nl]
-            nonlinear_eq = wrap_nleq_expr(nn, sizes[:nq], elem.nonlinear_eq)
         end
 
-        if pins isa Dict
-            ports = ports_from_old_pins(val)
-        end
         if ports !== nothing
             pins = Dict{Symbol,Vector{Tuple{Int, Int}}}()
             for branch in 1:length(ports)
@@ -745,7 +739,5 @@ consecranges(lengths) = map((l, e) -> (e-l+1):e, lengths, cumsum(lengths))
 matsplit(v::AbstractVector, rowsizes) = [v[rs] for rs in consecranges(rowsizes)]
 matsplit(m::AbstractMatrix, rowsizes, colsizes=[size(m,2)]) =
     [m[rs, cs] for rs in consecranges(rowsizes), cs in consecranges(colsizes)]
-
-include("deprecated.jl")
 
 end # module
