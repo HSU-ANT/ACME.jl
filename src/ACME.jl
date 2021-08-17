@@ -796,6 +796,18 @@ precompile(mosfet, (Symbol,))
 precompile(opamp, ())
 precompile(opamp, (Type{Val{:macak}}, Float64, Float64, Float64))
 
+precompile(Circuit, ())
+precompile(add!, (Circuit, Element))
+precompile(add!, (Circuit, Symbol, Element))
+for T1 in (Symbol, Tuple{Symbol,Int}, Tuple{Symbol,String}, Tuple{Symbol,Symbol}),
+    T2 in (
+        Symbol, Tuple{Symbol,Int}, Tuple{Symbol,String}, Tuple{Symbol,Symbol},
+        Vararg{Symbol}, Vararg{Tuple{Symbol,Int}}, Vararg{Tuple{Symbol,String}}, Vararg{Tuple{Symbol,Symbol}},
+        Vararg{Union{Symbol,Tuple{Symbol,Any}}},
+    )
+    precompile(connect!, (Circuit, T1, T2))
+end
+
 precompile(DiscreteModel, (Circuit, Rational{Int}))
 
 end # module
