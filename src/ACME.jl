@@ -1,4 +1,4 @@
-# Copyright 2015, 2016, 2017, 2018, 2019, 2020 Martin Holters
+# Copyright 2015, 2016, 2017, 2018, 2019, 2020, 2021 Martin Holters
 # See accompanying license file.
 
 module ACME
@@ -19,8 +19,44 @@ using StaticArrays
 include("kdtree.jl")
 include("solvers.jl")
 
+let mat_dims = Dict(
+        :mv => (:nl, :nb), :mi => (:nl, :nb), :mx => (:nl, :nx),
+        :mxd => (:nl, :nx), :mq => (:nl, :nq), :mu => (:nl, :nu),
+        :u0 => (:nl, :n0),
+        :pv => (:ny, :nb), :pi => (:ny, :nb), :px => (:ny, :nx),
+        :pxd => (:ny, :nx), :pq => (:ny, :nq),
+    )
 
-mutable struct Element
+    @eval function prepare_element_matrices(; $((Expr(:kw, m, nothing) for m ∈ keys(mat_dims))...))
+        matrices = Dict{Symbol,SparseMatrixCSC{Real,Int}}()
+        $(
+            (
+                quote
+                    if $(mat_name) !== nothing
+                        matrices[$(QuoteNode(mat_name))] = hcat($(mat_name))::AbstractMatrix
+                    end
+                end
+                for mat_name ∈ keys(mat_dims)
+            )...
+        )
+        sizes = Dict{Symbol,Int}(:n0 => 1)
+        for (mat_name, mat) ∈ matrices
+            for (sym, s) ∈ zip($(mat_dims)[mat_name], size(mat))
+                if get!(sizes, sym, s) ≠ s
+                    throw(ArgumentError("Inconsistent sizes for $(sym)"))
+                end
+            end
+        end
+        for (m, ns) ∈ $(mat_dims)
+            if !haskey(matrices, m)
+                matrices[m] = spzeros(Real, get!(sizes, ns[1], 0), get!(sizes, ns[2], 0))
+            end
+        end
+        return matrices, sizes
+    end
+end
+
+struct Element
   mv :: SparseMatrixCSC{Real,Int}
   mi :: SparseMatrixCSC{Real,Int}
   mx :: SparseMatrixCSC{Real,Int}
@@ -36,64 +72,30 @@ mutable struct Element
   nonlinear_eq
   pins :: Dict{Symbol, Vector{Tuple{Int, Int}}}
 
-  function Element(;args...)
-    sizes = Dict{Symbol,Int}(:n0 => 1)
-
-    function update_sizes(mat, syms)
-      for (sym, s) in zip(syms, size(mat))
-        if !haskey(sizes, sym)
-          sizes[sym] = s
-        elseif sizes[sym] ≠ s
-          error("Inconsistent sizes for ", sym)
+    function Element(;nonlinear_eq=nothing, ports=nothing, pins=nothing, mat_args...)
+        matrices, sizes = prepare_element_matrices(; mat_args...)
+        if nonlinear_eq === nothing
+            nonlinear_eq = (q) -> (SVector{0,Float64}(), SMatrix{0,0,Float64}())
         end
-      end
-    end
 
-    mat_dims =
-        Dict( :mv => (:nl,:nb), :mi => (:nl,:nb), :mx => (:nl,:nx),
-              :mxd => (:nl,:nx), :mq => (:nl,:nq), :mu => (:nl,:nu),
-              :u0 => (:nl, :n0),
-              :pv => (:ny,:nb), :pi => (:ny,:nb), :px => (:ny,:nx),
-              :pxd => (:ny,:nx), :pq => (:ny,:nq) )
-
-    elem = new()
-    for (key, val) in args
-      if haskey(mat_dims, key)
-        val = convert(SparseMatrixCSC{Real,Int}, hcat(val)) # turn val into a sparse matrix whatever it is
-        update_sizes(val, mat_dims[key])
-      else
-          if key === :pins && !(val isa Dict)
-              val = ports_from_old_pins(val)
-              key = :ports
-          end
-          if key === :ports
-              pins = Dict{Symbol,Vector{Tuple{Int, Int}}}()
-              for branch in 1:length(val)
-                  push!(get!(pins, Symbol(val[branch][1]), []), (branch, 1))
-                  push!(get!(pins, Symbol(val[branch][2]), []), (branch, -1))
-              end
-              val = pins
-              key = :pins
-          end
-      end
-      setfield!(elem, key, val)
+        if ports !== nothing
+            pins = Dict{Symbol,Vector{Tuple{Int, Int}}}()
+            for branch in 1:length(ports)
+                push!(get!(pins, Symbol(ports[branch][1]), Tuple{Int, Int}[]), (branch, 1))
+                push!(get!(pins, Symbol(ports[branch][2]), Tuple{Int, Int}[]), (branch, -1))
+            end
+        end
+        if pins === nothing
+            pins = Dict(Symbol(i) => [((i+1) ÷ 2, 2(i % 2) - 1)] for i in 1:2sizes[:nb])
+        end
+        return new(
+            matrices[:mv], matrices[:mi], matrices[:mx], matrices[:mxd],
+            matrices[:mq], matrices[:mu], matrices[:u0],
+            matrices[:pv], matrices[:pi], matrices[:px], matrices[:pxd], matrices[:pq],
+            nonlinear_eq,
+            pins,
+        )
     end
-    for (m, ns) in mat_dims
-      if !isdefined(elem, m)
-        setfield!(elem, m, spzeros(Real, get(sizes, ns[1], 0), get(sizes, ns[2], 0)))
-      end
-    end
-    if !isdefined(elem, :nonlinear_eq)
-      elem.nonlinear_eq = (q) -> (SVector{0,Float64}(), SMatrix{0,0,Float64}())
-    elseif elem.nonlinear_eq isa Expr
-        nn = get(sizes, :nb, 0) + get(sizes, :nx, 0) + get(sizes, :nq, 0) - get(sizes, :nl, 0)
-        elem.nonlinear_eq = wrap_nleq_expr(nn, get(sizes, :nq, 0), elem.nonlinear_eq)
-    end
-    if !isdefined(elem, :pins)
-        elem.pins = Dict(Symbol(i) => [((i+1) ÷ 2, 2(i % 2) - 1)] for i in 1:2nb(elem))
-    end
-    elem
-  end
 end
 
 for (n,m) in Dict(:nb => :mv, :nx => :mx, :nq => :mq, :nu => :mu)
@@ -738,6 +740,29 @@ matsplit(v::AbstractVector, rowsizes) = [v[rs] for rs in consecranges(rowsizes)]
 matsplit(m::AbstractMatrix, rowsizes, colsizes=[size(m,2)]) =
     [m[rs, cs] for rs in consecranges(rowsizes), cs in consecranges(colsizes)]
 
-include("deprecated.jl")
+@assert precompile(resistor, (Float64,))
+@assert precompile(resistor, (Int,))
+@assert precompile(potentiometer, (Float64,))
+@assert precompile(potentiometer, (Int,))
+@assert precompile(potentiometer, (Float64, Float64))
+@assert precompile(potentiometer, (Int, Float64))
+@assert precompile(capacitor, (Float64,))
+@assert precompile(inductor, (Float64,))
+@assert precompile(inductor, (Type{Val{:JA}},))
+@assert precompile(transformer, (Float64, Float64))
+@assert precompile(transformer, (Type{Val{:JA}},))
+@assert precompile(voltagesource, ())
+@assert precompile(voltagesource, (Float64,))
+@assert precompile(voltagesource, (Int,))
+@assert precompile(currentsource, ())
+@assert precompile(currentsource, (Float64,))
+@assert precompile(currentsource, (Int,))
+@assert precompile(voltageprobe, ())
+@assert precompile(currentprobe, ())
+@assert precompile(diode, ())
+@assert precompile(bjt, (Symbol,))
+@assert precompile(mosfet, (Symbol,))
+@assert precompile(opamp, ())
+@assert precompile(opamp, (Type{Val{:macak}}, Float64, Float64, Float64))
 
 end # module
