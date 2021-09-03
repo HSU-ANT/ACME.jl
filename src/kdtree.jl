@@ -1,10 +1,9 @@
-# Copyright 2016, 2017, 2018, 2019 Martin Holters
+# Copyright 2016, 2017, 2018, 2019, 2021 Martin Holters
 # See accompanying license file.
 
 import Base.deleteat!
 import Base.isless
 import Base.isempty
-using Statistics: mean, var
 
 mutable struct KDTree{Tcv<:AbstractVector,Tp<:AbstractMatrix}
     cut_dim::Vector{Int}

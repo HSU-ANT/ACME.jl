@@ -5,10 +5,10 @@ include("checklic.jl")
 
 using ACME
 using Compat: evalpoly, only
-using Test: @test, @test_broken, @test_logs, @test_throws, @testset
 using FFTW: rfft
-using ProgressMeter
+using ProgressMeter: Progress, next!
 using SparseArrays: sparse, spzeros
+using Test: @test, @test_broken, @test_logs, @test_throws, @testset
 
 @testset "topomat" begin
     tv, ti = ACME.topomat(sparse([1 -1 1; -1 1 -1]))
