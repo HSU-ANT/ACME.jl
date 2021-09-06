@@ -1,8 +1,7 @@
-# Copyright 2016, 2017, 2018, 2019 Martin Holters
+# Copyright 2016, 2017, 2018, 2019, 2021 Martin Holters
 # See accompanying license file.
 
 export SimpleSolver, HomotopySolver, CachingSolver
-import Base.copy!
 
 struct ParametricNonLinEq{F_eval<:Function,F_setp<:Function,F_calcjp<:Function,Scratch}
     func::F_eval
@@ -132,7 +131,7 @@ function solve!(solver::LinearSolver, x::Vector{Float64}, b::Vector{Float64})
     return nothing
 end
 
-function copy!(dest::LinearSolver, src::LinearSolver)
+function Base.copy!(dest::LinearSolver, src::LinearSolver)
     copyto!(dest.factors, src.factors)
     copyto!(dest.ipiv, src.ipiv)
 end

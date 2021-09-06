@@ -3,8 +3,6 @@
 
 export Circuit, add!, connect!, disconnect!, @circuit, composite_element
 
-import Base: delete!
-
 struct CircuitNLFunc{Fs}
     fs::Fs
 end
@@ -130,7 +128,7 @@ end
 Deletes the element named `designator` from the circuit `c` (disconnecting all
 its pins).
 """
-function delete!(c::Circuit, designator::Symbol)
+function Base.delete!(c::Circuit, designator::Symbol)
     for net in c.nets
         filter!(elempin -> elempin[1] != designator, net)
     end
