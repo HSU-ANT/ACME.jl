@@ -673,18 +673,22 @@ function step!(runner::ModelRunner, y::AbstractMatrix{Float64}, u::AbstractMatri
         zoff += length(zsub)
     end
     #y[:,n] = model.dy * model.x + model.ey * u[:,n] + model.fy * z + model.y0
-    copyto!(ycur, model.y0)
-    BLAS.gemv!('N', 1., model.dy, model.x, 1., ycur)
-    BLAS.gemv!('N', 1., model.ey, ucur, 1., ycur)
-    BLAS.gemv!('N', 1., model.fy, z, 1., ycur)
-    #y[:,n] = ycur
-    copyto!(y, (n-1)*ny(model)+1, ycur, 1, ny(model))
+    if !isempty(ycur)
+        copyto!(ycur, model.y0)
+        BLAS.gemv!('N', 1., model.dy, model.x, 1., ycur)
+        BLAS.gemv!('N', 1., model.ey, ucur, 1., ycur)
+        BLAS.gemv!('N', 1., model.fy, z, 1., ycur)
+        #y[:,n] = ycur
+        copyto!(y, (n-1)*ny(model)+1, ycur, 1, ny(model))
+    end
     #model.x = model.a * model.x + model.b * u[:,n] + model.c * z + model.x0
-    copyto!(xnew, model.x0)
-    BLAS.gemv!('N', 1., model.a, model.x, 1., xnew)
-    BLAS.gemv!('N', 1., model.b, ucur, 1.,xnew)
-    BLAS.gemv!('N', 1., model.c, z, 1., xnew)
-    copyto!(model.x, xnew)
+    if !isempty(xnew)
+        copyto!(xnew, model.x0)
+        BLAS.gemv!('N', 1., model.a, model.x, 1., xnew)
+        BLAS.gemv!('N', 1., model.b, ucur, 1.,xnew)
+        BLAS.gemv!('N', 1., model.c, z, 1., xnew)
+        copyto!(model.x, xnew)
+    end
 end
 
 function gensolve(a, b, x, h, thresh=0.1)
