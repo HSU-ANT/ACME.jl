@@ -1,10 +1,5 @@
-# Copyright 2016, 2017, 2018, 2019 Martin Holters
+# Copyright 2016, 2017, 2018, 2019, 2021 Martin Holters
 # See accompanying license file.
-
-import Base.deleteat!
-import Base.isless
-import Base.isempty
-using Statistics: mean, var
 
 mutable struct KDTree{Tcv<:AbstractVector,Tp<:AbstractMatrix}
     cut_dim::Vector{Int}
@@ -83,7 +78,7 @@ mutable struct AltEntry{T}
     delta_norm::T
 end
 
-isless(e1::AltEntry, e2::AltEntry) = isless(e1.delta_norm, e2.delta_norm)
+Base.isless(e1::AltEntry, e2::AltEntry) = isless(e1.delta_norm, e2.delta_norm)
 
 mutable struct Alts{T}
     entries::Vector{AltEntry{T}}
@@ -139,10 +134,10 @@ function siftdown!(alts::Alts, i)
     end
 end
 
-isempty(alts::Alts) = alts.number_valid == 0
+Base.isempty(alts::Alts) = alts.number_valid == 0
 peek(alts::Alts) = alts.entries[1]
 
-function deleteat!(alts::Alts, i::Integer)
+function Base.deleteat!(alts::Alts, i::Integer)
     alts.entries[i], alts.entries[alts.number_valid] = alts.entries[alts.number_valid], alts.entries[i]
     alts.number_valid -= 1
     if i ≤ alts.number_valid

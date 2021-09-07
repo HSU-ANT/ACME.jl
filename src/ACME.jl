@@ -6,15 +6,15 @@ module ACME
 export DiscreteModel, run!, steadystate, steadystate!, linearize, ModelRunner
 
 using Compat: evalpoly
-using SparseArrays: SparseMatrixCSC, blockdiag, dropzeros!, findnz,
-    nonzeros, sparse, spzeros
+using IterTools: subsets
 using LinearAlgebra: BLAS, I, axpy!, lu, rmul!
 using Markdown: @doc_str
-
-using ProgressMeter
-using IterTools
 using OrderedCollections: OrderedDict
-using StaticArrays
+using ProgressMeter: @showprogress
+using SparseArrays: SparseMatrixCSC, blockdiag, dropzeros!, findnz,
+    nonzeros, sparse, spzeros
+using StaticArrays: @SMatrix, @SVector, SMatrix, SVector
+using Statistics: mean, var
 
 include("kdtree.jl")
 include("solvers.jl")
