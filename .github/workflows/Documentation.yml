@@ -10,17 +10,13 @@ on:
 
 jobs:
   build:
-    name: build on Julia ${{ matrix.julia-version }}
+    name: Docs build
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        julia-version: ['1.0', '1.1', '1.2', '1.3', '1.4', 'nightly']
     steps:
       - uses: actions/checkout@v2.4.0
       - uses: julia-actions/setup-julia@v1
         with:
-          version: ${{ matrix.julia-version }}
+          version: '1.6'
       - name: Install dependencies
         run: julia --project=docs -e 'using Pkg; Pkg.instantiate()'
       - name: Build and deploy
@@ -28,7 +24,3 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # For authentication with GitHub Actions token
           DOCUMENTER_KEY: ${{ secrets.DOCUMENTER_KEY }} # For authentication with SSH deploy key
         run: julia --project=docs/ docs/make.jl
-      - uses: actions/upload-artifact@v2.2.4
-        with:
-          name: docs
-          path: docs/build

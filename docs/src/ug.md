@@ -50,7 +50,7 @@ A `Circuit` only stores elements and information about their connections. To
 simulate a circuit, a model has to be derived from it. This can be as simple
 as:
 
-```jldoctest ug; output = false, filter = r"(ACME\.)?DiscreteModel{.*"s
+```jldoctest ug; output = false, filter = r"DiscreteModel{.*"s
 model = DiscreteModel(circ, 1/44100)
 
 # output
@@ -62,7 +62,7 @@ Here, `1/44100` denotes the sampling interval, i.e. the reciprocal of the
 sampling rate at which the model should run. Optionally, one can specify the
 solver to use for solving the model's non-linear equation:
 
-```jldoctest ug; output = false, filter = r"(ACME\.)?DiscreteModel{.*"s
+```jldoctest ug; output = false, filter = r"DiscreteModel{.*"s
 model = DiscreteModel(circ, 1/44100, HomotopySolver{SimpleSolver})
 
 # output
@@ -79,7 +79,7 @@ y = run!(model, u)
 
 # output
 
-0×10 Array{Float64,2}
+0×10 Matrix{Float64}
 ```
 
 The input `u` is matrix with one row for each of the circuit's inputs and one
@@ -95,7 +95,7 @@ run!(model, [1 zeros(1,99)])
 
 # output
 
-1×100 Array{Float64,2}:
+1×100 Matrix{Float64}:
  1.83357e-8  3.1622e-7  2.59861e-6  …  0.00465423  0.00459275  0.00453208
 ```
 To
@@ -106,7 +106,7 @@ y = run!(model, zeros(0, 100))
 
 # output
 
-0×100 Array{Float64,2}
+0×100 Matrix{Float64}
 ```
 
 The internal state of the model (e.g. capacitor charges) is preserved accross
@@ -136,7 +136,7 @@ steadystate!(model)
 
 # output
 
-20-element Array{Float64,1}:
+20-element Vector{Float64}:
  0.0
  0.0
  0.0

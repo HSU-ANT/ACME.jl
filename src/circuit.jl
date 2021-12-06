@@ -266,7 +266,7 @@ Provides a simple domain-specific language to decribe circuits. The
 # Example
 
 To create a circuit with a voltage source connected to a resistor:
-```jldoctest; output = false, setup = :(using ACME), filter = r"(ACME\.)?Circuit\(.*"s
+```jldoctest; output = false, setup = :(using ACME), filter = r"Circuit\(.*"s
 @circuit begin
     src = voltagesource(5)
     r = resistor(1000)
@@ -285,7 +285,7 @@ defaulting to the current element.
 
 # Example
 
-```jldoctest; output = false, setup = :(using ACME), filter = r"(ACME\.)?Circuit\(.*"s
+```jldoctest; output = false, setup = :(using ACME), filter = r"Circuit\(.*"s
 @circuit begin
     src = voltagesource(5)
     r = resistor(1000), src[+] ⟷ [1], src[-] ⟷ [2]
@@ -301,7 +301,7 @@ to a named net. (Such named nets are created as needed.)
 
 # Example
 
-```jldoctest; output = false, setup = :(using ACME), filter = r"(ACME\.)?Circuit\(.*"s
+```jldoctest; output = false, setup = :(using ACME), filter = r"Circuit\(.*"s
 @circuit begin
     src = voltagesource(5), [-] ⟷ gnd
     r = resistor(1000), [1] ⟷ src[+], [2] ⟷ gnd
@@ -423,7 +423,7 @@ arbitrarily chosen pin and every other pin.
 The following will create an element for a 2.5V source, created using a 5V
 source and a voltage divider, stabilized with a capacitor.
 
-```jldoctest; output = false, setup = :(using ACME), filter = r"(ACME\.)?Element\(.*"s
+```jldoctest; output = false, setup = :(using ACME), filter = r"ACME\.Element\(.*"s
 circ = @circuit begin
    r1 = resistor(10e3)
    r2 = resistor(10e3), [1] == r1[2]
@@ -435,7 +435,7 @@ composite_element(circ, pinmap=Dict(1 => (:r2, 1), 2 => (:r2, 2)))
 
 # output
 
-Element(...)
+ACME.Element(...)
 ```
 
 Note that the pins still implicitly specifiy ports, so an even number must be
