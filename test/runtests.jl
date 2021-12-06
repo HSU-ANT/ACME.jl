@@ -4,7 +4,6 @@
 include("checklic.jl")
 
 using ACME
-using Compat: evalpoly, only
 using FFTW: rfft
 using ProgressMeter: Progress, next!
 using SparseArrays: sparse, spzeros
