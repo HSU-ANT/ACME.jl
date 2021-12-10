@@ -5,7 +5,6 @@ module ACME
 
 export DiscreteModel, run!, steadystate, steadystate!, linearize, ModelRunner
 
-using Compat: evalpoly
 using IterTools: subsets
 using LinearAlgebra: BLAS, I, axpy!, lu, rmul!
 using Markdown: @doc_str
