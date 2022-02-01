@@ -1,4 +1,4 @@
-# Copyright 2018, 2019 Martin Holters
+# Copyright 2018, 2019, 2022 Martin Holters
 # See accompanying license file.
 ACMEdir = joinpath(@__DIR__, "..")
 println("Checking copyright headers...")
@@ -9,7 +9,7 @@ for dirname in ("src", "examples", "test")
             name = joinpath(dirname, name)
             local years
             try
-                years = sort!(unique(parse.([Int], readlines(`git log --format=%cd --date=format:%Y -- $name`))))
+                years = sort!(unique(parse.([Int], readlines(`git log --format=%ad --date=format:%Y -- $name`))))
             catch e
                 @warn e
                 continue
