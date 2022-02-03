@@ -1,4 +1,4 @@
-# Copyright 2015, 2016, 2017, 2018, 2019, 2020, 2021 Martin Holters
+# Copyright 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022 Martin Holters
 # See accompanying license file.
 
 include("checklic.jl")
@@ -147,6 +147,14 @@ end
             probe = currentprobe(), [+] ⟷ r[1], [-] ⟷ r[2]
         end
         @test_logs (:warn, "Model output depends on indeterminate quantity") DiscreteModel(circ, 1)
+    end
+
+    @testset "indeterminate state update" begin
+        circ = @circuit begin
+            u = opamp(), ["in+"] ↔ ["in-"]
+            c = capacitor(1e-6), [1] ↔ u["out-"], [2] ↔ u["out+"]
+        end
+        @test_logs (:warn, "State update depends on indeterminate quantity") DiscreteModel(circ, 1)
     end
 
     @testset "no solution" begin
