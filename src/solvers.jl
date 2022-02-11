@@ -136,6 +136,8 @@ function Base.copy!(dest::LinearSolver, src::LinearSolver)
     copyto!(dest.ipiv, src.ipiv)
 end
 
+abstract type NonlinearSolver end
+
 """
     SimpleSolver
 
@@ -146,7 +148,7 @@ the last solution found (or another solution provided externally) using the
 available Jacobians. Due to the missing global convergence, the `SimpleSolver`
 is rarely useful as such.
 """
-mutable struct SimpleSolver{NLEQ<:ParametricNonLinEq}
+mutable struct SimpleSolver{NLEQ<:ParametricNonLinEq} <: NonlinearSolver
     nleq::NLEQ
     z::Vector{Float64}
     linsolver::LinearSolver
@@ -242,7 +244,7 @@ can be combined with the `SimpleSolver` as `HomotopySolver{SimpleSolver}` to
 obtain a useful Newton homtopy solver with generally good convergence
 properties.
 """
-mutable struct HomotopySolver{BaseSolver}
+mutable struct HomotopySolver{BaseSolver<:NonlinearSolver} <: NonlinearSolver
     basesolver::BaseSolver
     start_p::Vector{Float64}
     pa::Vector{Float64}
@@ -314,7 +316,7 @@ See [M. Holters, U. Zölzer, "A k-d Tree Based Solution Cache for the Non-linear
 Equation of Circuit Simulations"](http://www.eurasip.org/Proceedings/Eusipco/Eusipco2016/papers/1570255150.pdf)
 for a more detailed discussion.
 """
-mutable struct CachingSolver{BaseSolver}
+mutable struct CachingSolver{BaseSolver<:NonlinearSolver} <: NonlinearSolver
     basesolver::BaseSolver
     ps_tree::KDTree{Vector{Float64}, Matrix{Float64}}
     zs::Matrix{Float64}
@@ -402,7 +404,7 @@ set_extrapolation_origin(solver::CachingSolver, p, z) =
 get_extrapolation_jacobian(solver::CachingSolver) =
     get_extrapolation_jacobian(solver.basesolver)
 
-function linearize(solver, p::AbstractVector{Float64})
+function linearize(solver::NonlinearSolver, p::AbstractVector{Float64})
     z = solve(solver, p)
     set_extrapolation_origin(solver, p, z)
     if !hasconverged(solver)

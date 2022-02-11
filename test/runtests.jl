@@ -7,17 +7,17 @@ using ACME
 using FFTW: rfft
 using ProgressMeter: Progress, next!
 using SparseArrays: sparse, spzeros
-using Test: @test, @test_broken, @test_logs, @test_throws, @testset
+using Test: @inferred, @test, @test_broken, @test_logs, @test_throws, @testset
 
 @testset "topomat" begin
-    tv, ti = ACME.topomat(sparse([1 -1 1; -1 1 -1]))
+    tv, ti = @inferred ACME.topomat(sparse([1 -1 1; -1 1 -1]))
     @test tv*ti'==spzeros(2,1)
 
     # Pathological cases for topomat:
     # two nodes, one loop branch (short-circuited) -> voltage==0, current arbitrary
-    @test ACME.topomat(spzeros(Int, 2, 1)) == (hcat([1]), spzeros(0, 1))
+    @test @inferred(ACME.topomat(spzeros(Int, 2, 1))) == (hcat([1]), spzeros(0, 1))
     # two nodes, one branch between them -> voltage arbitrary, current==0
-    @test ACME.topomat(sparse([1,2], [1,1], [1,-1])) == (spzeros(0, 1), hcat([1]))
+    @test @inferred(ACME.topomat(sparse([1,2], [1,1], [1,-1]))) == (spzeros(0, 1), hcat([1]))
 end
 
 @testset "LinearSolver" begin
@@ -211,7 +211,7 @@ end
 @testset "gensolve/rank_factorize" begin
     a = Rational{BigInt}[1 1 1; 1 1 2; 1 2 1; 1 2 2; 2 1 1; 2 1 2]
     b = Rational{BigInt}[1 2 3 4 5 6; 6 5 4 3 2 1; 1 0 1 0 1 0]
-    nullspace = ACME.gensolve(sparse(a'), spzeros(Rational{BigInt}, size(a, 2), 0))[2]
+    nullspace = @inferred(ACME.gensolve(sparse(a'), spzeros(Rational{BigInt}, size(a, 2), 0)))[2]
     @test nullspace'*a == spzeros(3, 3)
     c, f = ACME.rank_factorize(sparse(a * b))
     @test c*f == a*b
@@ -234,13 +234,12 @@ end
         zuin in (zeros(Rational{BigInt}, 3, 1), hcat(Rational{BigInt}[1; 2; -1]))
         dq_full = p * dq + fq * zxin
         eq_full = p * eq + fq * zuin
-        mats = Dict{Symbol,Array}(:a => a, :b => b, :c => c, :dy => dy, :ey => ey,
-            :fy => fy, :dq_full => dq_full, :eq_full => eq_full, :fq => fq)
-        mats[:dq_fulls]=Matrix[mats[:dq_full]]
-        mats[:eq_fulls]=Matrix[mats[:eq_full]]
-        mats[:fqprev_fulls]=Matrix[mats[:eq_full]]
-        mats[:fqs]=Matrix[mats[:fq]]
-        ACME.reduce_pdims!(mats)
+        mats = (
+            a = a, b = b, c = c, dy = dy, ey = ey, fy = fy,
+            dq_full = dq_full, eq_full = eq_full, fq = fq,
+            dq_fulls = [dq_full], eq_fulls = [eq_full], fqprev_fulls = [eq_full], fqs = [fq]
+        )
+        mats = ACME.reduce_pdims!(mats)
         @test size(mats[:pexps][1], 2) == 3
         @test mats[:pexps][1] * mats[:dqs][1] == mats[:dq_fulls][1]
         @test mats[:pexps][1] * mats[:eqs][1] == mats[:eq_fulls][1]
