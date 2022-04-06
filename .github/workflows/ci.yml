@@ -30,7 +30,7 @@ jobs:
           arch: ${{ matrix.julia-arch }}
       - uses: julia-actions/julia-runtest@v1
       - uses: julia-actions/julia-processcoverage@v1.2
-      - uses: codecov/codecov-action@v2.1.0
+      - uses: codecov/codecov-action@v3
         with:
           file: lcov.info
       - uses: coverallsapp/github-action@master
