@@ -206,3 +206,28 @@ plot(u, y; xlabel="input voltage", ylabel="output current", legend=false)
 For the small input voltages, the theoretical transconductance of 10 mA / 50 mV
 = 0.2 Ω⁻¹ is obtained, while for the larger voltages, the saturation effect
 becomes clearly visible.
+
+As the nonlinear function $\bm{f}$ may be evaluated very often, it is worth
+optimizing it a fair bit. In particular, we may note that
+$1/\coth^2(x)=1-\tanh^2(x)$ to save on the number of typically expensive
+evaluations of hyperbolic functions. Furthermore, we can redefine
+$q_1=v_1/(2v_\text{T})$ by using
+```math
+\quad \bm{M}_\text{q}=\begin{pmatrix} -2v_\text{T} & 0 \\ 0 & -1 \\ 0 & 0 \end{pmatrix}
+```
+for another, very minor simplification of the nonlinear function. This leads to
+the functionally equivalent:
+```@example ota_nonlinear
+using ACME, StaticArrays # hide
+ota(i_bias) = ACME.Element(
+    mv=[1 0; 0 0; 0 0], mi=[0 0; 0 1; 1 0], mq=[-50e-3 0; 0 -1; 0 0],
+    ports=["in+" => "in-", "out+" => "out-"],
+    nonlinear_eq = function (q)
+        th = tanh(q[1])
+        res = @SVector [i_bias*th + q[2]]
+        J = @SMatrix [i_bias*(1-th^2) 1.0]
+        return (res, J)
+    end
+)
+nothing # hide
+```
