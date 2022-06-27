@@ -164,6 +164,9 @@ and
 ```math
 \bm{f}(\bm{q}) = \begin{pmatrix} i_\text{bias}\cdot\tanh(q_1/(2v_\text{T})) + q_2 \end{pmatrix}.
 ```
+Note that this adds two equations, a linear one and a nonlinear one, matching
+the two additional unknowns ($q_1$ and $q_2$).
+
 In order to do nonlinear equation solving, ACME requires not only the function
 $\bm{f}$, but also its Jacobian, in this case
 ```math
