@@ -57,13 +57,16 @@ these ports. For the OTA, the first port can obviously be chosen as the input
 pins. For the second port, the output pin has to be paired with a pin that
 provides the current to be sourced at the output to maintain a net current sum
 of zero. As for the opamp models, we therefore introduce a negative output pin.
-For the mathematical formulation, the port voltages and currents are collected
-in vectors $\bm{v}$ and $\bm{i}$, respectively. Following the convention that
-the input port is the first entry, the OTA is therefore described with
+Each port is associated with a voltage and a current as depicted in the
+following diagram:
+
+![](ota.svg)
+
+The OTA is thus described with
 $i_2=-g\cdot v_1$ (where $g$ is the transconductance) and $i_1=0$. The negative
-sign in the first equation is required because ACME considers the currents on
-the element's inside, but here, we want a positive input voltage to yield a
-positive output current on the outside.
+sign in the first equation is required because we want a positive input voltage
+to yield a positive output current pointing out of the OTA, i.e. opposite to
+$i_2$.
 
 ACME uses a matrix notation that in full generality looks like
 ```math
@@ -71,9 +74,10 @@ ACME uses a matrix notation that in full generality looks like
 + \bm{M}_{\dot{\text{x}}}\dot{\bm{x}} + \bm{M}_\text{q}\bm{q}
 = \bm{M}_\text{u}\bm{u} + \bm{u}_0.
 ```
-
 The matrices $\bm{M}_{\cdot}$ describe the element and will have to be
-determined in the following. The vector $\bm{x}$ holds the internal states of
+determined in the following. The port voltages and currents are collected
+in vectors $\bm{v}$ and $\bm{i}$, respectively. The vector $\bm{x}$ holds the
+internal states of
 the element and $\dot{\bm{x}}$ their derivatives. We model a stateless OTA, so
 these parts can be ignored by choosing $\bm{M}_\text{x}$ and
 $\bm{M}_{\dot{\text{x}}}$ as zero-column matrices. The vector $\bm{q}$ becomes
