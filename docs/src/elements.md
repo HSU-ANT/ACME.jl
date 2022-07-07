@@ -84,9 +84,13 @@ $\bm{M}_\text{u}$ is also chosen to have zero columns. Finally, $\bm{u}_0$ is
 again used for describing the element. For the linear OTA, we can write the two
 equations as
 ```math
-\begin{pmatrix} g & 0 \\ 0 & 0 \end{pmatrix}\bm{v}
-+ \begin{pmatrix} 0 & 1 \\ 1 & 0 \end{pmatrix}\bm{i}
-= \begin{pmatrix} 0 \\ 0 \end{pmatrix}
+\underbrace{\begin{pmatrix} g & 0 \\ 0 & 0 \end{pmatrix}}_{\bm{M}_\text{v}}
+\cdot\underbrace{\begin{pmatrix} v_1 \\ v_2 \end{pmatrix}}_{\bm{v}}
++
+\underbrace{\begin{pmatrix} 0 & 1 \\ 1 & 0 \end{pmatrix}}_{\bm{M}_\text{i}}
+\cdot\underbrace{\begin{pmatrix} i_1 \\ i_2 \end{pmatrix}}_{\bm{i}}
+=
+\underbrace{\begin{pmatrix} 0 \\ 0 \end{pmatrix}}_{\bm{u}_0}
 ```
 where the first row translates to $i_2=-g\cdot v_1$ and the second row to $i_1=0$.
 Thus, we obtain
@@ -164,8 +168,8 @@ and
 ```math
 \bm{f}(\bm{q}) = \begin{pmatrix} i_\text{bias}\cdot\tanh(q_1/(2v_\text{T})) + q_2 \end{pmatrix}.
 ```
-Note that this adds two equations, a linear one and a nonlinear one, matching
-the two additional unknowns ($q_1$ and $q_2$).
+Note that, compared to the linear case, this adds two equations, a linear one
+and a nonlinear one, matching the two additional unknowns ($q_1$ and $q_2$).
 
 In order to do nonlinear equation solving, ACME requires not only the function
 $\bm{f}$, but also its Jacobian, in this case
