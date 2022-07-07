@@ -239,3 +239,117 @@ ota(i_bias) = ACME.Element(
 )
 nothing # hide
 ```
+
+As a second example, we consider a variable capacitor, where the capacitance
+shall be an input. An ordinary capacitor obeys $i = C\dot{v}$ (where
+$\dot{v}=\frac{dv}{dt}$ denotes the voltage's derivative with respect to time).
+One could stick with that equation even when $C$ is allow to vary with time,
+or use $i = \frac{d}{dt} Cv = \dot{C}v + C\dot{v}$ (which reduces to same
+equation for const $C$). Both equations are valid in their own right but model
+different behavior. Here, we choose the second option, which implies that for
+zero current, if the capacitance changes, the voltage changes, but the charge
+$Cv$ remains constant. This is true for example for a plate capacitor with
+the distance between the plates varying over time.
+
+For modelling with ACME, it is easiest to choose the charge as state, i.e.
+$x_1=Cv_1$ and $i_1=\dot{x}_1$. (Obviously, there is only one port, so the
+definition of $i_1$ and $v_1$ is immediate.) We want the capacitance to be an
+input, so we now utilize the input vector and choose $C=u_1$. This looks simple
+enough so far, but unfortunately, cannot be represented using the linear
+equations alone due to the product in $x_1=Cv_1=u_1v_1$. We therefore need to
+introduce a nonlinear equation for the three quantities $q_1=v_1, q_2=u_1,
+q_3=x_1$. The resulting model thus becomes
+```math
+\begin{pmatrix}
+-1 \\
+0 \\
+0 \\
+0 \\
+\end{pmatrix}
+\bm{v}
++
+\begin{pmatrix}
+0 \\
+0 \\
+0 \\
+1 \\
+\end{pmatrix}
+\bm{i}
++
+\begin{pmatrix}
+0 \\
+0 \\
+-1 \\
+0 \\
+\end{pmatrix}
+\bm{x}
++
+\begin{pmatrix}
+0 \\
+0 \\
+0 \\
+-1 \\
+\end{pmatrix}
+\dot{\bm{x}}
++
+\begin{pmatrix}
+1 & 0 & 0 \\
+0 & 1 & 0 \\
+0 & 0 & 1 \\
+0 & 0 & 0 \\
+\end{pmatrix}
+\bm{q}
+=
+\begin{pmatrix}
+0 \\
+1 \\
+0 \\
+0 \\
+\end{pmatrix}
+\bm{u}
+```
+and
+```math
+\bm{f}(\bm{q}) = \begin{pmatrix} q_1\cdot q_2 - q_3 \end{pmatrix}.
+```
+Again, we also need the Jabobian, which is trivially found to be
+```math
+\bm{J}(\bm{q}) = \begin{pmatrix} q_2 & q_1 & -1 \end{pmatrix}.
+```
+Thus we obtain
+```@example var_capacitor
+using ACME, StaticArrays # hide
+var_capacitor() = ACME.Element(
+    mv=[-1; 0; 0; 0], mi=[0; 0; 0; 1], mx=[0; 0; -1; 0], mxd=[0; 0; 0; -1],
+    mq=[1 0 0; 0 1 0; 0 0 1; 0 0 0], mu=[0; 1; 0; 0],
+    nonlinear_eq = function (q)
+        res = @SVector [q[1] * q[2] - q[3]]
+        J = @SMatrix [q[2] q[1] -1]
+        return (res, J)
+    end
+)
+nothing # hide
+```
+Note that when not specifying `ports`, their count is deduced from the matrix
+sizes, they are assumed not to share pins, and the pin names are obtained be
+numbering them, i.e. here we get the pins `1` and `2`.
+
+We can thus simulate a highly simplified condenser microphone with
+```@example var_capacitor
+circ = @circuit begin
+    Vcc = voltagesource(10)
+    C = var_capacitor(), [1] ⟷ Vcc[+]
+    R = resistor(1e6), [1] ⟷ C[2], [2] ⟷ Vcc[-]
+    Jout = voltageprobe(), [+] ⟷ R[1], [-] ⟷ Vcc[-]
+end
+model = DiscreteModel(circ, 1/44100)
+u = [fill(1.0e-9, 200); fill(1.1e-9, 200); fill(0.9e-9, 200)]
+y = run!(model, u')'
+using Plots
+plot(range(0, length=length(y), step=1/44.100), y; xlabel="t in ms", ylabel="output voltage", legend=false)
+```
+Here the input controls the capacitance, starting at 1 nF, then jumping to 1.1nF
+and later jumping to 0.9nF. At first, the capacitor is charged while the voltage
+across the resistor, the output voltage, drops accordingly. The sudden changes
+in the capacitance result in equally sudden changes in the voltage, which then
+decays again as the capacitor (dis-)charges.
