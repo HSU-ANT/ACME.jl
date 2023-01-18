@@ -794,3 +794,7 @@ end
         # TODO: further validate y
     end
 end
+
+if isdefined(Base, :get_extension) # Julia 1.10
+    include("unitful.jl")
+end

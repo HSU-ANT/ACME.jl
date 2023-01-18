@@ -19,10 +19,17 @@ ProgressMeter = "0.6, 0.7, 0.8, 0.9, 1"
 StaticArrays = "0.8, 0.9, 0.10, 0.11, 0.12, 1.0"
 julia = "1.4"
 
+[extensions]
+UnitfulExt = "Unitful"
+
 [extras]
 FFTW = "7a1cc6ca-52ef-59f5-83cd-3a7055c09341"
 SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 
 [targets]
-test = ["Test", "FFTW", "SparseArrays"]
+test = ["Test", "FFTW", "SparseArrays", "Unitful"]
+
+[weakdeps]
+Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
