@@ -1,4 +1,4 @@
-# Copyright 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022 Martin Holters
+# Copyright 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023 Martin Holters
 # See accompanying license file.
 
 include("checklic.jl")
@@ -38,6 +38,16 @@ end
     @test_throws DimensionMismatch ACME.solve!(solver, zeros(3), zeros(4))
     @test_throws DimensionMismatch ACME.solve!(solver, zeros(4), zeros(4))
     @test !ACME.setlhs!(solver, zeros(3,3))
+end
+
+@testset "Element equality" begin
+    @test resistor(1e3) == resistor(1e3)
+    @test hash(resistor(1e3)) == hash(resistor(1e3))
+    @test resistor(1e3) != resistor(2.2e3)
+    @test resistor(1) != voltagesource(1)
+    @test bjt(:npn) == bjt(:npn)
+    @test hash(bjt(:npn)) == hash(bjt(:npn))
+    @test bjt(:npn) != bjt(:pnp)
 end
 
 @testset "simple circuits" begin

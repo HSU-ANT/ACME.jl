@@ -1,4 +1,4 @@
-# Copyright 2015, 2016, 2017, 2018, 2019, 2020, 2021 Martin Holters
+# Copyright 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2023 Martin Holters
 # See accompanying license file.
 
 module ACME
@@ -96,6 +96,11 @@ struct Element
         )
     end
 end
+
+Base.:(==)(e1::Element, e2::Element) =
+    all(f -> (getfield(e1, f) == getfield(e2, f))::Bool, fieldnames(Element))
+Base.hash(e::Element, h::UInt) =
+    foldl((h, f) -> hash(getfield(e, f), h)::UInt, fieldnames(Element); init=h)
 
 for (n,m) in Dict(:nb => :mv, :nx => :mx, :nq => :mq, :nu => :mu)
   @eval ($n)(e::Element) = size(e.$m, 2)
