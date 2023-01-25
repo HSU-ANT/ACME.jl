@@ -5,6 +5,20 @@
 All circuit elements are created by calling corresponding functions; see the
 [Element Reference](@ref) for details.
 
+### Unitful elements
+
+ACME provides a package extension for
+[Unitful](https://github.com/PainterQubits/Unitful.jl) to support quantities
+with units when constructing elements. E.g. `resistor(4.7e3)` and
+`resistor(4.7u"kΩ")` are equivalent after `Unitful` has been loaded. This can
+increase readability and help catch bugs (e.g. `resistor(5u"V")` will throw an
+error). The input and output signals of the curcuit models will still be
+unitless, however.
+
+!!! compat "Julia 1.9"
+    Package extensions require Julia 1.9 or later. Consequently, unitful
+    quantities are not supported on earlier Julia versions.
+
 ## Circuit Description
 
 Circuits are described using `Circuit` instances, which are most easily created
