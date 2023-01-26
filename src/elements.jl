@@ -1,4 +1,4 @@
-# Copyright 2015, 2016, 2017, 2018, 2019, 2020, 2021 Martin Holters
+# Copyright 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2023 Martin Holters
 # See accompanying license file.
 
 export resistor, potentiometer, capacitor, inductor, transformer,
@@ -97,8 +97,12 @@ Magnetization"](http://dafx.de/paper-archive/2016/dafxpapers/08-DAFx-16_paper_10
 Pins: `1` and `2` for primary winding, `3` and `4` for secondary winding, and so
 on
 """
-function transformer(::Type{Val{:JA}}; D=2.4e-2, A=4.54e-5, ns=[],
-                     a=14.1, α=5e-5, c=0.55, k=17.8, Ms=2.75e5)
+transformer(::Type{Val{:JA}}; ns=[], α=5e-5, c=0.55, kwargs...) =
+    _transformer_ja(ns, α, c, (; kwargs...))
+_transformer_ja(ns, α, c, kwargs::NamedTuple{<:Any, <:Tuple{Vararg{Real}}}) =
+    __transformer_ja(; ns=ns, α=α, c=c, kwargs...)
+function __transformer_ja(; D=2.4e-2, A=4.54e-5, ns=[],
+                        a=14.1, α=5e-5, c=0.55, k=17.8, Ms=2.75e5)
     μ0 = 1.2566370614e-6
     nonlinear_eq = @inline function (q)
         coth_q1 = coth(q[1])
@@ -175,7 +179,8 @@ Pins: `+` and `-` with `v` being measured from `+` to `-`
 """
 function voltagesource end
 voltagesource(v; rs=0) = Element(mv=1, mi=-rs, u0=v, ports=[:+ => :-])
-voltagesource(; rs=0) = Element(mv=1, mi=-rs, mu=1, ports=[:+ => :-])
+voltagesource(; rs=0) = _voltagesource(rs)
+_voltagesource(rs) = Element(mv=1, mi=-rs, mu=1, ports=[:+ => :-])
 
 """
     currentsource(; gp=0)
@@ -190,7 +195,8 @@ Pins: `+` and `-` where `i` measures the current leaving source at the `+` pin
 """
 function currentsource end
 currentsource(i; gp=0) = Element(mv=gp, mi=-1, u0=i, ports=[:+ => :-])
-currentsource(; gp=0) = Element(mv=gp, mi=-1, mu=1, ports=[:+ => :-])
+currentsource(; gp=0) = _currentsource(gp)
+_currentsource(gp) = Element(mv=gp, mi=-1, mu=1, ports=[:+ => :-])
 
 """
     voltageprobe()
@@ -201,7 +207,8 @@ defaults to zero.
 
 Pins: `+` and `-` with the output voltage being measured from `+` to `-`
 """
-voltageprobe(;gp=0) = Element(mv=-gp, mi=1, pv=1, ports=[:+ => :-])
+voltageprobe(;gp=0) = _voltageprobe(gp)
+_voltageprobe(gp) = Element(mv=-gp, mi=1, pv=1, ports=[:+ => :-])
 
 """
     currentprobe()
@@ -213,7 +220,8 @@ defaults to zero.
 Pins: `+` and `-` with the output current being the current entering the probe
 at `+`
 """
-currentprobe(;rs=0) = Element(mv=1, mi=-rs, pi=1, ports=[:+ => :-])
+currentprobe(;rs=0) = _currentprobe(rs)
+_currentprobe(rs=0) = Element(mv=1, mi=-rs, pi=1, ports=[:+ => :-])
 
 @doc raw"""
     diode(;is=1e-12, η = 1)
@@ -224,7 +232,8 @@ The reverse saturation current `is` has to be given in Ampere, the emission
 coefficient `η` is unitless.
 
 Pins: `+` (anode) and `-` (cathode)
-""" diode(;is::Real=1e-12, η::Real = 1) =
+""" diode(;is=1e-12, η = 1) = _diode(is, η)
+_diode(is::Real, η::Real) =
   Element(mv=[1;0], mi=[0;1], mq=[-1 0; 0 -1], ports=[:+ => :-], nonlinear_eq =
         @inline function(q)
             v, i = q
@@ -295,7 +304,9 @@ The parameters are set using named arguments:
 | `rb`  | Base terminal resistance
 
 Pins: `base`, `emitter`, `collector`
-""" function bjt(typ; is=1e-12, η=1, isc=is, ise=is, ηc=η, ηe=η, βf=1000, βr=10,
+""" bjt(typ; kwargs...) = _bjt(typ, (; kwargs...))
+_bjt(typ, kwargs::NamedTuple{<:Any, <:Tuple{Vararg{Real}}}) = __bjt(typ; kwargs...)
+function __bjt(typ; is=1e-12, η=1, isc=is, ise=is, ηc=η, ηe=η, βf=1000, βr=10,
              ile=0, ilc=0, ηcl=ηc, ηel=ηe, vaf=Inf, var=Inf, ikf=Inf, ikr=Inf,
              re=0, rc=0, rb=0)
     local polarity
@@ -419,7 +430,10 @@ respectively. E.g. with `vt=(0.7, 0.1, 0.02)`, the $v_{GS}$-dpendent threshold
 voltage $v_T = 0.7 + 0.1\cdot v_{GS} + 0.02\cdot v_{GS}^2$ will be used.
 
 Pins: `gate`, `source`, `drain`
-""" function mosfet(typ; vt=0.7, α=2e-5, λ=0)
+""" mosfet(typ; kwargs...) = _mosfet(typ, (; kwargs...))
+_mosfet(typ, kwargs::NamedTuple{<:Any, <:Tuple{Vararg{Union{Real,Tuple{Vararg{Real}}}}}}) =
+     __mosfet(typ; kwargs...)
+function __mosfet(typ; vt=0.7, α=2e-5, λ=0)
     if typ == :n
         polarity = 1
     elseif typ == :p
@@ -519,7 +533,7 @@ connected to a ground node and has to provide the current sourced on the other
 output pin.
 
 Pins: `in+` and `in-` for input, `out+` and `out-` for output
-""" function opamp(::Type{Val{:macak}}, gain, vomin, vomax)
+""" function opamp(::Type{Val{:macak}}, gain::Real, vomin::Real, vomax::Real)
     offset = 0.5 * (vomin + vomax)
     scale = 0.5 * (vomax - vomin)
     nonlinear_eq =
