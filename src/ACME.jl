@@ -14,6 +14,7 @@ using SparseArrays: SparseMatrixCSC, blockdiag, dropzeros!, findnz,
     nonzeros, sparse, spzeros
 using StaticArrays: @SMatrix, @SVector, SMatrix, SVector
 using Statistics: mean, var
+using Compat: argmin
 
 include("kdtree.jl")
 include("solvers.jl")
@@ -715,29 +716,46 @@ function step!(runner::ModelRunner, y::AbstractMatrix{Float64}, u::AbstractMatri
 end
 
 function gensolve(a, b, x, h, thresh=0.1)
-    m = size(a)[1]
+    m = size(a, 1)
     if m == 0
         return x, h
     end
-    t = sortperm([count(!iszero, ait) for ait in eachrow(a)]) # row indexes in ascending order of nnz
+
     tol = 3 * max(eps(float(eltype(a))), eps(float(eltype(h)))) * size(a, 2)
-    for i in 1:m
-        ait = a[t[i],:]' # ait is a row of the a matrix
-        s = ait * h;
+    function selectcol(s, h)
+        # find the non-zero values in s, determine their absolute values, find their maximum
         jnz, nz_vals = findnz(s')
         nz_abs_vals = abs.(nz_vals)
         max_abs_val = reduce(max, init=zero(eltype(s)), nz_abs_vals)
-        if max_abs_val ≤ tol # cosidered numerical zero
+        if max_abs_val ≤ tol # considered numerical zero
+            # no (numerically) non-zero values found
+            return nothing
+        end
+        # limit the non-zero values to at least `thresh` * the maximum one
+        # of those, pick the one where the column in j has fewest non-zero entries
+        return argmin(
+            j -> count(!iszero, h[:,j]),
+            j for (j, abs_val) in zip(jnz, nz_abs_vals) if abs_val ≥ thresh*max_abs_val
+        )
+    end
+
+    Aᵀ = convert(SparseMatrixCSC, a')
+    t = sortperm([count(!iszero, aᵢᵀ) for aᵢᵀ in eachcol(Aᵀ)]) # row indexes in ascending order of nnz
+    for i in 1:m
+        aᵢᵀ = Aᵀ[:, t[i]]' # aᵢᵀ is a row of the a matrix
+        s = aᵢᵀ * h
+        j = selectcol(s, h)
+        if j === nothing
+            # aᵢᵀ is not linearly independent from the previous rows -> ignore it
+            # note: if b[t[i],:]' ≠ aᵢᵀ*x, the equation system is inconsistent
             continue
         end
-        jat = jnz[nz_abs_vals .≥ thresh*max_abs_val] # cols above threshold
-        j = jat[argmin([count(!iszero, hj) for hj in eachcol(h[:,jat])])]
-        q = h[:,j]
-        x = x + convert(typeof(x), q * ((b[t[i],:]' - ait*x) * (1 / (ait*q))))
-        if size(h)[2] > 1
-            h = h[:,[1:j-1;j+1:end]] - convert(typeof(h), q * s[1,[1:j-1;j+1:end]]'*(1/s[1,j]))
+        q = h[:,j] / s[1,j]
+        x = x + convert(typeof(x), q * ((b[t[i],:]' - aᵢᵀ*x)))
+        if size(h, 2) > 1
+            h = h[:,[1:j-1;j+1:end]] - convert(typeof(h), q * s[1,[1:j-1;j+1:end]]')
         else
-            h = similar(h, eltype(h), (size(h)[1], 0))
+            h = similar(h, eltype(h), (size(h, 1), 0))
         end
     end
     return x, h
