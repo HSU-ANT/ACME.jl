@@ -510,7 +510,7 @@ end
     end
     ηcl=1.2
     ηel=1.3
-    prog = Progress(2^9, "Testing Gummel-Poon model: ")
+    prog = Progress(2^9, desc="Testing Gummel-Poon model: ")
     @testset "Gummel-Poon $typ" for ile in (0, 50e-9), ilc in (0, 100e-9),
             ηcl in (ηc, 1.2), ηel in (ηe, 1.1),
             vaf in (Inf, 10), var in (Inf, 50),

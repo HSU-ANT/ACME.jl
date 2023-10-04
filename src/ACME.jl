@@ -650,7 +650,7 @@ is preserved accross calls to `run!`.
 function run!(runner::ModelRunner{<:DiscreteModel,true}, y::AbstractMatrix{Float64},
               u::AbstractMatrix{Float64})
     checkiosizes(runner, u, y)
-    @showprogress "Running model: " for n = 1:size(u, 2)
+    @showprogress desc="Running model: " for n = 1:size(u, 2)
         step!(runner, y, u, n)
     end
 end
