@@ -1,4 +1,4 @@
-# Copyright 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2023 Martin Holters
+# Copyright 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2023, 2024 Martin Holters
 # See accompanying license file.
 
 module ACME
@@ -10,8 +10,6 @@ using LinearAlgebra: BLAS, I, axpy!, lu, rmul!
 using Markdown: @doc_str
 using OrderedCollections: OrderedDict
 using ProgressMeter: @showprogress
-using SparseArrays: SparseMatrixCSC, blockdiag, dropzeros!, findnz,
-    nonzeros, sparse, spzeros
 using StaticArrays: @SMatrix, @SVector, SMatrix, SVector
 using Statistics: mean, var
 
@@ -27,7 +25,7 @@ let mat_dims = Dict(
     )
 
     @eval function prepare_element_matrices(; $((Expr(:kw, m, nothing) for m ∈ keys(mat_dims))...))
-        matrices = Dict{Symbol,SparseMatrixCSC{Real,Int}}()
+        matrices = Dict{Symbol,Matrix{Real}}()
         $(
             (
                 quote
@@ -48,7 +46,7 @@ let mat_dims = Dict(
         end
         for (m, ns) ∈ $(mat_dims)
             if !haskey(matrices, m)
-                matrices[m] = spzeros(Real, get!(sizes, ns[1], 0), get!(sizes, ns[2], 0))
+                matrices[m] = zeros(Real, get!(sizes, ns[1], 0), get!(sizes, ns[2], 0))
             end
         end
         return matrices, sizes
@@ -56,20 +54,20 @@ let mat_dims = Dict(
 end
 
 struct Element
-  mv :: SparseMatrixCSC{Real,Int}
-  mi :: SparseMatrixCSC{Real,Int}
-  mx :: SparseMatrixCSC{Real,Int}
-  mxd :: SparseMatrixCSC{Real,Int}
-  mq :: SparseMatrixCSC{Real,Int}
-  mu :: SparseMatrixCSC{Real,Int}
-  u0 :: SparseMatrixCSC{Real,Int}
-  pv :: SparseMatrixCSC{Real,Int}
-  pi :: SparseMatrixCSC{Real,Int}
-  px :: SparseMatrixCSC{Real,Int}
-  pxd :: SparseMatrixCSC{Real,Int}
-  pq :: SparseMatrixCSC{Real,Int}
-  nonlinear_eq
-  pins :: Dict{Symbol, Vector{Tuple{Int, Int}}}
+    mv::Matrix{Real}
+    mi::Matrix{Real}
+    mx::Matrix{Real}
+    mxd::Matrix{Real}
+    mq::Matrix{Real}
+    mu::Matrix{Real}
+    u0::Matrix{Real}
+    pv::Matrix{Real}
+    pi::Matrix{Real}
+    px::Matrix{Real}
+    pxd::Matrix{Real}
+    pq::Matrix{Real}
+    nonlinear_eq
+    pins::Dict{Symbol, Vector{Tuple{Int, Int}}}
 
     function Element(;nonlinear_eq=nothing, ports=nothing, pins=nothing, mat_args...)
         matrices, sizes = prepare_element_matrices(; mat_args...)
@@ -264,19 +262,19 @@ end
 function model_matrices(circ::Circuit, t::Rational{BigInt})
     lhs = Rational{BigInt}[
         mv(circ) mi(circ) mxd(circ)//t+mx(circ)//2 mq(circ);
-        blockdiag(topomat(circ)...) spzeros(nb(circ), nx(circ) + nq(circ))
+        cat(topomat(circ)...; dims=(1,2))::Matrix{Int} zeros(nb(circ), nx(circ) + nq(circ))
     ]
     rhs = Rational{BigInt}[
         u0(circ) mu(circ) mxd(circ)//t-mx(circ)//2;
-        spzeros(Rational{BigInt}, nb(circ), 1+nu(circ)+nx(circ))
+        zeros(Rational{BigInt}, nb(circ), 1+nu(circ)+nx(circ))
     ]
-    x, f = Matrix.(gensolve(lhs, rhs))
+    x, f = gensolve(lhs, rhs)
 
     rowsizes = (nb(circ), nb(circ), nx(circ), nq(circ))
     rowranges = consecranges(rowsizes)
     fq = f[rowranges[4], :]
 
-    nullspace = gensolve(sparse(fq), spzeros(Rational{BigInt}, size(fq, 1), 0))[2]
+    nullspace = gensolve(fq, zeros(Rational{BigInt}, size(fq, 1), 0))[2]
     indeterminates = f * nullspace
 
     if sum(abs2, indeterminates[rowranges[3],:]) > 1e-20
@@ -410,7 +408,7 @@ function reduce_pdims!(mats)
     for idx in 1:subcount
         # decompose [dq_full eq_full] into pexp*[dq eq] with [dq eq] having minimum
         # number of rows
-        pexp, dqeq = rank_factorize(sparse([mats[:dq_fulls][idx] mats[:eq_fulls][idx] mats[:fqprev_fulls][idx]]))
+        pexp, dqeq = rank_factorize([mats[:dq_fulls][idx] mats[:eq_fulls][idx] mats[:fqprev_fulls][idx]])
         pexps[idx] = pexp
         colsizes = map(m -> size(mats[m][idx], 2)::Int, (:dq_fulls, :eq_fulls, :fqprev_fulls))
         dqs[idx], eqs[idx], fqprevs[idx] = matsplit(dqeq, (size(dqeq, 1),), colsizes)
@@ -418,10 +416,10 @@ function reduce_pdims!(mats)
         # project pexp onto the orthogonal complement of the column space of Fq
         fq = mats[:fqs][idx]
         nn = size(fq, 2)
-        fq_pinv = gensolve(sparse(fq'*fq), fq')[1]
+        fq_pinv = gensolve(fq'*fq, fq')[1]
         pexp = pexp - fq*fq_pinv*pexp
         # if the new pexp has lower rank, update
-        pexp, f = rank_factorize(sparse(pexp))
+        pexp, f = rank_factorize(pexp)
         if size(pexp, 2) < size(pexps[idx], 2)
             cols = offset .+ (1:nn)
             copyto!(mats[:a], mats[:a] - mats[:c][:,cols]*fq_pinv*pexps[idx]*dqs[idx])
@@ -724,10 +722,10 @@ function gensolve(a, b, x, h, thresh=0.1)
     for i in 1:m
         ait = a[t[i],:]' # ait is a row of the a matrix
         s = ait * h;
-        jnz, nz_vals = findnz(s')
-        nz_abs_vals = abs.(nz_vals)
+        jnz = findall(!iszero, s')
+        nz_abs_vals = abs.(s[jnz])
         max_abs_val = reduce(max, init=zero(eltype(s)), nz_abs_vals)
-        if max_abs_val ≤ tol # cosidered numerical zero
+        if max_abs_val ≤ tol # considered numerical zero
             continue
         end
         jat = jnz[nz_abs_vals .≥ thresh*max_abs_val] # cols above threshold
@@ -743,12 +741,12 @@ function gensolve(a, b, x, h, thresh=0.1)
     return x, h
 end
 
-gensolve(a, b, thresh=0.1) =
-    gensolve(a, b, spzeros(promote_type(eltype(a), eltype(b)), size(a, 2), size(b, 2)), SparseMatrixCSC{eltype(a)}(I, size(a,2), size(a,2)), thresh)
+gensolve(a::AbstractMatrix{Ta}, b::AbstractMatrix{Tb}, thresh=0.1) where {Ta, Tb} =
+    gensolve(a, b, zeros(promote_type(Ta, Tb), size(a, 2), size(b, 2)), Matrix{Ta}(I, size(a,2), size(a,2)), thresh)
 
-function rank_factorize(a::SparseMatrixCSC)
+function rank_factorize(a)
     f = a
-    nullspace = gensolve(a', spzeros(eltype(a), size(a, 2), 0))[2]
+    nullspace = gensolve(a', zeros(eltype(a), size(a, 2), 0))[2]
     c = Matrix{eltype(a)}(I, size(a, 1), size(a, 1))
     while size(nullspace, 2) > 0
         i, j = (argmax(abs.(nullspace))::CartesianIndex{2}).I # argmax cannot be inferred prior to Julia 1.7

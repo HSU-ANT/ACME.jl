@@ -1,4 +1,4 @@
-# Copyright 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023 Martin Holters
+# Copyright 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024 Martin Holters
 # See accompanying license file.
 
 include("checklic.jl")
@@ -6,18 +6,17 @@ include("checklic.jl")
 using ACME
 using FFTW: rfft
 using ProgressMeter: Progress, next!
-using SparseArrays: sparse, spzeros
 using Test: @inferred, @test, @test_broken, @test_logs, @test_throws, @testset
 
 @testset "topomat" begin
-    tv, ti = @inferred ACME.topomat(sparse([1 -1 1; -1 1 -1]))
-    @test tv*ti'==spzeros(2,1)
+    tv, ti = @inferred ACME.topomat([1 -1 1; -1 1 -1])
+    @test tv*ti'==zeros(2,1)
 
     # Pathological cases for topomat:
     # two nodes, one loop branch (short-circuited) -> voltage==0, current arbitrary
-    @test @inferred(ACME.topomat(spzeros(Int, 2, 1))) == (hcat([1]), spzeros(0, 1))
+    @test @inferred(ACME.topomat(zeros(Int, 2, 1))) == (hcat([1]), zeros(0, 1))
     # two nodes, one branch between them -> voltage arbitrary, current==0
-    @test @inferred(ACME.topomat(sparse([1,2], [1,1], [1,-1]))) == (spzeros(0, 1), hcat([1]))
+    @test @inferred(ACME.topomat(hcat([1; -1]))) == (zeros(0, 1), hcat([1]))
 end
 
 @testset "LinearSolver" begin
@@ -221,9 +220,9 @@ end
 @testset "gensolve/rank_factorize" begin
     a = Rational{BigInt}[1 1 1; 1 1 2; 1 2 1; 1 2 2; 2 1 1; 2 1 2]
     b = Rational{BigInt}[1 2 3 4 5 6; 6 5 4 3 2 1; 1 0 1 0 1 0]
-    nullspace = @inferred(ACME.gensolve(sparse(a'), spzeros(Rational{BigInt}, size(a, 2), 0)))[2]
-    @test nullspace'*a == spzeros(3, 3)
-    c, f = ACME.rank_factorize(sparse(a * b))
+    nullspace = @inferred(ACME.gensolve(a', zeros(Rational{BigInt}, size(a, 2), 0)))[2]
+    @test nullspace'*a == zeros(3, 3)
+    c, f = ACME.rank_factorize(a * b)
     @test c*f == a*b
 end
 

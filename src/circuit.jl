@@ -1,4 +1,4 @@
-# Copyright 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2023 Martin Holters
+# Copyright 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2023, 2024 Martin Holters
 # See accompanying license file.
 
 export Circuit, add!, connect!, disconnect!, @circuit, composite_element
@@ -35,34 +35,27 @@ for n in [:nb; :nx; :nq; :nu; :nl; :ny; :nn]
 end
 
 for mat in [:mv; :mi; :mx; :mxd; :mq; :mu; :pv; :pi; :px; :pxd; :pq]
-    # blockdiag() does not work, so include an empty matrix of desired type in
+    # cat(; dims=(1,2)) does not work, so include an empty matrix of desired type in
     # case elements(c) is empty
-    # as blockdiag for unknown number of arguments cannot be inferred properly,
-    # add type-assertion
-    @eval ($mat)(c::Circuit) =
-         blockdiag(spzeros(Rational{BigInt}, 0, 0),
-                 (convert(SparseMatrixCSC{Rational{BigInt}}, elem.$mat)
-                  for elem in elements(c))...
-                )::SparseMatrixCSC{Rational{BigInt},Int}
+    @eval ($mat)(c::Circuit) = cat(
+        zeros(Rational{BigInt}, 0, 0),
+        (convert(Matrix{Rational{BigInt}}, elem.$mat) for elem in elements(c))...;
+        dims=(1, 2)
+    )::Matrix{Rational{BigInt}}
 end
 
-u0(c::Circuit) = reduce(vcat, elem.u0 for elem in elements(c); init=spzeros(Real, 0, 1))
+u0(c::Circuit) = reduce(vcat, elem.u0 for elem in elements(c); init=zeros(Real, 0, 1))
 
 function incidence(c::Circuit)
-    i = sizehint!(Int[], 2nb(c))
-    j = sizehint!(Int[], 2nb(c))
-    v = sizehint!(Int[], 2nb(c))
+    inci = zeros(Int, length(c.nets), nb(c))
     for (row, pins) in enumerate(c.nets), (elemname, pinname) in pins
         offset = branch_offset(c, elemname)
         bps = c.elements[elemname].pins[pinname]
         for (branch, polarity) in bps
-            push!(i, row)
-            push!(j, offset + branch)
-            push!(v, polarity)
+            inci[row, offset+branch] += polarity
         end
     end
-    # ensure zeros due to short-circuited branches are removed with dropzeros!
-    dropzeros!(sparse(i, j, v, length(c.nets), nb(c)))
+    return inci
 end
 
 function nonlinear_eq_func(c::Circuit, elem_idxs=1:length(elements(c)))
@@ -205,8 +198,8 @@ that if e.g. three pin `p1`, `p2`, and `p3` are connected then
 """
 disconnect!(c::Circuit, p::Tuple{Symbol,Any}) = disconnect!(c, (p[1], Symbol(p[2])))
 
-function topomat!(incidence::SparseMatrixCSC{T}) where {T<:Integer}
-    @assert all(x -> abs(x) == 1, nonzeros(incidence))
+function topomat!(incidence::AbstractMatrix{T}) where {T<:Integer}
+    @assert all(x -> x in (-1, 0, 1), incidence)
     @assert all(sum(incidence, dims=1) .== 0)
 
     t = falses(size(incidence)[2]);
@@ -240,15 +233,14 @@ function topomat!(incidence::SparseMatrixCSC{T}) where {T<:Integer}
     ti = incidence[1:row-1, :]
 
     dl = ti[:, (!).(t)]
-    tv = spzeros(T, size(dl, 2), size(incidence, 2))
-    # findall here works around JuliaLang/julia#27013 (introdcued in 0.7.0-DEV.4983)
-    tv[:, findall(t)] = -dl'
-    tv[:, findall((!).(t))] = SparseMatrixCSC{T}(I, size(dl, 2), size(dl, 2))::SparseMatrixCSC{T}
+    tv = zeros(T, size(dl, 2), size(incidence, 2))
+    tv[:, t] = -dl'
+    tv[:, (!).(t)] = Matrix{T}(I, size(dl, 2), size(dl, 2))
 
     tv, ti
 end
 
-topomat(incidence::SparseMatrixCSC{<:Integer}) = topomat!(copy(incidence))
+topomat(incidence::AbstractMatrix{<:Integer}) = topomat!(copy(incidence))
 topomat(c::Circuit) = topomat!(incidence(c))
 
 @doc raw"""
@@ -443,14 +435,14 @@ ports.
     end
     numports = length(ports)
     # construct system matrix with norators for connection ports included
-    Mᵥ = blockdiag(mv(circ), spzeros(numports, numports))
-    Mᵢ = blockdiag(mi(circ), spzeros(numports, numports))
-    Mₓ = [mx(circ); spzeros(numports, nx(circ))]
-    Mₓ´ = [mxd(circ); spzeros(numports, nx(circ))]
-    Mq = [mq(circ); spzeros(numports, nq(circ))]
-    Mu = [mu(circ); spzeros(numports, nu(circ))]
-    u0 = [ACME.u0(circ); spzeros(numports)]
-    incid = [incidence(circ) spzeros(Int, length(circ.nets), numports)]
+    Mᵥ = zeropad(mv(circ), numports)
+    Mᵢ = zeropad(mi(circ), numports)
+    Mₓ = zeropad(mx(circ), (numports, 0))
+    Mₓ´ = zeropad(mxd(circ), (numports, 0))
+    Mq = zeropad(mq(circ), (numports, 0))
+    Mu = zeropad(mu(circ), (numports, 0))
+    u0 = zeropad(ACME.u0(circ), (numports, 0))
+    incid = zeropad(incidence(circ), (0, numports))
     for i in eachindex(ports)
         port = ports[i]
         net = netfor!(circ, pinmap[port[1]])
@@ -463,15 +455,15 @@ ports.
     end
 
     tv, ti = topomat!(incid)
-    S = SparseMatrixCSC{Rational{BigInt}}([[Mᵥ Mᵢ Mₓ Mₓ´ Mq];
-        [blockdiag(tv, ti) spzeros(nb(circ)+numports, 2nx(circ)+nq(circ))]])
-    ũ, M = gensolve(S, SparseMatrixCSC{Rational{BigInt}}([[Mu u0]; spzeros(nb(circ)+numports, nu(circ)+1)]))
+    S = Matrix{Rational{BigInt}}([Mᵥ Mᵢ Mₓ Mₓ´ Mq;
+        cat(tv, ti; dims=(1, 2))::Matrix{Int} zeros(nb(circ)+numports, 2nx(circ)+nq(circ))])
+    ũ, M = gensolve(S, Matrix{Rational{BigInt}}([Mu u0; zeros(nb(circ)+numports, nu(circ)+1)]))
     # [v' i' x' xd' q']' = ũ + My for arbitrary y
     # now drop all rows concerning only internal voltages and currents
     indices = vcat(consecranges([nb(circ), numports, nb(circ), numports+2nx(circ)+nq(circ)])[[2,4]]...)
     ũ = ũ[indices,:]
     M = M[indices,:]
-    S̃ = SparseMatrixCSC(gensolve(M', spzeros(size(M,2), 0))[2]') # output matrices p as RHS?
+    S̃ = gensolve(M', zeros(size(M,2), 0))[2]' # output matrices p as RHS?
     # S̃ spans nullspace of M', so that
     #    S̃*[v' i' x' xd' q']' = S̃*ũ + S̃*My = S̃*ũ
     # i.e. S̃ acts as a new system matrix
@@ -484,6 +476,13 @@ ports.
         mu = M̃u, u0 = ũ0,
         nonlinear_eq=nonlinear_eq_func(circ),
         ports=ports)
+end
+
+function zeropad(x, padsz)
+    y = similar(x, size(x) .+ padsz)
+    fill!(y, false)
+    y[axes(x)...] = x
+    return y
 end
 
 function ports_from_pinmap(pinmap)

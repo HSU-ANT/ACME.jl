@@ -1,4 +1,4 @@
-# Copyright 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2023 Martin Holters
+# Copyright 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2023, 2024 Martin Holters
 # See accompanying license file.
 
 export resistor, potentiometer, capacitor, inductor, transformer,
@@ -128,8 +128,8 @@ function __transformer_ja(; D=2.4e-2, A=4.54e-5, ns=[],
         return (res, @SMatrix [J_1_1 J_1_2 J_1_3 J_1_4])
     end
     Element(mv=Matrix{Int}(I, length(ns)+5, length(ns)),
-            mi=[spzeros(length(ns), length(ns)); ns'; spzeros(4, length(ns))],
-            mx=[spzeros(length(ns), 2); -π*D 0; -1/a -α/a; 0 -1; 0 0; 0 0],
+            mi=[zeros(length(ns), length(ns)); ns'; zeros(4, length(ns))],
+            mx=[zeros(length(ns), 2); -π*D 0; -1/a -α/a; 0 -1; 0 0; 0 0],
             mxd=[-μ0*A*ns -μ0*ns*A; 0 0; 0 0; 0 0; -1 0; 0 -1],
             mq=[zeros(length(ns)+1,4); Matrix(I, 4, 4)], nonlinear_eq = nonlinear_eq)
 end
