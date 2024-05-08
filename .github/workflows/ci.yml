@@ -39,6 +39,7 @@ jobs:
       - uses: codecov/codecov-action@v4.3.1
         with:
           files: lcov.info
+          token: ${{ secrets.CODECOV_TOKEN }}
       - uses: coverallsapp/github-action@master
         with:
           path-to-lcov: lcov.info
