@@ -36,7 +36,7 @@ jobs:
           arch: ${{ matrix.julia-arch }}
       - uses: julia-actions/julia-runtest@v1
       - uses: julia-actions/julia-processcoverage@v1.2
-      - uses: codecov/codecov-action@v4.3.1
+      - uses: codecov/codecov-action@v4.4.0
         with:
           files: lcov.info
           token: ${{ secrets.CODECOV_TOKEN }}
