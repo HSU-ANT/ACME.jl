@@ -40,10 +40,9 @@ jobs:
         with:
           files: lcov.info
           token: ${{ secrets.CODECOV_TOKEN }}
-      - uses: coverallsapp/github-action@master
+      - uses: coverallsapp/github-action@v2
         with:
-          path-to-lcov: lcov.info
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          file: lcov.info
           flag-name: run-${{ matrix.os }}-${{ matrix.julia-version }}-${{ matrix.julia-arch }}
           parallel: true
 
@@ -53,7 +52,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Coveralls Finished
-      uses: coverallsapp/github-action@master
+      uses: coverallsapp/github-action@v2
       with:
-        github-token: ${{ secrets.GITHUB_TOKEN }}
         parallel-finished: true
