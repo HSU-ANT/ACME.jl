@@ -1,4 +1,4 @@
-# Copyright 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023 Martin Holters
+# Copyright 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024 Martin Holters
 # See accompanying license file.
 
 include("checklic.jl")
@@ -711,7 +711,7 @@ end
         run!(runner, y, u)
         alloc = @allocated run!(runner, y, u)
         if alloc > 0
-            warn("Allocated $alloc in run! of HomotopySolver{SimpleSolver} base ModelRunner")
+            @warn "Allocated $alloc in run! of HomotopySolver{SimpleSolver} base ModelRunner"
         end
     end
 
