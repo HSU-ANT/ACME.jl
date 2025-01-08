@@ -11,6 +11,7 @@ on:
 permissions:
   contents: read
   statuses: write
+  id-token: write # for OICD connect with Codecov
 
 jobs:
   test:
@@ -61,7 +62,7 @@ jobs:
       - uses: codecov/codecov-action@v5.1.1
         with:
           files: lcov.info
-          token: ${{ secrets.CODECOV_TOKEN }}
+          use_oidc: true
       - uses: coverallsapp/github-action@v2
         with:
           file: lcov.info
