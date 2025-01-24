@@ -59,7 +59,7 @@ jobs:
           arch: ${{ matrix.julia-arch }}
       - uses: julia-actions/julia-runtest@v1
       - uses: julia-actions/julia-processcoverage@v1.2
-      - uses: codecov/codecov-action@v5.1.2
+      - uses: codecov/codecov-action@v5.3.0
         with:
           files: lcov.info
           use_oidc: true
