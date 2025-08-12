@@ -50,7 +50,7 @@ jobs:
             julia-arch: aarch64
             julia-version: '1'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
       - uses: julia-actions/setup-julia@v2
