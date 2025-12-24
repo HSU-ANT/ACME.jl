@@ -1,6 +1,8 @@
 [deps]
 ACME = "ca8b7239-ccd3-5cce-807f-2072f3f0d108"
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
+Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
+StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 
 [compat]
 Documenter = "=0.27.10"
